@@ -5,4 +5,5 @@
     <File Path="README.md" />
   </Folder>
   <Project Path="LiveArch.Deployment/LiveArch.Deployment.csproj" />
+  <Project Path="LiveArch.Diagram/LiveArch.Diagram.csproj" />
 </Solution>
