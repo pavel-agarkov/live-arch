@@ -1,7 +1,7 @@
 ﻿using Pulumi;
+using Pulumi.AzureNative.App;
 using Pulumi.AzureNative.Resources;
 using Pulumi.AzureNative.Web;
-using Pulumi.AzureNative.Web.Inputs;
 using Pulumi.DockerBuild;
 using Structurizr;
 using System;
@@ -10,9 +10,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
+using Type = System.Type;
 
 namespace LiveArch.Deployment
 {
@@ -121,35 +121,45 @@ namespace LiveArch.Deployment
 
         protected async Task ProcessDeploymentNodeAsync(DeploymentNode deployNode, CancellationToken cancellationToken)
         {
-            await CreateNodeAsync(new DeploymentNodeAdapter(deployNode), cancellationToken);
-
-            foreach (var infraNode in deployNode.InfrastructureNodes.On(environment))
+            var deploymentNode = new DeploymentNodeAdapter(deployNode);
+            if (deploymentNode.IsDisabled == false)
             {
-                await ProcessInfrastructureNodeAsync(infraNode, cancellationToken);
+                await CreateNodeAsync(deploymentNode, cancellationToken);
+
+                foreach (var infraNode in deployNode.InfrastructureNodes.On(environment))
+                {
+                    await ProcessInfrastructureNodeAsync(infraNode, cancellationToken);
+                }
+
+                foreach (var containerInstance in deployNode.ContainerInstances.On(environment))
+                {
+                    await ProcessContainerInstanceAsync(containerInstance!, cancellationToken);
+                }
+
+                foreach (var childNode in deployNode.Children)
+                {
+                    await ProcessDeploymentNodeAsync(childNode!, cancellationToken);
+                }
             }
-
-            foreach (var containerInstance in deployNode.ContainerInstances.On(environment))
-            {
-                await ProcessContainerInstanceAsync(containerInstance!, cancellationToken);
-            }
-
-
-            foreach (var childNode in deployNode.Children)
-            {
-                await ProcessDeploymentNodeAsync(childNode!, cancellationToken);
-            }
-
         }
 
         private async Task ProcessInfrastructureNodeAsync(InfrastructureNode infraNode, CancellationToken cancellationToken)
         {
-            await CreateNodeAsync(new InfrastructureNodeAdapter(infraNode), cancellationToken);
+            var infra = new InfrastructureNodeAdapter(infraNode);
+            if (infra.IsDisabled == false)
+            {
+                await CreateNodeAsync(infra, cancellationToken);
+            }
         }
 
         private async Task ProcessContainerInstanceAsync(ContainerInstance containerInstance, CancellationToken cancellationToken)
         {
-            await BuildContainerInstance(containerInstance, cancellationToken);
-            await CreateNodeAsync(new ContainerInstanceAdapter(containerInstance), cancellationToken);
+            var container = new ContainerInstanceAdapter(containerInstance);
+            if (container.IsDisabled == false)
+            {
+                await BuildContainerInstance(containerInstance, cancellationToken);
+                await CreateNodeAsync(container, cancellationToken);
+            }
         }
 
         private async Task BuildContainerInstance(ContainerInstance containerInstance, CancellationToken cancellationToken)
@@ -237,9 +247,20 @@ namespace LiveArch.Deployment
                 }
             }
 
-            if (deployNode.Node is ContainerInstance ci && newResources.TryGetValue(ci.Container, out var image) && image is Image dockerImage && param is WebAppArgs web)
+            if (deployNode.Node is ContainerInstance ci && newResources.TryGetValue(ci.Container, out var image) && image is Image dockerImage)
             {
-                SetProperty(web, "siteConfig.linuxFxVersion", Output.Format($"DOCKER|{dockerImage.Ref}"), GetInputProps(typeof(WebAppArgs)));
+                if (param is WebAppArgs web)
+                {
+                    SetProperty(web, "siteConfig.linuxFxVersion", Output.Format($"DOCKER|{dockerImage.Ref}"), GetInputProps(typeof(WebAppArgs)));
+                }
+                else if (param is ContainerAppArgs app)
+                {
+                    SetProperty(app, "template.containers.image", dockerImage.Ref, GetInputProps(typeof(ContainerAppArgs)));
+                }
+                else if (param is DeploymentArgs k8s)
+                {
+                    SetProperty(k8s, "spec.template.spec.containers.image", dockerImage.Ref, GetInputProps(typeof(DeploymentArgs)));
+                }
             }
         }
 
@@ -629,7 +650,7 @@ namespace LiveArch.Deployment
         private static object ConvertOutputToInputList(Type innerTargetType, object output)
         {
 
-            var listType = typeof(List<>).MakeGenericType(output.GetType());            
+            var listType = typeof(List<>).MakeGenericType(output.GetType());
             var list = (IList)Activator.CreateInstance(listType)!;
             list.Add(output);
 

@@ -21,22 +21,19 @@ workspace EnterpriseArchitecture {
             }
         }
 
-        development = deploymentEnvironment "Development" {
-        }
-
-        production = deploymentEnvironment "Production" {
+        environment = deploymentEnvironment "$ENV" {
             deploymentNode "Resource Group" {
                 tags "Microsoft Azure - Resource Groups"
                 technology "azure-native:resources:getResourceGroup"
                 properties {
-                    resourceGroupName     "$PROD_RESOURCE_GROUP_NAME"
+                    resourceGroupName     "$RESOURCE_GROUP_NAME"
                 }
 
                 prodKeyVault = infrastructureNode "Key Vault" {
                     tags "Microsoft Azure - Key Vaults"
                     technology "azure-native:keyvault:getVault"
                     properties {
-                        vaultName    "$PROD_KEY_VAULT_NAME"
+                        vaultName    "$KEY_VAULT_NAME"
                     }
                 }
 
@@ -44,8 +41,8 @@ workspace EnterpriseArchitecture {
                     tags "Microsoft Azure - Managed Identities"
                     technology "azure-native:managedidentity:UserAssignedIdentity"
                     properties {
-                        var "prod-order-service-mi"
-                        resourceName   "prod-order-service-mi"
+                        var "order-service-mi"
+                        resourceName   "$ENV-order-service-mi"
                     }
                 }
 
@@ -53,8 +50,8 @@ workspace EnterpriseArchitecture {
                     tags "Microsoft Azure - Entra Managed Identities"
                     technology "azure-native:keyvault:AccessPolicy"
                     properties {
-                        var "prod-order-service-kv-access-policy"
-                        policy.tenantId    "$PROD_TENANT_ID"
+                        var "order-service-kv-access-policy"
+                        policy.tenantId    "$TENANT_ID"
                         policy.permissions.secrets  "get, list"
                     }
                     -> prodMi "principal" {
@@ -75,20 +72,20 @@ workspace EnterpriseArchitecture {
                     tags "Microsoft Azure - Virtual Networks"
                     technology "azure-native:network:getVirtualNetwork"
                     properties {
-                        virtualNetworkName    "$PROD_VNET_NAME"
+                        virtualNetworkName    "$VNET_NAME"
                     }
 
                     deploymentNode "App Service Plan" {
                         tags "Microsoft Azure - App Service Plans"
                         technology "azure-native:web:getAppServicePlan"
                         properties {
-                            name    "prod-app-service-plan"
+                            name    "$ENV-app-service-plan"
                         }
 
                         containerInstance orderApi mainProdRg {
                             properties {
-                                var "prod-order-api"
-                                name            "prod-order-api"
+                                var "order-api"
+                                name            "$ENV-order-api"
                                 identity.type   "UserAssigned"
                             }
                             -> prodMi "identity" {
@@ -105,24 +102,24 @@ workspace EnterpriseArchitecture {
                     tags "Microsoft Azure - SQL Server Registries"
                     technology "azure-native:azuredata:getSqlServerRegistration"
                     properties {
-                        sqlServerRegistrationName   "$PROD_SQL_SERVER_REGISTRATION_NAME"
+                        sqlServerRegistrationName   "$SQL_SERVER_REGISTRATION_NAME"
                     }
                     deploymentNode "SQL Server" {
                         tags "Microsoft Azure - Azure SQL"
                         technology "azure-native:azuredata:getSqlServer"
                         properties {
-                            sqlServerName   "$PROD_SQL_SERVER_NAME"
+                            sqlServerName   "$SQL_SERVER_NAME"
                         }
                         deploymentNode "Elastic Pool" {
                             tags "Microsoft Azure - SQL Elastic Pools"
                             technology "azure-native:sql:getElasticPool"
                             properties {
-                                elasticPoolName   "$PROD_SQL_ELASTIC_POOL_NAME"
+                                elasticPoolName   "$SQL_ELASTIC_POOL_NAME"
                             }
                             containerInstance orderDb mainProdRg {
                                 properties {
-                                    var "prod-order-db"
-                                    name    "prod-order-db"
+                                    var "order-db"
+                                    name    "$ENV-order-db"
                                 }
                             }
                         }
@@ -144,7 +141,7 @@ workspace EnterpriseArchitecture {
             autolayout
         }
 
-        deployment * production prod {
+        deployment * environment env {
             include *
             autolayout
         }

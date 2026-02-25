@@ -14,107 +14,73 @@ namespace LiveArch.Deployment
         ISet<Relationship> Relationships { get; }
         IDeploymentNode? Parent { get; }
 
+        bool IsDisabled { get; }
+
     }
 
-    public class DeploymentNodeAdapter : IDeploymentNode
+    public abstract class DeploymentAdapter<TNode> : IDeploymentNode where TNode : Element
     {
-        private readonly DeploymentNode node;
+        protected readonly TNode node;
 
-        public DeploymentNodeAdapter(DeploymentNode node)
+        protected DeploymentAdapter(TNode node)
         {
             this.node = node;
         }
 
-        public Element Node => node;
+        public bool IsDisabled =>
+            Properties.TryGetValue("isDisabled", out var isDisabledString) &&
+            bool.TryParse(isDisabledString, out var isDisabled) &&
+            isDisabled;
+
         public string Name => node.Name;
-        public string Technology => node.Technology;
+
+        public Element Node => node;
+
+        public IDeploymentNode? Parent => node.Parent != null ? new ElementAdapter(node.Parent) : null;
         public IDictionary<string, string> Properties => node.Properties;
 
         public ISet<Relationship> Relationships => node.Relationships;
-
-        public IDeploymentNode? Parent => node.Parent != null ? new ElementAdapter(node.Parent) : null;
-    }
-
-    public class ElementAdapter : IDeploymentNode
-    {
-        private readonly Element node;
-
-        public Element Node => node;
-
-        public string Name => node.Name;
-
-        public string Technology =>
+        public virtual string Technology =>
               node is DeploymentNode dn ? dn.Technology
             : node is InfrastructureNode ind ? ind.Technology
             : node is ContainerInstance ctn ? ctn.Container.Technology
             : string.Empty;
+    }
 
-        public IDictionary<string, string> Properties => node.Properties;
-
-        public ISet<Relationship> Relationships => node.Relationships;
-
-        public IDeploymentNode? Parent => node.Parent != null ? new ElementAdapter(node.Parent) : null;
-
-        public ElementAdapter(Element node)
+    public class DeploymentNodeAdapter : DeploymentAdapter<DeploymentNode>
+    {
+        public DeploymentNodeAdapter(DeploymentNode node) : base(node)
         {
-            this.node = node;
         }
     }
 
-    public class InfrastructureNodeAdapter : IDeploymentNode
+    public class ElementAdapter : DeploymentAdapter<Element>
     {
-        private readonly InfrastructureNode node;
-
-        public InfrastructureNodeAdapter(InfrastructureNode node)
+        public ElementAdapter(Element node) : base(node)
         {
-            this.node = node;
         }
-
-        public Element Node => node;
-        public string Name => node.Name;
-        public string Technology => node.Technology;
-        public IDictionary<string, string> Properties => node.Properties;
-
-        public ISet<Relationship> Relationships => node.Relationships;
-
-        public IDeploymentNode? Parent => node.Parent != null ? new ElementAdapter(node.Parent) : null;
     }
 
-    public class ContainerInstanceAdapter : IDeploymentNode
+    public class InfrastructureNodeAdapter : DeploymentAdapter<InfrastructureNode>
     {
-        private readonly ContainerInstance node;
-
-        public ContainerInstanceAdapter(ContainerInstance node)
+        public InfrastructureNodeAdapter(InfrastructureNode node) : base(node)
         {
-            this.node = node;
         }
-
-        public Element Node => node;
-        public string Name => node.Name;
-        public string Technology => node.Container.Technology;
-        public IDictionary<string, string> Properties => node.Properties;
-
-        public ISet<Relationship> Relationships => node.Relationships;
-
-        public IDeploymentNode? Parent => node.Parent != null ? new ElementAdapter(node.Parent) : null;
     }
 
-    public class ContainerBuildAdapter : IDeploymentNode
+    public class ContainerInstanceAdapter : DeploymentAdapter<ContainerInstance>
     {
-        private readonly Container node;
-
-        public ContainerBuildAdapter(Container node)
+        public ContainerInstanceAdapter(ContainerInstance node) : base(node)
         {
-            this.node = node;
+        }
+    }
+
+    public class ContainerBuildAdapter : DeploymentAdapter<Container>
+    {
+        public ContainerBuildAdapter(Container node):base(node)
+        {
         }
 
-        public Element Node => node;
-        public string Name => node.Name;
-        public string Technology => node.Properties.FirstOrDefault(x => x.Key == "buildTechnology").Value ?? string.Empty;
-        public IDictionary<string, string> Properties => node.Properties;
-
-        public ISet<Relationship> Relationships => node.Relationships;
-
-        public IDeploymentNode? Parent => node.Parent != null ? new ElementAdapter(node.Parent) : null;
+        public override string Technology => node.Properties.FirstOrDefault(x => x.Key == "buildTechnology").Value ?? string.Empty;
     }
 }
