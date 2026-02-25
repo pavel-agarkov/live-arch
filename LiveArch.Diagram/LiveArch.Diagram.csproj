@@ -22,4 +22,10 @@
     <None Remove="LiveArch.Diagram.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="workspace.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>

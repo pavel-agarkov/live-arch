@@ -5,15 +5,19 @@ workspace EnterpriseArchitecture {
         orderService = softwareSystem "Order Microservice" {
             orderDb = container "Order Database" {
                 tags "Microsoft Azure - Production Ready Database"
-                technology "azurerm_sql_database"
+                technology "azure-native:sql:Database"
             }
             orderApi = container "Order API" {
                 tags "Microsoft Azure - App Services"
-                technology "azurerm_app_service"
-                -> orderDb "Uses"
-                component "Order API Component" {
-                    technology ".NET 8"
+                technology "azure-native:web:WebApp"
+                properties {
+                    buildTechnology "docker-build:index:Image"
+                    context.location "../LiveArch.OrderApi/"
+                    dockerfile.location "../.Dockerfile"
+                    identity.type   "SystemAssigned"
+                    push "true"
                 }
+                -> orderDb "uses"
             }
         }
 
@@ -21,81 +25,105 @@ workspace EnterpriseArchitecture {
         }
 
         production = deploymentEnvironment "Production" {
-            deploymentNode "Azure Subscription" {
-                tags "Microsoft Azure - Subscriptions"
-                technology "data_azurerm_subscription"
+            deploymentNode "Resource Group" {
+                tags "Microsoft Azure - Resource Groups"
+                technology "azure-native:resources:getResourceGroup"
                 properties {
-                    subscription_id "$PROD_SUBSCRIPTION_ID"
-                    tenant_id       "$PROD_TENANT_ID"
+                    resourceGroupName     "$PROD_RESOURCE_GROUP_NAME"
                 }
 
-                deploymentNode "Resource Group" {
-                    tags "Microsoft Azure - Resource Groups"
-                    technology "data_azurerm_resource_group"
+                prodKeyVault = infrastructureNode "Key Vault" {
+                    tags "Microsoft Azure - Key Vaults"
+                    technology "azure-native:keyvault:getVault"
                     properties {
-                        name     "$PROD_RESOURCE_GROUP_NAME"
-                        location "$PROD_LOCATION_NAME"
+                        vaultName    "$PROD_KEY_VAULT_NAME"
                     }
+                }
 
-                    prodKeyVault = infrastructureNode "Key Vault" {
-                        tags "Microsoft Azure - Key Vaults"
-                        technology "data_azurerm_key_vault"
+                prodMi = infrastructureNode "Managed Identity" {
+                    tags "Microsoft Azure - Managed Identities"
+                    technology "azure-native:managedidentity:UserAssignedIdentity"
+                    properties {
+                        var "prod-order-service-mi"
+                        resourceName   "prod-order-service-mi"
+                    }
+                }
+
+                infrastructureNode "Key Vault Access Policy" {
+                    tags "Microsoft Azure - Entra Managed Identities"
+                    technology "azure-native:keyvault:AccessPolicy"
+                    properties {
+                        var "prod-order-service-kv-access-policy"
+                        policy.tenantId    "$PROD_TENANT_ID"
+                        policy.permissions.secrets  "get, list"
+                    }
+                    -> prodMi "principal" {
                         properties {
-                            name    "$PROD_KEY_VAULT_NAME"
+                            source "principalId"
+                            target "policy.objectId"
                         }
                     }
-
-                    prodMi = infrastructureNode "Managed Identity" {
-                        tags "Microsoft Azure - Managed Identities"
-                        technology "azurerm_user_assigned_identity"
+                    -> prodKeyVault "vault" {
                         properties {
-                            name   "prod-app-service-mi"
+                            source "name"
+                            target "vaultName"
                         }
                     }
+                }
 
-                    infrastructureNode "Key Vault Role Assignment" {
-                        tags "Microsoft Azure - Entra Managed Identities"
-                        technology "azurerm_role_assignment"
-                        properties {
-                            name                 "prod-app-service-mi-keyvault-reader"
-                            role_definition_name "Key Vault Reader"
-                        }
-                        -> prodMi "Identity"
-                        -> prodKeyVault "Resource"
+                deploymentNode "Virtual Network" {
+                    tags "Microsoft Azure - Virtual Networks"
+                    technology "azure-native:network:getVirtualNetwork"
+                    properties {
+                        virtualNetworkName    "$PROD_VNET_NAME"
                     }
 
-                    deploymentNode "Virtual Network" {
-                        tags "Microsoft Azure - Virtual Networks"
-                        technology "data_azurerm_virtual_network"
+                    deploymentNode "App Service Plan" {
+                        tags "Microsoft Azure - App Service Plans"
+                        technology "azure-native:web:getAppServicePlan"
                         properties {
-                            name    "$PROD_VNET_NAME"
+                            name    "prod-app-service-plan"
                         }
 
-                        deploymentNode "App Service Plan" {
-                            tags "Microsoft Azure - App Service Plans"
-                            technology "azurerm_app_service_plan"
+                        containerInstance orderApi mainProdRg {
                             properties {
-                                name    "prod-app-service-plan"
+                                var "prod-order-api"
+                                name            "prod-order-api"
+                                identity.type   "UserAssigned"
                             }
-
-                            containerInstance orderApi mainProdRg {
-                                -> prodMi "Identity"
+                            -> prodMi "identity" {
                                 properties {
-                                    name    "prod-order-api"
+                                    source  "id"
+                                    target  "identity.userAssignedIdentities"
                                 }
                             }
                         }
                     }
+                }
 
+                deploymentNode "SQL Server Registration" {
+                    tags "Microsoft Azure - SQL Server Registries"
+                    technology "azure-native:azuredata:getSqlServerRegistration"
+                    properties {
+                        sqlServerRegistrationName   "$PROD_SQL_SERVER_REGISTRATION_NAME"
+                    }
                     deploymentNode "SQL Server" {
                         tags "Microsoft Azure - Azure SQL"
-                        technology "data_azurerm_sql_server"
+                        technology "azure-native:azuredata:getSqlServer"
                         properties {
-                            name   "$PROD_SQL_SERVER_NAME"
+                            sqlServerName   "$PROD_SQL_SERVER_NAME"
                         }
-                        containerInstance orderDb mainProdRg {
+                        deploymentNode "Elastic Pool" {
+                            tags "Microsoft Azure - SQL Elastic Pools"
+                            technology "azure-native:sql:getElasticPool"
                             properties {
-                                name    "prod-order-db"
+                                elasticPoolName   "$PROD_SQL_ELASTIC_POOL_NAME"
+                            }
+                            containerInstance orderDb mainProdRg {
+                                properties {
+                                    var "prod-order-db"
+                                    name    "prod-order-db"
+                                }
                             }
                         }
                     }
