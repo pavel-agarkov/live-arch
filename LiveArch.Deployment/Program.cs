@@ -1,6 +1,7 @@
 ﻿using Pulumi;
 using Pulumi.AzureNative.Authorization;
 using Pulumi.AzureNative.AzureData;
+using Pulumi.AzureNative.DataBoxEdge;
 using Pulumi.AzureNative.KeyVault;
 using Pulumi.AzureNative.KeyVault.Inputs;
 using Pulumi.AzureNative.ManagedIdentity;
@@ -12,6 +13,8 @@ using Pulumi.AzureNative.Web;
 using Pulumi.AzureNative.Web.Inputs;
 using Pulumi.DockerBuild.Inputs;
 using Pulumi.Testing;
+using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace LiveArch.Deployment
@@ -20,13 +23,25 @@ namespace LiveArch.Deployment
     {
         private static async Task<int> Main(string[] args)
         {
+            IReadOnlyDictionary<string, object> variables = new Dictionary<string, object>()
+            {
+                { "ENV", "prod" },
+                { "KEY_VAULT_NAME", "main_prod_kv" },
+                { "RESOURCE_GROUP_NAME", "main_prod_rg" },
+                { "APP_CONFIG_NAME", "main_prod_app_config" },
+                { "TENANT_ID", "pavel.agarkov" },
+                { "VNET_NAME", "main_prod_vnet" },
+                { "SQL_SERVER_REGISTRATION_NAME", "main_prod_sql_reg" },
+                { "SQL_SERVER_NAME", "main_prod_sql_server" },
+                { "SQL_ELASTIC_POOL_NAME", "main_prod_sql_elastic_pool" },
+            };
+
             await Pulumi.Deployment.TestAsync(new Mocks(), new TestOptions { IsPreview = false }, async () =>
             {
-                var ws = new StructurizrComponent("C:\\Projects\\Presentations\\LiveArch\\LiveArch.Diagram\\workspace.json", "Production");
+                var ws = new StructurizrComponent("C:\\Projects\\Presentations\\LiveArch\\LiveArch.Diagram\\workspace.json", "prod", variables);
                 await ws.ProcessWorkspaceAsync(default);
             });
             return 0;
-
         }
 
         public async Task Test()
@@ -76,6 +91,11 @@ namespace LiveArch.Deployment
                 }
             });
 
+            var role = GetRoleDefinition.InvokeAsync(new GetRoleDefinitionArgs
+            {
+
+            });
+
             new RoleAssignment("", new RoleAssignmentArgs
             {
                 PrincipalId = mi.PrincipalId,
@@ -83,6 +103,12 @@ namespace LiveArch.Deployment
                 RoleDefinitionId = "",
                 PrincipalType = Pulumi.AzureNative.Authorization.PrincipalType.ServicePrincipal
 
+            });
+
+            var sa = await Pulumi.AzureNative.Storage.GetStorageAccount.InvokeAsync(new Pulumi.AzureNative.Storage.GetStorageAccountArgs
+            {
+                ResourceGroupName = rg.Name,
+                AccountName = ""
             });
 
             var sqlReg = await GetSqlServerRegistration.InvokeAsync(new GetSqlServerRegistrationArgs
@@ -137,6 +163,14 @@ namespace LiveArch.Deployment
                 Name = "",
                 PerSiteScaling = true
             });
+
+            var config = await Pulumi.AzureNative.AppConfiguration.GetKeyValue.InvokeAsync(new Pulumi.AzureNative.AppConfiguration.GetKeyValueArgs
+            {
+                ConfigStoreName = "",
+                KeyValueName = "",
+                ResourceGroupName = "",
+            });
+
 
             var myImage = new Pulumi.DockerBuild.Image("", new Pulumi.DockerBuild.ImageArgs
             {
@@ -193,7 +227,7 @@ namespace LiveArch.Deployment
             });
 
             // Create an Azure Storage Account
-            var storageAccount = new StorageAccount("sa", new StorageAccountArgs
+            var storageAccount = new Pulumi.AzureNative.Storage.StorageAccount("sa", new Pulumi.AzureNative.Storage.StorageAccountArgs
             {
                 ResourceGroupName = resourceGroup.Name,
                 Sku = new Pulumi.AzureNative.Storage.Inputs.SkuArgs

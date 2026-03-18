@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Linq;
 using System.Threading.Tasks;
 
 
@@ -28,11 +29,25 @@ namespace LiveArch.Deployment
             var outputDic = new Dictionary<string, object>() {
                 { "name", "test-name" },
                 { "location", "test-location" },
-                { "id", Guid.NewGuid().ToString() },
+                { "id", (args.Token?.Split(':').Last() ?? "") + Guid.NewGuid().ToString() },
                 { "serverFarmId", "test-app-service-plan" },
                 { "serverName", "test-server-name" },
                 { "ref", "some.test/docker-image:tag" }
             };
+
+            switch (args.Token)
+            {
+                case "azure-native:appconfiguration:getKeyValue":
+                    outputDic["value"] = "sa1, sa2, sa3";
+                    break;
+
+                case "azure-native:storage:getStorageAccount":
+                    outputDic["name"] = args.Args["accountName"];
+                    break;
+
+                default:
+                    break;
+            }
 
             foreach ((var key, var val) in args.Args)
             {

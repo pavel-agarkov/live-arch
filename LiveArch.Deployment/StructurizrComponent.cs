@@ -1,4 +1,6 @@
-﻿using Pulumi;
+﻿using LiveArch.Deployment.Controls;
+using LiveArch.Deployment.Transformers;
+using Pulumi;
 using Pulumi.AzureNative.App;
 using Pulumi.AzureNative.Resources;
 using Pulumi.AzureNative.Web;
@@ -10,71 +12,77 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Type = System.Type;
 
 namespace LiveArch.Deployment
 {
-    public class StructurizrComponent
+    public partial class StructurizrComponent
     {
+        [GeneratedRegex(@"\$\{([a-zA-Z0-9_\.\:\-]+)\}", RegexOptions.Multiline, 1000)]
+        private static partial Regex InterpolationRegex();
+        private static readonly Regex VarRegex = InterpolationRegex();
+        private readonly string parent = Guid.NewGuid().ToString();
+        private readonly string owner = Guid.NewGuid().ToString();
+        private int level = 0;
         private readonly string environment;
+        private readonly IReadOnlyDictionary<string, object> rootVars;
         private Workspace workspace;
-        private Dictionary<string, Type> resourceTypes;
+        private readonly Dictionary<string, Type> resourceTypes = new();
         private Dictionary<string, MethodInfo> invokeMethods = new();
-        private Dictionary<Element, object> newResources = new();
-        private Dictionary<Element, object> oldResources = new();
+        private Dictionary<(Element, IReadOnlyDictionary<string, object>), object> newResources = new();
+        private Dictionary<(Element, IReadOnlyDictionary<string, object>), object> oldResources = new();
         private Dictionary<object, object> childInputWrappers = new();
 
         private Dictionary<Type, Dictionary<string, PropertyInfo>> allInputProps = new();
         private readonly Dictionary<Type, Dictionary<string, MemberInfo>> _outputMembersCache = new();
 
-        private PropertyInfo inputAttrNameProp;
+        private readonly PropertyInfo inputAttrNameProp = typeof(InputAttribute).GetProperty("Name", BindingFlags.Instance | BindingFlags.NonPublic)!;
         private readonly InvokeOptions? invokeOptions = null;
         private readonly CustomResourceOptions? customResourceOptions = null;
 
 
-        public StructurizrComponent(string workspacePath, string environment)
+        public StructurizrComponent(string workspacePath, string environment, IReadOnlyDictionary<string, object> variables)
         {
             var json = new FileInfo(workspacePath);
             workspace = WorkspaceUtils.LoadWorkspaceFromJson(json);
             this.environment = environment;
-            CachePulumiTypes();
+            rootVars = new Dictionary<string, object>(variables)
+            {
+                [owner] = workspace,
+                ["level"] = ++level
+            };
+            CachePulumiTypes(typeof(Image), typeof(ResourceGroup), typeof(ForEachLoop));
         }
 
         public async Task ProcessWorkspaceAsync(CancellationToken cancellationToken)
         {
-            foreach (var deployNode in workspace.Model.DeploymentNodes.On(environment))
+            foreach (var deployNode in workspace.Model.DeploymentNodes.On(environment, SubstituteVariables(rootVars)))
             {
-                await ProcessDeploymentNodeAsync(deployNode, cancellationToken);
+                await ProcessDeploymentNodeAsync(deployNode, rootVars, cancellationToken);
             }
         }
 
-        private void CachePulumiTypes()
+        private void CachePulumiTypes(params Type[] entryTypes)
         {
-            inputAttrNameProp = typeof(InputAttribute).GetProperty("Name", BindingFlags.Instance | BindingFlags.NonPublic)!;
+            entryTypes.Select(x => x.Assembly).Distinct().ToList().ForEach(CacheAssamblyTypes);
+        }
 
-            var pulumiTypes = typeof(ResourceGroup).Assembly.GetTypes();
-            resourceTypes = pulumiTypes
-                .Select(t =>
-                {
-                    var attr = t.GetCustomAttribute<ResourceTypeAttribute>(true);
-                    return new { t, attr?.Type };
-                })
-                .Where(x => x.Type != null)
-                .ToDictionary(x => x.Type!, x => x.t);
-
-            var dockerTypes = typeof(Image).Assembly.GetTypes();
-            foreach (var dockerResType in dockerTypes)
+        private void CacheAssamblyTypes(Assembly assembly)
+        {
+            var types = assembly.GetTypes();
+            foreach (var resType in types)
             {
-                var attr = dockerResType.GetCustomAttribute<ResourceTypeAttribute>(true);
+                var attr = resType.GetCustomAttribute<ResourceTypeAttribute>(true);
                 if (attr != null)
                 {
-                    resourceTypes.Add(attr.Type, dockerResType);
+                    resourceTypes.Add(attr.Type, resType);
                 }
             }
 
-            foreach (var type in pulumiTypes)
+            foreach (var type in types)
             {
                 if (!type.IsAbstract || !type.IsSealed) continue;
                 if (!type.Name.StartsWith("Get")) continue;
@@ -119,55 +127,123 @@ namespace LiveArch.Deployment
             return null;
         }
 
-        protected async Task ProcessDeploymentNodeAsync(DeploymentNode deployNode, CancellationToken cancellationToken)
+        private object SubstituteVariables(string input, IReadOnlyDictionary<string, object> vars)
         {
-            var deploymentNode = new DeploymentNodeAdapter(deployNode);
+            var direct = vars.FirstOrDefault(kv => input == $"${{{kv.Key}}}");
+            if (direct.Key != null)
+            {
+                return direct.Value;
+            }
+            return VarRegex.Replace(input, match =>
+            {
+                var name = match.Groups[1].Value;
+
+                if (!vars.TryGetValue(name, out var value))
+                {
+                    throw new InvalidOperationException($"Variable '${{{name}}}' is not defined.");
+                }
+
+                return (string)ConvertValue(typeof(string), value, vars);
+            });
+        }
+
+        private Func<string, object> SubstituteVariables(IReadOnlyDictionary<string, object> vars)
+        {
+            return s => SubstituteVariables(s, vars);
+        }
+
+
+        protected async Task ProcessDeploymentNodeAsync(DeploymentNode deployNode, IReadOnlyDictionary<string, object> vars, CancellationToken cancellationToken)
+        {
+            var deploymentNode = new DeploymentNodeAdapter(deployNode, SubstituteVariables(vars));
             if (deploymentNode.IsDisabled == false)
             {
-                await CreateNodeAsync(deploymentNode, cancellationToken);
+                var res = await CreateNodeAsync(deploymentNode, vars, cancellationToken);
 
-                foreach (var infraNode in deployNode.InfrastructureNodes.On(environment))
+                var infraNodes = deployNode.InfrastructureNodes.On(environment, SubstituteVariables(vars))
+                    .Select(x => new InfrastructureNodeAdapter(x, SubstituteVariables(vars)))
+                    .Where(x => x.IsDisabled == false)
+                    .ToList();
+
+                if (res is ForEachLoop loop)
                 {
-                    await ProcessInfrastructureNodeAsync(infraNode, cancellationToken);
+                    var sourceElement = infraNodes.FirstOrDefault(x => x.Technology == ForEachSource.Technology);
+                    if (sourceElement != null)
+                    {
+                        infraNodes.Remove(sourceElement);
+                        var sourceVars = new Dictionary<string, object>(vars)
+                        {
+                            [parent] = vars,
+                            [owner] = loop,
+                            ["level"] = ++level
+                        };
+                        var sourceComponent = await CreateNodeAsync(sourceElement, sourceVars, cancellationToken) as ForEachSource;
+                        if (sourceComponent != null)
+                        {
+                            sourceComponent.Source.Apply(async items =>
+                            {
+                                foreach (var item in items)
+                                {
+                                    var loopVars = new Dictionary<string, object>(vars)
+                                    {
+                                        [loop.Name] = item,
+                                        [parent] = vars,
+                                        [owner] = loop!,
+                                        ["level"] = ++level
+                                    };
+                                    await CreateChildResources(deployNode, infraNodes, loopVars, cancellationToken);
+                                }
+                            });
+                        }
+                    }
                 }
-
-                foreach (var containerInstance in deployNode.ContainerInstances.On(environment))
+                else
                 {
-                    await ProcessContainerInstanceAsync(containerInstance!, cancellationToken);
-                }
-
-                foreach (var childNode in deployNode.Children)
-                {
-                    await ProcessDeploymentNodeAsync(childNode!, cancellationToken);
+                    var childVars = new Dictionary<string, object>(vars)
+                    {
+                        [parent] = vars,
+                        [owner] = res!,
+                        ["level"] = ++level
+                    };
+                    await CreateChildResources(deployNode, infraNodes, childVars, cancellationToken);
                 }
             }
         }
 
-        private async Task ProcessInfrastructureNodeAsync(InfrastructureNode infraNode, CancellationToken cancellationToken)
+        private async Task CreateChildResources(DeploymentNode deployNode, List<InfrastructureNodeAdapter> infraNodes, IReadOnlyDictionary<string, object> childVars, CancellationToken cancellationToken)
         {
-            var infra = new InfrastructureNodeAdapter(infraNode);
-            if (infra.IsDisabled == false)
+            foreach (var infraNode in infraNodes)
             {
-                await CreateNodeAsync(infra, cancellationToken);
+                await CreateNodeAsync(infraNode, childVars, cancellationToken);
+            }
+
+            foreach (var containerInstance in deployNode.ContainerInstances.On(environment, SubstituteVariables(childVars)))
+            {
+                await ProcessContainerInstanceAsync(containerInstance!, childVars, cancellationToken);
+            }
+
+            foreach (var childNode in deployNode.Children)
+            {
+                await ProcessDeploymentNodeAsync(childNode!, childVars, cancellationToken);
             }
         }
 
-        private async Task ProcessContainerInstanceAsync(ContainerInstance containerInstance, CancellationToken cancellationToken)
+        private async Task ProcessContainerInstanceAsync(ContainerInstance containerInstance, IReadOnlyDictionary<string, object> vars, CancellationToken cancellationToken)
         {
-            var container = new ContainerInstanceAdapter(containerInstance);
+            var container = new ContainerInstanceAdapter(containerInstance, SubstituteVariables(vars));
             if (container.IsDisabled == false)
             {
-                await BuildContainerInstance(containerInstance, cancellationToken);
-                await CreateNodeAsync(container, cancellationToken);
+                await BuildContainerInstance(containerInstance, vars, cancellationToken);
+                await CreateNodeAsync(container, vars, cancellationToken);
             }
         }
 
-        private async Task BuildContainerInstance(ContainerInstance containerInstance, CancellationToken cancellationToken)
+        private async Task BuildContainerInstance(ContainerInstance containerInstance, IReadOnlyDictionary<string, object> vars, CancellationToken cancellationToken)
         {
-            await CreateNodeAsync(new ContainerBuildAdapter(containerInstance.Container), cancellationToken);
+            await CreateNodeAsync(new ContainerBuildAdapter(containerInstance.Container, SubstituteVariables(vars)), vars, cancellationToken);
         }
 
-        private async Task CreateNodeAsync(IDeploymentNode deployNode, CancellationToken cancellationToken)
+        private async Task<object?> CreateNodeAsync(IDeploymentNode deployNode, IReadOnlyDictionary<string, object> vars, CancellationToken cancellationToken)
         {
             if (resourceTypes.TryGetValue(deployNode.Technology, out var type))
             {
@@ -181,16 +257,15 @@ namespace LiveArch.Deployment
 
                         if (deployNode.Parent != null)
                         {
-                            PropagateParentProperties(deployNode.Parent, param, paramInputProps);
+                            PropagateParentProperties(deployNode.Parent, param, paramInputProps, vars);
                         }
 
-                        ApplyRelations(deployNode, param);
+                        ApplyRelations(deployNode, param, vars);
 
                         foreach ((var propName, var propVal) in deployNode.Properties)
                         {
-                            SetProperty(param, propName, propVal, paramInputProps);
+                            SetProperty(param, propName, propVal, paramInputProps, vars);
                         }
-
 
                         var task = (Task)invoke.Invoke(null, [param, invokeOptions!])!;
                         await task.ConfigureAwait(false);
@@ -198,8 +273,9 @@ namespace LiveArch.Deployment
                         var resultProperty = task.GetType().GetProperty("Result");
                         var resource = resultProperty!.GetValue(task);
 
-
-                        oldResources.Add(deployNode.Node, resource!);
+                        oldResources.Add((deployNode.Node, vars), resource!);
+                        oldResources.TryAdd((deployNode.Node, GetLoopScopedVars(vars)), resource!);
+                        return resource;
                     }
                 }
                 else
@@ -210,77 +286,89 @@ namespace LiveArch.Deployment
 
                     if (deployNode.Parent != null)
                     {
-                        PropagateParentProperties(deployNode.Parent, param, paramInputProps);
+                        PropagateParentProperties(deployNode.Parent, param, paramInputProps, vars);
                     }
 
-                    ApplyRelations(deployNode, param);
+                    ApplyRelations(deployNode, param, vars);
 
                     foreach ((var propName, var propVal) in deployNode.Properties)
                     {
-                        SetProperty(param, propName, propVal, paramInputProps);
+                        SetProperty(param, propName, propVal, paramInputProps, vars);
                     }
 
                     if (!deployNode.Properties.TryGetValue("var", out var resVar) &&
                         (!deployNode.Properties.TryGetValue("structurizr.dsl.identifier", out resVar) || Guid.TryParse(resVar, out _)) &&
                         !deployNode.Properties.TryGetValue("name", out resVar))
                     {
-                        resVar = deployNode.Name;
+                        resVar = deployNode.Node.Name;
                     }
 
-                    var newRes = Activator.CreateInstance(type, [resVar, param, customResourceOptions!]);
-                    newResources.Add(deployNode.Node, newRes!);
+                    var newRes = Activator.CreateInstance(type, [SubstituteVariables(resVar, vars), param, customResourceOptions!]);
+                    newResources.Add((deployNode.Node, vars), newRes!);
+                    newResources.TryAdd((deployNode.Node, GetLoopScopedVars(vars)), newRes!);
+                    return newRes;
                 }
             }
-
+            return null;
         }
 
-        private void ApplyRelations(IDeploymentNode deployNode, object param)
+        private IReadOnlyCollection<ITransformer> GetTransformers(Dictionary<string, string> properties)
+        {
+            var transformers = new List<ITransformer>();
+            foreach ((var name, var get) in TransformerRegistry.Registry)
+            {
+                if (properties.TryGetValue(name, out var param))
+                {
+                    var transformer = get(param);
+                    transformers.Add(transformer);
+                }
+            }
+            return transformers;
+        }
+
+        private void ApplyRelations(IDeploymentNode deployNode, object param, IReadOnlyDictionary<string, object> vars)
         {
             foreach (var relation in deployNode.Relationships)
             {
-                if (oldResources.TryGetValue(relation.Destination, out var source) || newResources.TryGetValue(relation.Destination, out source))
+                if (TryGetResourceByNode(relation.Destination, vars, out var source))
                 {
                     if (relation.Properties.TryGetValue("source", out var sourcePath) && relation.Properties.TryGetValue("target", out var targetPath))
                     {
-                        ApplyDependency(source, param, sourcePath, targetPath);
+                        ApplyDependency(source!, param, sourcePath, targetPath, vars, GetTransformers(relation.Properties));
                     }
                 }
             }
 
-            if (deployNode.Node is ContainerInstance ci && newResources.TryGetValue(ci.Container, out var image) && image is Image dockerImage)
+            if (deployNode.Node is ContainerInstance ci && newResources.TryGetValue((ci.Container, vars), out var image) && image is Image dockerImage)
             {
                 if (param is WebAppArgs web)
                 {
-                    SetProperty(web, "siteConfig.linuxFxVersion", Output.Format($"DOCKER|{dockerImage.Ref}"), GetInputProps(typeof(WebAppArgs)));
+                    SetProperty(web, "siteConfig.linuxFxVersion", Output.Format($"DOCKER|{dockerImage.Ref}"), GetInputProps(typeof(WebAppArgs)), vars);
                 }
                 else if (param is ContainerAppArgs app)
                 {
-                    SetProperty(app, "template.containers.image", dockerImage.Ref, GetInputProps(typeof(ContainerAppArgs)));
+                    SetProperty(app, "template.containers.image", dockerImage.Ref, GetInputProps(typeof(ContainerAppArgs)), vars);
                 }
                 else if (param is DeploymentArgs k8s)
                 {
-                    SetProperty(k8s, "spec.template.spec.containers.image", dockerImage.Ref, GetInputProps(typeof(DeploymentArgs)));
+                    SetProperty(k8s, "spec.template.spec.containers.image", dockerImage.Ref, GetInputProps(typeof(DeploymentArgs)), vars);
                 }
             }
         }
 
-        private void PropagateParentProperties(IDeploymentNode deployNode, object param, Dictionary<string, PropertyInfo> paramInputProps)
+        private void PropagateParentProperties(IDeploymentNode deployNode, object param, Dictionary<string, PropertyInfo> paramInputProps, IReadOnlyDictionary<string, object> vars)
         {
-            if (deployNode.Parent != null)
+            var parentVars = vars;
+            if (deployNode.Parent != null && TryGetParentVars(vars, out parentVars))
             {
-                PropagateParentProperties(deployNode.Parent, param, paramInputProps);
+                PropagateParentProperties(deployNode.Parent, param, paramInputProps, parentVars!);
             }
-            if (!oldResources.TryGetValue(deployNode.Node, out object? resource) &&
-                !newResources.TryGetValue(deployNode.Node, out resource))
+            if (!TryGetResourceByNode(deployNode.Node, parentVars ?? vars, out var resource))
             {
-                if (deployNode.Node is SoftwareSystem)
-                {
-                    return;
-                }
-                throw new InvalidOperationException("Resource has not been created yet");
+                return;
             }
 
-            if (ResourceHierarchy.Registry.TryGetValue(resource.GetType(), out var rules))
+            if (ResourceHierarchy.Registry.TryGetValue(resource!.GetType(), out var rules))
             {
                 foreach (var rule in rules)
                 {
@@ -289,11 +377,52 @@ namespace LiveArch.Deployment
                     {
                         foreach (var targetProp in rule.TargetInputProperties)
                         {
-                            SetProperty(param, targetProp, value, paramInputProps);
+                            SetProperty(param, targetProp, value, paramInputProps, vars);
                         }
                     }
                 }
             }
+        }
+
+        private bool TryGetResourceByNode(Element node, IReadOnlyDictionary<string, object> vars, out object? resource)
+        {
+            if (!oldResources.TryGetValue((node, vars), out resource) &&
+                !newResources.TryGetValue((node, vars), out resource) &&
+                !oldResources.TryGetValue((node, GetLoopScopedVars(vars)), out resource) &&
+                !newResources.TryGetValue((node, GetLoopScopedVars(vars)), out resource) &&
+                !oldResources.TryGetValue((node, rootVars), out resource) &&
+                !newResources.TryGetValue((node, rootVars), out resource))
+            {
+                if (node is StaticStructureElement)
+                {
+                    return false;
+                }
+                throw new InvalidOperationException($"Resource for node {node.Name} is out of scope");
+            }
+
+            return true;
+        }
+
+        private bool TryGetParentVars(IReadOnlyDictionary<string, object> vars, out IReadOnlyDictionary<string, object>? parentVars)
+        {
+            if (vars.TryGetValue(parent, out var parentVarObj))
+            {
+                parentVars = (IReadOnlyDictionary<string, object>)parentVarObj;
+                return true;
+            }
+            parentVars = null;
+            return false;
+        }
+
+        private IReadOnlyDictionary<string, object> GetLoopScopedVars(IReadOnlyDictionary<string, object> vars)
+        {
+            if (vars.TryGetValue(owner, out var ownerResource)
+                && ownerResource is not ForEachLoop
+                && TryGetParentVars(vars, out var parentVars))
+            {
+                return GetLoopScopedVars(parentVars!);
+            }
+            return vars;
         }
 
         private Dictionary<string, PropertyInfo> GetInputProps(Type type)
@@ -457,14 +586,22 @@ namespace LiveArch.Deployment
         private static bool IsOutput(Type t)
             => t.IsGenericType && t.GetGenericTypeDefinition() == typeof(Output<>);
 
-        public void ApplyDependency(object source, object target, string sourcePath, string targetPath)
+        public void ApplyDependency(object source, object target, string sourcePath, string targetPath, IReadOnlyDictionary<string, object> vars, IReadOnlyCollection<ITransformer> transformers)
         {
             var value = GetOutputValue(source, sourcePath);
             if (value == null)
                 return;
 
             var inputProps = GetInputProps(target.GetType());
-            SetProperty(target, targetPath, value, inputProps);
+            if(transformers.Count > 0)
+            {
+                foreach (var transformer in transformers)
+                {
+                    value = ConvertValue(transformer.InputType, value, vars);
+                    value = transformer.Transform(value);
+                }
+            }
+            SetProperty(target, targetPath, value, inputProps, vars);
         }
 
         private static PropertyInfo? FindPropertyForBackingField(Type type, FieldInfo field)
@@ -482,7 +619,7 @@ namespace LiveArch.Deployment
             return type.GetProperty(name, BindingFlags.Instance | BindingFlags.Public);
         }
 
-        public void SetProperty(object target, string path, object value, Dictionary<string, PropertyInfo> inputProps)
+        public void SetProperty(object target, string path, object value, Dictionary<string, PropertyInfo> inputProps, IReadOnlyDictionary<string, object> vars)
         {
             var parts = path.Split('.', 2);
 
@@ -491,7 +628,7 @@ namespace LiveArch.Deployment
                 // leaf property
                 if (inputProps.TryGetValue(parts[0], out var prop))
                 {
-                    object converted = ConvertValue(prop.PropertyType, value);
+                    object converted = ConvertValue(prop.PropertyType, value, vars);
                     prop.SetValue(target, converted);
                 }
                 return;
@@ -506,17 +643,17 @@ namespace LiveArch.Deployment
             var current = headProp.GetValue(target);
             if (current == null)
             {
-                current = CreateNestedInstance(headProp.PropertyType, out var unwrapped);
+                current = CreateNestedInstance(headProp.PropertyType, vars, out var unwrapped);
                 childInputWrappers[current] = unwrapped ?? current;
                 headProp.SetValue(target, current);
             }
 
             var nestedProps = GetInputProps(GetUnderlyingArgsType(headProp.PropertyType));
 
-            SetProperty(childInputWrappers[current], tail, value, nestedProps);
+            SetProperty(childInputWrappers[current], tail, value, nestedProps, vars);
         }
 
-        private static object CreateNestedInstance(Type type, out object? unwrapped)
+        private object CreateNestedInstance(Type type, IReadOnlyDictionary<string, object> vars, out object? unwrapped)
         {
             // Input<T>
             if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Input<>))
@@ -533,7 +670,7 @@ namespace LiveArch.Deployment
                 var elem = type.GetGenericArguments()[0];
                 var list = Activator.CreateInstance(typeof(List<>).MakeGenericType(elem))!;
                 unwrapped = list;
-                return WrapInputList(elem, list);
+                return WrapInputList(elem, list, vars);
             }
 
             // InputMap<T>
@@ -543,7 +680,7 @@ namespace LiveArch.Deployment
                 var dict = Activator.CreateInstance(typeof(Dictionary<,>)
                     .MakeGenericType(typeof(string), elem))!;
                 unwrapped = dict;
-                return WrapInputMap(elem, dict);
+                return WrapInputMap(elem, dict, vars);
             }
 
             // zwykły Args
@@ -561,37 +698,46 @@ namespace LiveArch.Deployment
             return type;
         }
 
-        public static object ConvertValue(Type targetType, object rawValue)
+        public object ConvertValue(Type targetType, object sourceValue, IReadOnlyDictionary<string, object> vars)
         {
-            if (rawValue == null)
-                return null!;
+            if (sourceValue is string str)
+            {
+                sourceValue = SubstituteVariables(str, vars);
+            }
 
-            var rawType = rawValue.GetType();
+            if (sourceValue == null)
+            {
+                return null!;
+            }
+
+            var sourceType = sourceValue.GetType();
 
             // source value is Output
-            if (IsGenericOutput(rawType))
+            if (IsGenericOutput(sourceType))
             {
                 var innerTargetType = targetType.GetGenericArguments()[0]!;
 
                 // target is Input
                 if (IsGenericInput(targetType))
                 {
-                    CheckGenericArguments(targetType, rawType, innerTargetType);
-                    return ConvertOutputToInput(innerTargetType, rawValue);
+                    CheckGenericArguments(targetType, sourceType, innerTargetType);
+                    return ConvertOutputToInput(innerTargetType, sourceValue);
                 }
 
                 if (IsGenericInputList(targetType))
                 {
-                    CheckGenericArguments(targetType, rawType, innerTargetType);
-                    return ConvertOutputToInputList(innerTargetType, rawValue);
+                    CheckGenericArguments(targetType, sourceType, innerTargetType);
+                    return ConvertOutputToInputList(innerTargetType, sourceValue);
                 }
 
-                throw new NotSupportedException($"Cannot convert {rawType.FullName} to {targetType.FullName}");
+                throw new NotSupportedException($"Cannot convert {sourceType.FullName} to {targetType.FullName}");
             }
 
             // Если значение уже подходит — возвращаем как есть
-            if (targetType.IsAssignableFrom(rawType))
-                return rawValue;
+            if (targetType.IsAssignableFrom(sourceType))
+            {
+                return sourceValue;
+            }
 
             // Input<T>
             if (IsGenericInput(targetType))
@@ -599,11 +745,11 @@ namespace LiveArch.Deployment
                 var innerType = targetType.GetGenericArguments()[0];
 
                 // если rawValue уже совместим с innerType → используем implicit operator
-                if (innerType.IsAssignableFrom(rawType))
-                    return WrapInput(innerType, rawValue);
+                if (innerType.IsAssignableFrom(sourceType))
+                    return WrapInput(innerType, sourceValue);
 
                 // иначе конвертируем и оборачиваем
-                var converted = ConvertValue(innerType, rawValue);
+                var converted = ConvertValue(innerType, sourceValue, vars);
                 return WrapInput(innerType, converted);
             }
 
@@ -611,40 +757,40 @@ namespace LiveArch.Deployment
             if (targetType.IsGenericType && targetType.GetGenericTypeDefinition() == typeof(InputList<>))
             {
                 var elemType = targetType.GetGenericArguments()[0];
-                var list = ConvertToList(elemType, rawValue);
-                return WrapInputList(elemType, list);
+                var list = ConvertToList(elemType, sourceValue, vars);
+                return WrapInputList(elemType, list, vars);
             }
 
             // InputMap<T>
             if (targetType.IsGenericType && targetType.GetGenericTypeDefinition() == typeof(InputMap<>))
             {
                 var elemType = targetType.GetGenericArguments()[0];
-                var dict = ConvertToDictionary(elemType, rawValue);
-                return WrapInputMap(elemType, dict);
+                var dict = ConvertToDictionary(elemType, sourceValue, vars);
+                return WrapInputMap(elemType, dict, vars);
             }
 
             // Union<T0,T1>
             if (targetType.IsGenericType &&
                 targetType.GetGenericTypeDefinition() == typeof(Union<,>))
             {
-                return ConvertToUnion(targetType, rawValue);
+                return ConvertToUnion(targetType, sourceValue, vars);
             }
 
 
             // Enum
             if (IsPulumiEnum(targetType))
             {
-                return ConvertPulumiEnum(targetType, rawValue);
+                return ConvertPulumiEnum(targetType, sourceValue, vars);
             }
 
             //
             // Primitives
             //
-            if (targetType == typeof(string)) return rawValue.ToString()!;
-            if (targetType == typeof(int)) return int.Parse(rawValue.ToString()!);
-            if (targetType == typeof(bool)) return bool.Parse(rawValue.ToString()!);
+            if (targetType == typeof(string)) return sourceValue.ToString()!;
+            if (targetType == typeof(int)) return int.Parse(sourceValue.ToString()!);
+            if (targetType == typeof(bool)) return bool.Parse(sourceValue.ToString()!);
 
-            throw new NotSupportedException($"Cannot convert '{rawValue}' to {targetType}");
+            throw new NotSupportedException($"Cannot convert '{sourceValue}' to {targetType}");
         }
 
         private static object ConvertOutputToInputList(Type innerTargetType, object output)
@@ -696,9 +842,9 @@ namespace LiveArch.Deployment
             return type.GetCustomAttribute<EnumTypeAttribute>() != null;
         }
 
-        private static object ConvertPulumiEnum(Type enumType, object rawValue)
+        private object ConvertPulumiEnum(Type enumType, object sourceValue, IReadOnlyDictionary<string, object> vars)
         {
-            var raw = rawValue.ToString()!;
+            var str = (string)ConvertValue(typeof(string), sourceValue, vars);
 
             // znajdź wszystkie publiczne statyczne pola (np. SystemAssigned, UserAssigned)
             var props = enumType.GetProperties(BindingFlags.Public | BindingFlags.Static);
@@ -713,14 +859,14 @@ namespace LiveArch.Deployment
 
                 var enumString = valueField.GetValue(propValue)?.ToString();
 
-                if (string.Equals(enumString, raw, StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(enumString, str, StringComparison.OrdinalIgnoreCase))
                 {
                     return propValue;
                 }
             }
 
             throw new NotSupportedException(
-                $"Cannot convert '{raw}' to Pulumi enum type {enumType.Name}");
+                $"Cannot convert '{sourceValue}' to Pulumi enum type {enumType.Name}");
         }
 
         private static object ConvertOutputToInput(Type innerType, object output)
@@ -762,7 +908,7 @@ namespace LiveArch.Deployment
             return create.Invoke(null, [value])!;
         }
 
-        private static object WrapInputList(Type elemType, object listObj)
+        private object WrapInputList(Type elemType, object listObj, IReadOnlyDictionary<string, object> vars)
         {
             var listType = typeof(List<>).MakeGenericType(elemType);
 
@@ -772,7 +918,7 @@ namespace LiveArch.Deployment
                 var tmp = (IList)Activator.CreateInstance(listType)!;
                 foreach (var item in (IEnumerable)listObj)
                 {
-                    tmp.Add(ConvertValue(elemType, item!));
+                    tmp.Add(ConvertValue(elemType, item!, vars));
                 }
                 listObj = tmp;
             }
@@ -795,7 +941,7 @@ namespace LiveArch.Deployment
             return op.Invoke(null, [listObj])!;
         }
 
-        private static object WrapInputMap(Type valueType, object dictObj)
+        private object WrapInputMap(Type valueType, object dictObj, IReadOnlyDictionary<string, object> vars)
         {
             var dictType = typeof(Dictionary<,>).MakeGenericType(typeof(string), valueType);
 
@@ -805,7 +951,7 @@ namespace LiveArch.Deployment
                 var tmp = (IDictionary)Activator.CreateInstance(dictType)!;
                 foreach (DictionaryEntry kv in (IDictionary)dictObj)
                 {
-                    tmp[kv.Key] = ConvertValue(valueType, kv.Value!);
+                    tmp[kv.Key] = ConvertValue(valueType, kv.Value!, vars);
                 }
                 dictObj = tmp;
             }
@@ -829,7 +975,7 @@ namespace LiveArch.Deployment
             return op.Invoke(null, [dictObj])!;
         }
 
-        private static object ConvertToUnion(Type unionType, object rawValue)
+        private object ConvertToUnion(Type unionType, object rawValue, IReadOnlyDictionary<string, object> vars)
         {
             var args = unionType.GetGenericArguments();
             var t0 = args[0];
@@ -840,14 +986,14 @@ namespace LiveArch.Deployment
                 return rawValue;
 
             // 2. Spróbuj skonwertować rawValue do T0
-            if (TryConvertToType(t0, rawValue, out var v0))
+            if (TryConvertToType(t0, rawValue, vars, out var v0))
             {
                 var fromT0 = unionType.GetMethod("FromT0", BindingFlags.Public | BindingFlags.Static)!;
                 return fromT0.Invoke(null, [v0])!;
             }
 
             // 3. Spróbuj skonwertować rawValue do T1
-            if (TryConvertToType(t1, rawValue, out var v1))
+            if (TryConvertToType(t1, rawValue, vars, out var v1))
             {
                 var fromT1 = unionType.GetMethod("FromT1", BindingFlags.Public | BindingFlags.Static)!;
                 return fromT1.Invoke(null, [v1])!;
@@ -857,11 +1003,11 @@ namespace LiveArch.Deployment
                 $"Cannot convert '{rawValue}' to Union<{t0.Name},{t1.Name}>");
         }
 
-        private static bool TryConvertToType(Type targetType, object rawValue, out object? result)
+        private bool TryConvertToType(Type targetType, object rawValue, IReadOnlyDictionary<string, object> vars, out object? result)
         {
             try
             {
-                result = ConvertValue(targetType, rawValue);
+                result = ConvertValue(targetType, rawValue, vars);
                 return true;
             }
             catch
@@ -871,36 +1017,47 @@ namespace LiveArch.Deployment
             }
         }
 
-        private static object ConvertToList(Type elemType, object raw)
+        private object ConvertToList(Type elemType, object raw, IReadOnlyDictionary<string, object> vars)
         {
             var list = (IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(elemType))!;
 
             if (raw is string s)
             {
                 foreach (var part in s.Split(',', StringSplitOptions.RemoveEmptyEntries))
-                    list.Add(ConvertValue(elemType, part.Trim()));
+                {
+                    list.Add(ConvertValue(elemType, part.Trim(), vars));
+                }
             }
             else if (raw is IEnumerable<object> enumerable)
             {
                 foreach (var item in enumerable)
-                    list.Add(ConvertValue(elemType, item));
+                {
+                    list.Add(ConvertValue(elemType, item, vars));
+                }
             }
             else
             {
-                list.Add(ConvertValue(elemType, raw));
+                list.Add(ConvertValue(elemType, raw, vars));
             }
 
             return list;
         }
-        private static object ConvertToDictionary(Type elemType, object raw)
+
+        private object ConvertToDictionary(Type elemType, object sourceValue, IReadOnlyDictionary<string, object> vars)
         {
             var dict = (IDictionary)Activator.CreateInstance(
                 typeof(Dictionary<,>).MakeGenericType(typeof(string), elemType))!;
 
-            if (raw is IDictionary<string, object> rawDict)
+            if (sourceValue is IDictionary<string, object> rawDict)
             {
                 foreach (var kv in rawDict)
-                    dict[kv.Key] = ConvertValue(elemType, kv.Value);
+                {
+                    dict[kv.Key] = ConvertValue(elemType, kv.Value, vars);
+                }
+            }
+            else
+            {
+                throw new NotSupportedException($"Cannot convert '{sourceValue}' to Dictionary<string,{elemType.Name}>");
             }
 
             return dict;
