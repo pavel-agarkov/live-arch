@@ -4,6 +4,8 @@
     <File Path="LICENSE" />
     <File Path="README.md" />
   </Folder>
+  <Project Path="LiveArch.Deployment.Runner/LiveArch.Deployment.Runner.csproj" Id="90e68109-a4b7-419b-9c50-0cea8b788e5f" />
+  <Project Path="LiveArch.Deployment.TestRunner/LiveArch.Deployment.TestRunner.csproj" Id="6b598c80-c2d1-469b-b8d4-f754bd106233" />
   <Project Path="LiveArch.Deployment/LiveArch.Deployment.csproj" />
   <Project Path="LiveArch.Diagram/LiveArch.Diagram.csproj" />
 </Solution>

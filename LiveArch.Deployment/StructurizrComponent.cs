@@ -43,6 +43,8 @@ namespace LiveArch.Deployment
         private readonly InvokeOptions? invokeOptions = null;
         private readonly CustomResourceOptions? customResourceOptions = null;
 
+        public IReadOnlyDictionary<(Element, IReadOnlyDictionary<string, object>), object> NewResources => newResources;
+        public IReadOnlyDictionary<(Element, IReadOnlyDictionary<string, object>), object> OldResources => oldResources;
 
         public StructurizrComponent(string workspacePath, string environment, IReadOnlyDictionary<string, object> variables)
         {
@@ -593,7 +595,7 @@ namespace LiveArch.Deployment
                 return;
 
             var inputProps = GetInputProps(target.GetType());
-            if(transformers.Count > 0)
+            if (transformers.Count > 0)
             {
                 foreach (var transformer in transformers)
                 {

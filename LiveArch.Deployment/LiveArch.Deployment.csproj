@@ -1,20 +1,18 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
-    <Nullable>enable</Nullable>
+    <OutputType>Library</OutputType>
+	<TargetFramework>net10.0</TargetFramework>
+	<Nullable>enable</Nullable>
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
     <PackageReference Include="Pulumi" Version="3.*" />
-    <PackageReference Include="Pulumi.AzureNative" Version="3.*" />
+    <PackageReference Include="Pulumi.AzureNative" Version="3.16.0" />
     <PackageReference Include="Pulumi.DockerBuild" Version="0.0.15" />
     <PackageReference Include="Structurizr.Client" Version="1.1.1" />
   </ItemGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\LiveArch.Diagram\LiveArch.Diagram.csproj" />
-  </ItemGroup>
 
 </Project>
