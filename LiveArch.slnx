@@ -1,11 +1,20 @@
 <Solution>
+  <Folder Name="/Examples/">
+    <Project Path="LiveArch.Deployment.Runner/LiveArch.Deployment.Runner.csproj" Id="90e68109-a4b7-419b-9c50-0cea8b788e5f" />
+    <Project Path="LiveArch.Deployment.TestRunner/LiveArch.Deployment.TestRunner.csproj" Id="6b598c80-c2d1-469b-b8d4-f754bd106233" />
+    <Project Path="LiveArch.Diagram/LiveArch.Diagram.csproj" />
+  </Folder>
+  <Folder Name="/Examples/Web/">
+    <Project Path="LiveArch.Delivery.Api/LiveArch.Delivery.Api.csproj" Id="fbe78d5c-78b5-48d6-a468-e3ed26b4b2bf" />
+    <Project Path="LiveArch.Order.Api/LiveArch.Order.Api.csproj" Id="530966b9-7acf-44e3-a14c-1587bfd2d0c5" />
+  </Folder>
+  <Folder Name="/Libraries/">
+    <Project Path="LiveArch.Deployment.Azure/LiveArch.Deployment.Azure.csproj" Id="02144a47-e659-4c9d-9310-dbf67792dc0f" />
+    <Project Path="LiveArch.Deployment/LiveArch.Deployment.csproj" />
+  </Folder>
   <Folder Name="/Solution Items/">
     <File Path=".gitignore" />
     <File Path="LICENSE" />
     <File Path="README.md" />
   </Folder>
-  <Project Path="LiveArch.Deployment.Runner/LiveArch.Deployment.Runner.csproj" Id="90e68109-a4b7-419b-9c50-0cea8b788e5f" />
-  <Project Path="LiveArch.Deployment.TestRunner/LiveArch.Deployment.TestRunner.csproj" Id="6b598c80-c2d1-469b-b8d4-f754bd106233" />
-  <Project Path="LiveArch.Deployment/LiveArch.Deployment.csproj" />
-  <Project Path="LiveArch.Diagram/LiveArch.Diagram.csproj" />
 </Solution>

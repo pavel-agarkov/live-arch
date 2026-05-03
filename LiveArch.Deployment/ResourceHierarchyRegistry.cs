@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-
-namespace LiveArch.Deployment
+﻿namespace LiveArch.Deployment
 {
     public class ResourceHierarchyRegistry : Dictionary<Type, IReadOnlyCollection<ResourcePropagationRule>>
     {

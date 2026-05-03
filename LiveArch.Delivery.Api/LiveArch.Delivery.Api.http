@@ -1,0 +1,6 @@
+@LiveArch.Delivery.Api_HostAddress = http://localhost:5045
+
+GET {{LiveArch.Delivery.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

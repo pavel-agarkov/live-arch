@@ -4,6 +4,7 @@ using Pulumi;
 using Pulumi.AzureNative.App;
 using Pulumi.AzureNative.Resources;
 using Pulumi.AzureNative.Web;
+using Pulumi.AzureNative.Web.Inputs;
 using Pulumi.DockerBuild;
 using Structurizr;
 using System;
@@ -28,6 +29,7 @@ namespace LiveArch.Deployment
         private readonly string owner = Guid.NewGuid().ToString();
         private int level = 0;
         private readonly string environment;
+        private readonly DeploymentView deploymentView;
         private readonly IReadOnlyDictionary<string, object> rootVars;
         private Workspace workspace;
         private readonly Dictionary<string, Type> resourceTypes = new();
@@ -46,11 +48,14 @@ namespace LiveArch.Deployment
         public IReadOnlyDictionary<(Element, IReadOnlyDictionary<string, object>), object> NewResources => newResources;
         public IReadOnlyDictionary<(Element, IReadOnlyDictionary<string, object>), object> OldResources => oldResources;
 
-        public StructurizrComponent(string workspacePath, string environment, IReadOnlyDictionary<string, object> variables)
+        public StructurizrComponent(string workspacePath, string environment, string deployment, IReadOnlyDictionary<string, object> variables)
         {
             var json = new FileInfo(workspacePath);
             workspace = WorkspaceUtils.LoadWorkspaceFromJson(json);
             this.environment = environment;
+            this.deploymentView = workspace.Views.DeploymentViews.FirstOrDefault(v => v.Key == deployment)
+                ?? throw new InvalidOperationException($"Deployment '{deployment}' was not found in the current workspace.");
+
             rootVars = new Dictionary<string, object>(variables)
             {
                 [owner] = workspace,
@@ -61,7 +66,8 @@ namespace LiveArch.Deployment
 
         public async Task ProcessWorkspaceAsync(CancellationToken cancellationToken)
         {
-            foreach (var deployNode in workspace.Model.DeploymentNodes.On(environment, SubstituteVariables(rootVars)))
+            var rootDeploymentNodes = workspace.Model.DeploymentNodes.On(environment, deploymentView, SubstituteVariables(rootVars));
+            foreach (var deployNode in rootDeploymentNodes)
             {
                 await ProcessDeploymentNodeAsync(deployNode, rootVars, cancellationToken);
             }
@@ -162,7 +168,7 @@ namespace LiveArch.Deployment
             {
                 var res = await CreateNodeAsync(deploymentNode, vars, cancellationToken);
 
-                var infraNodes = deployNode.InfrastructureNodes.On(environment, SubstituteVariables(vars))
+                var infraNodes = deployNode.InfrastructureNodes.On(environment, deploymentView, SubstituteVariables(vars))
                     .Select(x => new InfrastructureNodeAdapter(x, SubstituteVariables(vars)))
                     .Where(x => x.IsDisabled == false)
                     .ToList();
@@ -219,7 +225,7 @@ namespace LiveArch.Deployment
                 await CreateNodeAsync(infraNode, childVars, cancellationToken);
             }
 
-            foreach (var containerInstance in deployNode.ContainerInstances.On(environment, SubstituteVariables(childVars)))
+            foreach (var containerInstance in deployNode.ContainerInstances.On(environment, deploymentView, SubstituteVariables(childVars)))
             {
                 await ProcessContainerInstanceAsync(containerInstance!, childVars, cancellationToken);
             }
@@ -330,7 +336,7 @@ namespace LiveArch.Deployment
 
         private void ApplyRelations(IDeploymentNode deployNode, object param, IReadOnlyDictionary<string, object> vars)
         {
-            foreach (var relation in deployNode.Relationships)
+            foreach (var relation in deployNode.Relationships.In(deploymentView))
             {
                 if (TryGetResourceByNode(relation.Destination, vars, out var source))
                 {
@@ -399,6 +405,12 @@ namespace LiveArch.Deployment
                 {
                     return false;
                 }
+
+                if (new ElementAdapter(node, SubstituteVariables(vars)).IsDisabled)
+                {
+                    return false;
+                }
+
                 throw new InvalidOperationException($"Resource for node {node.Name} is out of scope");
             }
 
@@ -627,6 +639,18 @@ namespace LiveArch.Deployment
 
             if (parts.Length == 1)
             {
+                if (parts[0].Contains(':'))
+                {
+                    AddKeyToCollection(target, inputProps, parts[0], value, vars);
+                    return;
+                }
+
+                if (parts[0].Contains("+="))
+                {
+                    AddItemsToCollection(target, inputProps, parts[0], value, vars);
+                    return;
+                }
+
                 // leaf property
                 if (inputProps.TryGetValue(parts[0], out var prop))
                 {
@@ -653,6 +677,174 @@ namespace LiveArch.Deployment
             var nestedProps = GetInputProps(GetUnderlyingArgsType(headProp.PropertyType));
 
             SetProperty(childInputWrappers[current], tail, value, nestedProps, vars);
+        }
+
+        private void AddItemsToCollection(object target, Dictionary<string, PropertyInfo> inputProps, string path, object value, IReadOnlyDictionary<string, object> vars)
+        {
+            var parts = path.Split("+=", 2);
+            if (parts.Length != 2)
+            {
+                throw new InvalidOperationException("Collection append operation requires exactly one '+=' operator");
+            }
+
+            var collectionPropName = parts[0];
+
+            if (!inputProps.TryGetValue(collectionPropName, out var collectionProp))
+                throw new InvalidOperationException($"Property {collectionPropName} not found on {target.GetType().Name}");
+
+            var collectionType = collectionProp.PropertyType;
+
+            // --- InputList<T> ---
+            if (collectionType.IsGenericType &&
+                collectionType.GetGenericTypeDefinition() == typeof(InputList<>))
+            {
+                AddValuesToList(target, collectionProp, value, vars);
+                return;
+            }
+
+            throw new InvalidOperationException(
+                $"Append operation supports only properties of type 'InputList<T>'. '{collectionPropName}' has type '{collectionType.Name}'");
+        }
+
+        private void AddValuesToList(object target, PropertyInfo listProp, object value, IReadOnlyDictionary<string, object> vars)
+        {
+            var listType = listProp.PropertyType;
+            var itemType = listType.GetGenericArguments()[0];
+
+            // Получаем текущий список
+            var list = listProp.GetValue(target);
+            if (list == null)
+            {
+                list = Activator.CreateInstance(listType);
+                listProp.SetValue(target, list);
+            }
+
+            // Находим метод AddRange
+            var addRangeMethod = listType.GetMethod("AddRange");
+
+            // Конвертируем значение в InputList<T>
+            var inputListType = typeof(InputList<>).MakeGenericType(itemType);
+            var inputList = ConvertValue(inputListType, value, vars);
+
+            // Добавляем элемент
+            addRangeMethod!.Invoke(list, [inputList]);
+        }
+
+        private void AddKeyToCollection(object target, Dictionary<string, PropertyInfo> inputProps, string path, object value, IReadOnlyDictionary<string, object> vars)
+        {
+            var parts = path.Split(':', 2);
+            if (parts.Length != 2)
+            {
+                throw new InvalidOperationException("Collection assignment requires exactly one ':' separator");
+            }
+
+            var collectionPropName = parts[0];
+            var key = parts[1];
+
+            if (!inputProps.TryGetValue(collectionPropName, out var collectionProp))
+            {
+                throw new InvalidOperationException($"Property {collectionPropName} not found on {target.GetType().Name}");
+            }
+
+            var collectionType = collectionProp.PropertyType;
+
+            // --- InputList<T> ---
+            if (collectionType.IsGenericType &&
+                collectionType.GetGenericTypeDefinition() == typeof(InputList<>))
+            {
+                AddKeyToList(target, collectionProp, key, value, vars);
+                return;
+            }
+
+            // --- InputMap<T> ---
+            if (collectionType.IsGenericType &&
+                collectionType.GetGenericTypeDefinition() == typeof(InputMap<>))
+            {
+                AddKeyToMap(target, collectionProp, key, value, vars);
+                return;
+            }
+
+            throw new InvalidOperationException(
+                $"{collectionPropName} is neither InputList<T> nor InputMap<T>");
+        }
+
+        private void AddKeyToList(object target, PropertyInfo listProp, string key, object value, IReadOnlyDictionary<string, object> vars)
+        {
+            var listType = listProp.PropertyType;
+            var itemType = listType.GetGenericArguments()[0];
+
+            // Создаём список, если его нет
+            var list = listProp.GetValue(target);
+            if (list == null)
+            {
+                list = Activator.CreateInstance(listType);
+                listProp.SetValue(target, list);
+            }
+
+            // Создаём элемент T
+            var item = Activator.CreateInstance(itemType);
+
+            // Ищем Name или Key
+            var nameProp = (itemType.GetProperty("Name") ?? itemType.GetProperty("Key"))
+                ?? throw new InvalidOperationException($"{itemType.Name} must contain Name or Key property");
+
+            // Ищем Value
+            var valueProp = itemType.GetProperty("Value")
+                ?? throw new InvalidOperationException($"{itemType.Name} must contain Value property");
+
+            // Конвертируем значение
+            var convertedValue = ConvertValue(valueProp.PropertyType, value, vars);
+
+            // Устанавливаем свойства
+            nameProp.SetValue(item, (Input<string>)key);
+            valueProp.SetValue(item, convertedValue);
+
+            // Находим метод Add(params Input<T>[] inputs)
+            var addMethod = listType.GetMethods().Where(m => m.Name == "Add")
+                .Where(m =>
+                {
+                    var paramType = m.GetParameters().First().ParameterType;
+                    return paramType.IsArray &&
+                           paramType.GetElementType()!.IsGenericType &&
+                           paramType.GetElementType()!.GetGenericTypeDefinition() == typeof(Input<>);
+                })
+                .Single();
+
+            Type inputItemType = typeof(Input<>).MakeGenericType(itemType);
+            var inputItem = ConvertValue(inputItemType, item!, vars);
+
+            // Создаём массив Input<T> из одного элемента
+            var inputArray = Array.CreateInstance(inputItemType, 1);
+            inputArray.SetValue(inputItem, 0);
+
+            // Добавляем элемент
+            addMethod.Invoke(list, [inputArray]);
+        }
+
+        private void AddKeyToMap(object target, PropertyInfo mapProp, string key, object value, IReadOnlyDictionary<string, object> vars)
+        {
+            var mapType = mapProp.PropertyType;
+            var valueType = mapType.GetGenericArguments()[0]; // TValue
+
+            // Создаём словарь, если его нет
+            var map = mapProp.GetValue(target);
+            if (map == null)
+            {
+                map = Activator.CreateInstance(mapType);
+                mapProp.SetValue(target, map);
+            }
+
+            // Находим метод Add(string, Input<TValue>)
+            var addMethod = mapType.GetMethods()
+                .Where(m => m.Name == "Add" && m.GetParameters().Length == 2)
+                .Single();
+
+            // Конвертируем значение в Input<TValue>
+            var inputValueType = typeof(Input<>).MakeGenericType(valueType);
+            var convertedValue = ConvertValue(inputValueType, value, vars);
+
+            // Добавляем в словарь
+            addMethod.Invoke(map, [key, convertedValue]);
         }
 
         private object CreateNestedInstance(Type type, IReadOnlyDictionary<string, object> vars, out object? unwrapped)
