@@ -1,4 +1,5 @@
 ﻿using LiveArch.Deployment.Controls;
+using LiveArch.Deployment.ResourceHierarchy;
 using LiveArch.Deployment.Transformers;
 using Pulumi;
 using Pulumi.AzureNative.App;
@@ -29,6 +30,7 @@ namespace LiveArch.Deployment
         private readonly string owner = Guid.NewGuid().ToString();
         private int level = 0;
         private readonly string environment;
+        private readonly ResourceHierarchyRegistry registry;
         private readonly DeploymentView deploymentView;
         private readonly IReadOnlyDictionary<string, object> rootVars;
         private Workspace workspace;
@@ -48,11 +50,12 @@ namespace LiveArch.Deployment
         public IReadOnlyDictionary<(Element, IReadOnlyDictionary<string, object>), object> NewResources => newResources;
         public IReadOnlyDictionary<(Element, IReadOnlyDictionary<string, object>), object> OldResources => oldResources;
 
-        public StructurizrComponent(string workspacePath, string environment, string deployment, IReadOnlyDictionary<string, object> variables)
+        public StructurizrComponent(string workspacePath, string environment, string deployment, IReadOnlyDictionary<string, object> variables, ResourceHierarchyRegistry registry)
         {
             var json = new FileInfo(workspacePath);
             workspace = WorkspaceUtils.LoadWorkspaceFromJson(json);
             this.environment = environment;
+            this.registry = registry;
             this.deploymentView = workspace.Views.DeploymentViews.FirstOrDefault(v => v.Key == deployment)
                 ?? throw new InvalidOperationException($"Deployment '{deployment}' was not found in the current workspace.");
 
@@ -376,7 +379,7 @@ namespace LiveArch.Deployment
                 return;
             }
 
-            if (ResourceHierarchy.Registry.TryGetValue(resource!.GetType(), out var rules))
+            if (registry.TryGetValue(resource!.GetType(), out var rules))
             {
                 foreach (var rule in rules)
                 {

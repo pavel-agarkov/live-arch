@@ -92,6 +92,19 @@ deliveryRg = deploymentNode "Delivery Resource Group" {
                     }
                 }
             }
+            containerInstance deliveryWorker {
+                properties {
+                    var "delivery-worker"
+                    name            ${ENV}-delivery-worker
+                    identity.type   "UserAssigned"
+                }
+                -> deliveryMi "identity" {
+                    properties {
+                        source  "id"
+                        target  "identity.userAssignedIdentities"
+                    }
+                }
+            }
         }
     }
 }

@@ -1,4 +1,5 @@
-﻿using Pulumi.AzureNative.DevCenter;
+﻿using LiveArch.Deployment.ResourceHierarchy;
+using Pulumi.AzureNative.DevCenter;
 using Pulumi.AzureNative.Web;
 using Pulumi.AzureNative.Web.Inputs;
 using Pulumi.Testing;
@@ -21,13 +22,19 @@ namespace LiveArch.Deployment.TestRunner
             { "SQL_SERVER_NAME", "main_prod_sql_server" },
             { "SQL_ELASTIC_POOL_NAME", "main_prod_sql_elastic_pool" },
         };
+        private readonly ResourceHierarchyRegistry registry;
+
+        public DeploymentTests()
+        {
+            registry = new ResourceHierarchyBuilder([new AzureResourceHierarchy()]).Registry;
+        }
 
         [Fact]
         public async Task ShouldCreateAllResourcesForOrderService()
         {
             var ws = await ProcessDeployment("order-env");
 
-            ws.NewResources.Should().HaveCount(16);
+            ws.NewResources.Should().HaveCount(20);
 
             ws.OldResources.Should().HaveCount(18);
         }
@@ -37,7 +44,7 @@ namespace LiveArch.Deployment.TestRunner
         {
             var ws = await ProcessDeployment("delivery-env");
 
-            ws.NewResources.Should().HaveCount(10);
+            ws.NewResources.Should().HaveCount(14);
 
             ws.OldResources.Should().HaveCount(13);
         }
@@ -47,14 +54,14 @@ namespace LiveArch.Deployment.TestRunner
         {
             var ws = await ProcessDeployment("shared-env");
 
-            ws.NewResources.Should().HaveCount(16);
+            ws.NewResources.Should().HaveCount(20);
 
             ws.OldResources.Should().HaveCount(18);
         }
 
         private async Task<StructurizrComponent> ProcessDeployment(string deployment)
         {
-            var ws = new StructurizrComponent("workspace.json", "prod", deployment, variables);
+            var ws = new StructurizrComponent("workspace.json", "prod", deployment, variables, registry);
 
             await Pulumi.Deployment.TestAsync(testMocks, new TestOptions { IsPreview = false }, async () =>
             {

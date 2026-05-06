@@ -16,6 +16,12 @@ sharedRg = deploymentNode "Shared Resource Group" {
                 name    "${ENV}-order-events-topic"
             }
         }
+        containerInstance deliveryEventsTopic {
+            properties {
+                var "delivery-events-topic"
+                name    "${ENV}-delivery-events-topic"
+            }
+        }
     }
 
     deploymentNode "App Service Plan" {
@@ -48,6 +54,13 @@ deploymentNode "Shared Resource Group Reference" {
             properties {
                 var "order-events-topic"
                 name    "${ENV}-order-events-topic"
+                isDisabled true
+            }
+        }
+        deliveryEventsTopicReference = containerInstance deliveryEventsTopic {
+            properties {
+                var "delivery-events-topic"
+                name    "${ENV}-delivery-events-topic"
                 isDisabled true
             }
         }

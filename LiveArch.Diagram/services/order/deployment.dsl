@@ -143,6 +143,19 @@ orderRg = deploymentNode "Order Resource Group" {
                     }
                 }
             }
+            containerInstance orderWorker {
+                properties {
+                    var "order-worker"
+                    name            ${ENV}-order-worker
+                    identity.type   "UserAssigned"
+                }
+                -> prodMi "identity" {
+                    properties {
+                        source  "id"
+                        target  "identity.userAssignedIdentities"
+                    }
+                }
+            }
         }
     }
 }

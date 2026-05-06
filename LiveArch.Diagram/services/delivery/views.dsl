@@ -2,7 +2,7 @@ container deliveryService delivery-service {
     include *
     autolayout
 }
-component deliveryApi delivery-api {
+component deliveryWorker delivery-worker {
      include *
      autolayout
 }
@@ -10,5 +10,6 @@ component deliveryApi delivery-api {
 deployment * cloud delivery-env {
     include deliveryRg 
     include orderEventsTopicReference
+    include deliveryEventsTopicReference
     autolayout
 }

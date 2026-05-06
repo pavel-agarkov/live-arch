@@ -10,5 +10,6 @@ component orderApi order-api {
 deployment * cloud order-env {
     include orderRg
     include orderEventsTopicReference
-    autolayout
+    include deliveryEventsTopicReference
+    autolayout tb
 }
