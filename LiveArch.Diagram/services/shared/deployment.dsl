@@ -5,21 +5,25 @@ sharedRg = deploymentNode "Shared Resource Group" {
         resourceGroupName     ${RESOURCE_GROUP_NAME}
     }
     deploymentNode "Service Bus Namespace" {
-        tags "Microsoft Azure - Service Bus"
+        tags "Microsoft Azure - Azure Service Bus"
         technology "azure-native:servicebus:Namespace"
         properties {
             namespaceName     "${ENV}-sbns"
         }
-        containerInstance orderEventsTopic {
+        infrastructureNode "Order Events Topic" {
+            tags "Microsoft Azure - Azure Service Bus"
+            technology "azure-native:servicebus:Topic"
             properties {
                 var "order-events-topic"
-                name    "${ENV}-order-events-topic"
+                topicName    "${ENV}-order-events-topic"
             }
         }
-        containerInstance deliveryEventsTopic {
+        infrastructureNode "Delivery Events Topic" {
+            tags "Microsoft Azure - Azure Service Bus"
+            technology "azure-native:servicebus:Topic"
             properties {
                 var "delivery-events-topic"
-                name    "${ENV}-delivery-events-topic"
+                topicName    "${ENV}-delivery-events-topic"
             }
         }
     }
@@ -36,32 +40,28 @@ sharedRg = deploymentNode "Shared Resource Group" {
     }
 }
 
-deploymentNode "Shared Resource Group Reference" {
+sharedRgReference = deploymentNode "Shared Resource Group Reference" {
     tags "Microsoft Azure - Resource Groups"
     technology "azure-native:resources:getResourceGroup"
     properties {
         resourceGroupName     ${RESOURCE_GROUP_NAME}
-        isDisabled true
     }
     deploymentNode "Service Bus Namespace" {
-        tags "Microsoft Azure - Service Bus"
+        tags "Microsoft Azure - Azure Service Bus"
         technology "azure-native:servicebus:getNamespace"
         properties {
             namespaceName     "${ENV}-sbns"
-            isDisabled true
         }
         orderEventsTopicReference = containerInstance orderEventsTopic {
             properties {
                 var "order-events-topic"
-                name    "${ENV}-order-events-topic"
-                isDisabled true
+                topicName    "${ENV}-order-events-topic"
             }
         }
         deliveryEventsTopicReference = containerInstance deliveryEventsTopic {
             properties {
                 var "delivery-events-topic"
-                name    "${ENV}-delivery-events-topic"
-                isDisabled true
+                topicName    "${ENV}-delivery-events-topic"
             }
         }
     }

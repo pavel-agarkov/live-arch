@@ -14,10 +14,9 @@ group "Ordering" {
                 push "true"
             }
             -> orderDb "uses"
-            orderPublisher = component "Order Placed Message" {
-                technology "message"
+            -> orderEventsTopic "publish Order Placed Message" {
                 properties {
-                    typeName    "OrderPlacedMessage"
+                    messageTypes "OrderPlacedMessage"
                 }
             }
         }
@@ -31,15 +30,15 @@ group "Ordering" {
                 push "true"
             }
             -> orderDb "uses"
-            deliveryCompletedMessageConsumer = component "Delivery Completed Message" {
-                technology "message"
-                properties {
-                    typeName    "DeliveryCompletedMessage"
-                }
+        }
+        deliveryEventsTopic -> orderWorker "consume Delivery Completed Message" "azure-native:servicebus:Subscription" {
+            properties {
+                var "order-worker-subscription-to-delivery-events-topic"
+                subscriptionName   "${ENV}-order-worker-subscription-to-delivery-events-topic"
+                messageTypes "DeliveryCompletedMessage,DeliveryFailedMessage"
             }
         }
-
-        orderPublisher -> orderEventsTopic "publish Order Placed Message"
-        deliveryEventsTopic -> deliveryCompletedMessageConsumer "consume Delivery Completed Message"
     }
+
+    
 }

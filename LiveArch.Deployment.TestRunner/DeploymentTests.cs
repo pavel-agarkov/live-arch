@@ -99,6 +99,19 @@ namespace LiveArch.Deployment.TestRunner
                     }
                 }
             });
+
+            //new Pulumi.AzureNative.ServiceBus.GetTopic().Invoke()
+
+            var topic = new Pulumi.AzureNative.ServiceBus.Topic("", new Pulumi.AzureNative.ServiceBus.TopicArgs
+            {
+                TopicName = ""
+            });
+
+            var subs = new Pulumi.AzureNative.ServiceBus.Subscription("", new Pulumi.AzureNative.ServiceBus.SubscriptionArgs
+            {
+                NamespaceName = "",
+                TopicName = topic.Name
+            });
         }
     }
 }

@@ -414,7 +414,8 @@ namespace LiveArch.Deployment
                     return false;
                 }
 
-                throw new InvalidOperationException($"Resource for node {node.Name} is out of scope");
+                //throw new InvalidOperationException($"Resource for node {node.Name} is out of scope");
+                return false;
             }
 
             return true;
