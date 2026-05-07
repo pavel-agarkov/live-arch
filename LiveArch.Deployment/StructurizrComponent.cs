@@ -271,7 +271,7 @@ namespace LiveArch.Deployment
                             PropagateParentProperties(deployNode.Parent, param, paramInputProps, vars);
                         }
 
-                        await ApplyRelationsAsync(deployNode, param, vars, cancellationToken);
+                        ApplyRelations(deployNode, param, vars);
 
                         foreach ((var propName, var propVal) in deployNode.Properties)
                         {
@@ -286,6 +286,9 @@ namespace LiveArch.Deployment
 
                         oldResources.Add((deployNode.Node, vars), resource!);
                         oldResources.TryAdd((deployNode.Node, GetLoopScopedVars(vars)), resource!);
+
+                        await CreateRelationNodesAsync(deployNode, vars, cancellationToken);
+
                         return resource;
                     }
                 }
@@ -300,7 +303,7 @@ namespace LiveArch.Deployment
                         PropagateParentProperties(deployNode.Parent, param, paramInputProps, vars);
                     }
 
-                    await ApplyRelationsAsync(deployNode, param, vars, cancellationToken);
+                    ApplyRelations(deployNode, param, vars);
 
                     foreach ((var propName, var propVal) in deployNode.Properties)
                     {
@@ -328,6 +331,9 @@ namespace LiveArch.Deployment
                     var newRes = Activator.CreateInstance(type, [SubstituteVariables(resVar, vars), param, customResourceOptions!]);
                     newResources.Add((deployNode.Node, vars), newRes!);
                     newResources.TryAdd((deployNode.Node, GetLoopScopedVars(vars)), newRes!);
+
+                    await CreateRelationNodesAsync(deployNode, vars, cancellationToken);
+
                     return newRes;
                 }
             }
@@ -348,15 +354,24 @@ namespace LiveArch.Deployment
             return transformers;
         }
 
-        private async Task ApplyRelationsAsync(IDeploymentNode deployNode, object param, IReadOnlyDictionary<string, object> vars, CancellationToken cancellationToken)
+        private async Task CreateRelationNodesAsync(IDeploymentNode deployNode, IReadOnlyDictionary<string, object> vars, CancellationToken cancellationToken)
+        {
+            if (deployNode is not RelationshipAdapter)
+            {
+                foreach (var relation in deployNode.Relationships.In(deploymentView)
+                    .Where(r => !string.IsNullOrEmpty(r.Technology)))
+                {
+                    var relNode = new RelationshipAdapter(relation, SubstituteVariables(vars));
+                    if (relNode.IsDisabled == false)
+                        await CreateNodeAsync(relNode, vars, cancellationToken);
+                }
+            }
+        }
+
+        private void ApplyRelations(IDeploymentNode deployNode, object param, IReadOnlyDictionary<string, object> vars)
         {
             foreach (var relation in deployNode.Relationships.In(deploymentView))
             {
-                if (!string.IsNullOrEmpty(relation.Technology))
-                {
-                    var relNode = new RelationshipAdapter(relation, SubstituteVariables(vars));
-                    await CreateNodeAsync(relNode, vars, cancellationToken);
-                }
                 if (TryGetResourceByNode(relation.Destination, vars, out var source) &&
                     relation.Properties.TryGetValue("source", out var sourcePath) && relation.Properties.TryGetValue("target", out var targetPath))
                 {

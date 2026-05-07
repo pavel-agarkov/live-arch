@@ -16,7 +16,7 @@ group "Delivery" {
             -> deliveryDb "uses"
             -> deliveryEventsTopic "publish Delivery Events" {
                 properties {
-                    messageTypes "DeliveryCompletedMessage"
+                    messageTypes "DeliveryCompletedMessage,DeliveryFailedMessage"
                 }
             }
         }
