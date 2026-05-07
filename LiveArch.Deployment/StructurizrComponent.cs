@@ -36,8 +36,8 @@ namespace LiveArch.Deployment
         private Workspace workspace;
         private readonly Dictionary<string, Type> resourceTypes = new();
         private Dictionary<string, MethodInfo> invokeMethods = new();
-        private Dictionary<(Element, IReadOnlyDictionary<string, object>), object> newResources = new();
-        private Dictionary<(Element, IReadOnlyDictionary<string, object>), object> oldResources = new();
+        private Dictionary<(ModelItem, IReadOnlyDictionary<string, object>), object> newResources = new();
+        private Dictionary<(ModelItem, IReadOnlyDictionary<string, object>), object> oldResources = new();
         private Dictionary<object, object> childInputWrappers = new();
 
         private Dictionary<Type, Dictionary<string, PropertyInfo>> allInputProps = new();
@@ -47,8 +47,8 @@ namespace LiveArch.Deployment
         private readonly InvokeOptions? invokeOptions = null;
         private readonly CustomResourceOptions? customResourceOptions = null;
 
-        public IReadOnlyDictionary<(Element, IReadOnlyDictionary<string, object>), object> NewResources => newResources;
-        public IReadOnlyDictionary<(Element, IReadOnlyDictionary<string, object>), object> OldResources => oldResources;
+        public IReadOnlyDictionary<(ModelItem, IReadOnlyDictionary<string, object>), object> NewResources => newResources;
+        public IReadOnlyDictionary<(ModelItem, IReadOnlyDictionary<string, object>), object> OldResources => oldResources;
 
         public StructurizrComponent(string workspacePath, string environment, string deployment, IReadOnlyDictionary<string, object> variables, ResourceHierarchyRegistry registry)
         {
@@ -271,7 +271,7 @@ namespace LiveArch.Deployment
                             PropagateParentProperties(deployNode.Parent, param, paramInputProps, vars);
                         }
 
-                        ApplyRelations(deployNode, param, vars);
+                        await ApplyRelationsAsync(deployNode, param, vars, cancellationToken);
 
                         foreach ((var propName, var propVal) in deployNode.Properties)
                         {
@@ -300,7 +300,7 @@ namespace LiveArch.Deployment
                         PropagateParentProperties(deployNode.Parent, param, paramInputProps, vars);
                     }
 
-                    ApplyRelations(deployNode, param, vars);
+                    await ApplyRelationsAsync(deployNode, param, vars, cancellationToken);
 
                     foreach ((var propName, var propVal) in deployNode.Properties)
                     {
@@ -311,7 +311,18 @@ namespace LiveArch.Deployment
                         (!deployNode.Properties.TryGetValue("structurizr.dsl.identifier", out resVar) || Guid.TryParse(resVar, out _)) &&
                         !deployNode.Properties.TryGetValue("name", out resVar))
                     {
-                        resVar = deployNode.Node.Name;
+                        if (deployNode.Node is Element element)
+                        {
+                            resVar = element.Name;
+                        }
+                        else if (deployNode.Node is Relationship rel)
+                        {
+                            resVar = rel.Description;
+                        }
+                        else
+                        {
+                            throw new InvalidOperationException($"Cannot determine resource identifier for node {deployNode.Node}. Please specify 'var' property or assign to a variable.");
+                        }
                     }
 
                     var newRes = Activator.CreateInstance(type, [SubstituteVariables(resVar, vars), param, customResourceOptions!]);
@@ -337,16 +348,19 @@ namespace LiveArch.Deployment
             return transformers;
         }
 
-        private void ApplyRelations(IDeploymentNode deployNode, object param, IReadOnlyDictionary<string, object> vars)
+        private async Task ApplyRelationsAsync(IDeploymentNode deployNode, object param, IReadOnlyDictionary<string, object> vars, CancellationToken cancellationToken)
         {
             foreach (var relation in deployNode.Relationships.In(deploymentView))
             {
-                if (TryGetResourceByNode(relation.Destination, vars, out var source))
+                if (!string.IsNullOrEmpty(relation.Technology))
                 {
-                    if (relation.Properties.TryGetValue("source", out var sourcePath) && relation.Properties.TryGetValue("target", out var targetPath))
-                    {
-                        ApplyDependency(source!, param, sourcePath, targetPath, vars, GetTransformers(relation.Properties));
-                    }
+                    var relNode = new RelationshipAdapter(relation, SubstituteVariables(vars));
+                    await CreateNodeAsync(relNode, vars, cancellationToken);
+                }
+                if (TryGetResourceByNode(relation.Destination, vars, out var source) &&
+                    relation.Properties.TryGetValue("source", out var sourcePath) && relation.Properties.TryGetValue("target", out var targetPath))
+                {
+                    ApplyDependency(source!, param, sourcePath, targetPath, vars, GetTransformers(relation.Properties));
                 }
             }
 
@@ -395,7 +409,7 @@ namespace LiveArch.Deployment
             }
         }
 
-        private bool TryGetResourceByNode(Element node, IReadOnlyDictionary<string, object> vars, out object? resource)
+        private bool TryGetResourceByNode(ModelItem node, IReadOnlyDictionary<string, object> vars, out object? resource)
         {
             if (!oldResources.TryGetValue((node, vars), out resource) &&
                 !newResources.TryGetValue((node, vars), out resource) &&
@@ -409,13 +423,12 @@ namespace LiveArch.Deployment
                     return false;
                 }
 
-                if (new ElementAdapter(node, SubstituteVariables(vars)).IsDisabled)
+                if (node is Element element && new ElementAdapter(element, SubstituteVariables(vars)).IsDisabled)
                 {
                     return false;
                 }
 
-                //throw new InvalidOperationException($"Resource for node {node.Name} is out of scope");
-                return false;
+                throw new InvalidOperationException($"Resource for node {node} is out of scope");
             }
 
             return true;

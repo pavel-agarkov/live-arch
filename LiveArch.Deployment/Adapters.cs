@@ -7,7 +7,7 @@ namespace LiveArch.Deployment
 {
     public interface IDeploymentNode
     {
-        Element Node { get; }
+        ModelItem Node { get; }
         string Technology { get; }
         IDictionary<string, string> Properties { get; }
         ISet<Relationship> Relationships { get; }
@@ -36,7 +36,7 @@ namespace LiveArch.Deployment
         public IDeploymentNode? Parent => node.Parent != null ? new ElementAdapter(node.Parent, substituteVariables) : null;
         public IDictionary<string, string> Properties => node.Properties;
 
-        public Element Node => node;
+        public ModelItem Node => node;
 
         public ISet<Relationship> Relationships => node.Relationships;
         public virtual string Technology => substituteVariables(
@@ -81,5 +81,33 @@ namespace LiveArch.Deployment
         }
 
         public override string Technology => substituteVariables(node.Properties.FirstOrDefault(x => x.Key == "buildTechnology").Value ?? string.Empty).ToString()!;
+    }
+
+    public class RelationshipAdapter : IDeploymentNode
+    {
+        protected readonly Func<string, object> substituteVariables;
+        private readonly Relationship relationship;
+
+        public RelationshipAdapter(Relationship relationship, Func<string, object> substituteVariables)
+        {
+            this.relationship = string.IsNullOrEmpty(relationship.LinkedRelationshipId) ? relationship
+                : relationship.Source.Model.Relationships.First(r => r.Id == relationship.LinkedRelationshipId);
+            this.substituteVariables = substituteVariables;
+        }
+
+        public bool IsDisabled =>
+            Properties.TryGetValue("isDisabled", out var isDisabledString) &&
+            bool.TryParse(substituteVariables(isDisabledString).ToString(), out var isDisabled) &&
+            isDisabled;
+
+        public IDeploymentNode? Parent => new ElementAdapter(relationship.Source, substituteVariables);
+
+        public IDictionary<string, string> Properties => relationship.Properties;
+
+        public ModelItem Node => relationship;
+
+        public ISet<Relationship> Relationships => new HashSet<Relationship>(0);
+
+        public virtual string Technology => relationship.Technology;
     }
 }
