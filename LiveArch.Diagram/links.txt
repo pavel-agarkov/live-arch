@@ -1,2 +1,4 @@
 https://modification-query-facilities-cadillac.trycloudflare.com/workspace/1
 https://potatoes-raw-sellers-handbook.trycloudflare.com/
+
+cloudflared tunnel --url http://localhost:8080 --http-host-header localhost

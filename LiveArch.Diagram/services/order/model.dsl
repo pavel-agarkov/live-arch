@@ -30,12 +30,12 @@ group "Ordering" {
                 push "true"
             }
             -> orderDb "uses"
-        }
-        deliveryEventsTopic -> orderWorker "consume Delivery Completed Message" "azure-native:servicebus:Subscription" {
-            properties {
-                var "order-worker-subscription-to-delivery-events-topic"
-                subscriptionName   "${ENV}-order-worker-subscription-to-delivery-events-topic"
-                messageTypes "DeliveryCompletedMessage,DeliveryFailedMessage"
+            -> deliveryEventsTopic "consume Delivery Completed Message" "azurela:servicebus:ReadableSubscription" {
+                properties {
+                    var "order-worker-subscription-to-delivery-events-topic"
+                    subscriptionName   "${ENV}-order-worker-subscription-to-delivery-events-topic"
+                    messageTypes "DeliveryCompletedMessage,DeliveryFailedMessage"
+                }
             }
         }
     }
