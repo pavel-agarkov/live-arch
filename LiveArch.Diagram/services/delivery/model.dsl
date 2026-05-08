@@ -30,12 +30,12 @@ group "Delivery" {
                 push "true"
             }
             -> deliveryDb "uses"
-        }
-        orderEventsTopic -> deliveryWorker "consume Order Placed Message" "azure-native:servicebus:Subscription" {
-            properties {
-                var "delivery-worker-subscription-to-order-events-topic"
-                subscriptionName   "${ENV}-delivery-worker-subscription-to-order-events-topic"
-                messageTypes "OrderPlacedMessage"
+            -> orderEventsTopic "consume Order Placed Message" "azure-native:servicebus:Subscription" {
+                properties {
+                    var "delivery-worker-subscription-to-order-events-topic"
+                    subscriptionName   "${ENV}-delivery-worker-subscription-to-order-events-topic"
+                    messageTypes "OrderPlacedMessage"
+                }
             }
         }
     }

@@ -102,7 +102,7 @@ namespace LiveArch.Deployment
             bool.TryParse(substituteVariables(isDisabledString).ToString(), out var isDisabled) &&
             isDisabled;
 
-        public IDeploymentNode? Parent => new ElementAdapter(relationshipInstance.Source, substituteVariables);
+        public IDeploymentNode? Parent => new ElementAdapter(relationshipInstance.Destination, substituteVariables);
 
         public IDictionary<string, string> Properties => relationshipModel.Properties;
 

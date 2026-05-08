@@ -1,4 +1,5 @@
 ﻿using LiveArch.Deployment.ResourceHierarchy;
+using Pulumi.AzureNative.Authorization;
 using Pulumi.AzureNative.DevCenter;
 using Pulumi.AzureNative.Web;
 using Pulumi.AzureNative.Web.Inputs;
@@ -44,7 +45,7 @@ namespace LiveArch.Deployment.TestRunner
         {
             var ws = await ProcessDeployment("delivery-env");
 
-            ws.NewResources.Should().HaveCount(14);
+            ws.NewResources.Should().HaveCount(16);
 
             ws.OldResources.Should().HaveCount(13);
         }
@@ -111,6 +112,11 @@ namespace LiveArch.Deployment.TestRunner
             {
                 NamespaceName = "",
                 TopicName = topic.Name
+            });
+
+            var ra = new RoleAssignment("", new RoleAssignmentArgs
+            {
+                PrincipalId = app.Identity.Apply(x=>x.PrincipalId)
             });
         }
     }

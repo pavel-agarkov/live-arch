@@ -69,6 +69,15 @@ namespace LiveArch.Deployment
             new ResourcePropagationRules<Pulumi.AzureNative.ServiceBus.GetNamespaceResult>
             {
                 { ns => ns.Name, [ "namespaceName" ] }
+            },
+
+            new ResourcePropagationRules<Pulumi.AzureNative.ServiceBus.Topic>
+            {
+                { ns => ns.Name, [ "topicName" ] }
+            },
+            new ResourcePropagationRules<Pulumi.AzureNative.ServiceBus.GetTopicResult>
+            {
+                { ns => ns.Name, [ "topicName" ] }
             }
         };
     }
