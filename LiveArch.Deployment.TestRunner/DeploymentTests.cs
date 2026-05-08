@@ -1,8 +1,12 @@
-﻿using LiveArch.Deployment.ResourceHierarchy;
+﻿using LiveArch.Deployment.Azure.ServiceBus;
+using LiveArch.Deployment.Controls;
+using LiveArch.Deployment.ResourceHierarchy;
+using LiveArch.Deployment.ResourceTypes;
 using Pulumi.AzureNative.Authorization;
-using Pulumi.AzureNative.DevCenter;
+using Pulumi.AzureNative.Resources;
 using Pulumi.AzureNative.Web;
 using Pulumi.AzureNative.Web.Inputs;
+using Pulumi.DockerBuild;
 using Pulumi.Testing;
 using ManagedServiceIdentityType = Pulumi.AzureNative.Web.ManagedServiceIdentityType;
 
@@ -23,11 +27,19 @@ namespace LiveArch.Deployment.TestRunner
             { "SQL_SERVER_NAME", "main_prod_sql_server" },
             { "SQL_ELASTIC_POOL_NAME", "main_prod_sql_elastic_pool" },
         };
-        private readonly ResourceHierarchyRegistry registry;
+        private readonly ResourceTypesRegistry resourceTypesRegistry;
+        private readonly ResourceHierarchyRegistry hierarchyRegistry;
 
         public DeploymentTests()
         {
-            registry = new ResourceHierarchyBuilder([new AzureResourceHierarchy()]).Registry;
+            hierarchyRegistry = new ResourceHierarchyBuilder([new AzureResourceHierarchy()]).Registry;
+            resourceTypesRegistry = new ResourceTypesRegistry(new[]
+            {
+                new ResourceTypesAssemblyMarker(typeof(Image)),
+                new ResourceTypesAssemblyMarker(typeof(ResourceGroup)),
+                new ResourceTypesAssemblyMarker(typeof(ForEachLoop)),
+                new ResourceTypesAssemblyMarker(typeof(ReadableSubscription)),
+            });
         }
 
         [Fact]
@@ -47,7 +59,7 @@ namespace LiveArch.Deployment.TestRunner
 
             ws.NewResources.Should().HaveCount(16);
 
-            ws.OldResources.Should().HaveCount(13);
+            ws.OldResources.Should().HaveCount(20);
         }
 
         [Fact]
@@ -62,7 +74,7 @@ namespace LiveArch.Deployment.TestRunner
 
         private async Task<StructurizrComponent> ProcessDeployment(string deployment)
         {
-            var ws = new StructurizrComponent("workspace.json", "prod", deployment, variables, registry);
+            var ws = new StructurizrComponent("workspace.json", "prod", deployment, variables, hierarchyRegistry, resourceTypesRegistry);
 
             await Pulumi.Deployment.TestAsync(testMocks, new TestOptions { IsPreview = false }, async () =>
             {

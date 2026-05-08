@@ -1,5 +1,6 @@
 ﻿using LiveArch.Deployment.Controls;
 using LiveArch.Deployment.ResourceHierarchy;
+using LiveArch.Deployment.ResourceTypes;
 using LiveArch.Deployment.Transformers;
 using Pulumi;
 using Pulumi.AzureNative.App;
@@ -30,12 +31,11 @@ namespace LiveArch.Deployment
         private readonly string owner = Guid.NewGuid().ToString();
         private int level = 0;
         private readonly string environment;
-        private readonly ResourceHierarchyRegistry registry;
+        private readonly ResourceHierarchyRegistry hierarchyRegistry;
+        private readonly ResourceTypesRegistry resourceTypesRegistry;
         private readonly DeploymentView deploymentView;
         private readonly IReadOnlyDictionary<string, object> rootVars;
         private Workspace workspace;
-        private readonly Dictionary<string, Type> resourceTypes = new();
-        private Dictionary<string, MethodInfo> invokeMethods = new();
         private Dictionary<(ModelItem, IReadOnlyDictionary<string, object>), object> newResources = new();
         private Dictionary<(ModelItem, IReadOnlyDictionary<string, object>), object> oldResources = new();
         private Dictionary<object, object> childInputWrappers = new();
@@ -50,12 +50,19 @@ namespace LiveArch.Deployment
         public IReadOnlyDictionary<(ModelItem, IReadOnlyDictionary<string, object>), object> NewResources => newResources;
         public IReadOnlyDictionary<(ModelItem, IReadOnlyDictionary<string, object>), object> OldResources => oldResources;
 
-        public StructurizrComponent(string workspacePath, string environment, string deployment, IReadOnlyDictionary<string, object> variables, ResourceHierarchyRegistry registry)
+        public StructurizrComponent(
+            string workspacePath,
+            string environment,
+            string deployment,
+            IReadOnlyDictionary<string, object> variables,
+            ResourceHierarchyRegistry hierarchyRegistry,
+            ResourceTypesRegistry resourceTypesRegistry)
         {
             var json = new FileInfo(workspacePath);
             workspace = WorkspaceUtils.LoadWorkspaceFromJson(json);
             this.environment = environment;
-            this.registry = registry;
+            this.hierarchyRegistry = hierarchyRegistry;
+            this.resourceTypesRegistry = resourceTypesRegistry;
             this.deploymentView = workspace.Views.DeploymentViews.FirstOrDefault(v => v.Key == deployment)
                 ?? throw new InvalidOperationException($"Deployment '{deployment}' was not found in the current workspace.");
 
@@ -64,7 +71,6 @@ namespace LiveArch.Deployment
                 [owner] = workspace,
                 ["level"] = ++level
             };
-            CachePulumiTypes(typeof(Image), typeof(ResourceGroup), typeof(ForEachLoop));
         }
 
         public async Task ProcessWorkspaceAsync(CancellationToken cancellationToken)
@@ -74,68 +80,6 @@ namespace LiveArch.Deployment
             {
                 await ProcessDeploymentNodeAsync(deployNode, rootVars, cancellationToken);
             }
-        }
-
-        private void CachePulumiTypes(params Type[] entryTypes)
-        {
-            entryTypes.Select(x => x.Assembly).Distinct().ToList().ForEach(CacheAssamblyTypes);
-        }
-
-        private void CacheAssamblyTypes(Assembly assembly)
-        {
-            var types = assembly.GetTypes();
-            foreach (var resType in types)
-            {
-                var attr = resType.GetCustomAttribute<ResourceTypeAttribute>(true);
-                if (attr != null)
-                {
-                    resourceTypes.Add(attr.Type, resType);
-                }
-            }
-
-            foreach (var type in types)
-            {
-                if (!type.IsAbstract || !type.IsSealed) continue;
-                if (!type.Name.StartsWith("Get")) continue;
-
-                var invokeAsync = type.GetMethods(BindingFlags.Public | BindingFlags.Static)
-                    .FirstOrDefault(m => m.Name == "InvokeAsync");
-
-                if (invokeAsync == null) continue;
-
-                var token = ExtractInvokeToken(invokeAsync);
-                if (token == null) continue;
-
-                invokeMethods[token] = invokeAsync;
-                resourceTypes[token] = type;
-            }
-        }
-
-        private static string? ExtractInvokeToken(MethodInfo method)
-        {
-            // Ищем вызов Deployment.Instance.InvokeAsync<T>(token, ...)
-            var body = method.GetMethodBody();
-            if (body == null) return null;
-
-            // Ищем строковые литералы в IL
-            var module = method.Module;
-            var il = body.GetILAsByteArray();
-
-            for (int i = 0; i < il.Length - 1; i++)
-            {
-                // ldstr = 0x72
-                if (il[i] == 0x72)
-                {
-                    int metadataToken = BitConverter.ToInt32(il, i + 1);
-                    var str = module.ResolveString(metadataToken);
-
-                    // Ищем строки вида "azure-native:keyvault:getVault"
-                    if (str.Contains(":") && str.Count(c => c == ':') >= 2)
-                        return str;
-                }
-            }
-
-            return null;
         }
 
         private object SubstituteVariables(string input, IReadOnlyDictionary<string, object> vars)
@@ -256,19 +200,19 @@ namespace LiveArch.Deployment
 
         private async Task<object?> CreateNodeAsync(IDeploymentNode deployNode, IReadOnlyDictionary<string, object> vars, CancellationToken cancellationToken)
         {
-            if (resourceTypes.TryGetValue(deployNode.Technology, out var type))
+            if (resourceTypesRegistry.TryGetResourceType(deployNode.Technology, out var type))
             {
-                if (type.IsAbstract && type.IsSealed)
+                if (type!.IsAbstract && type.IsSealed)
                 {
-                    if (invokeMethods.TryGetValue(deployNode.Technology, out var invoke))
+                    if (resourceTypesRegistry.TryGetInvokeMethod(deployNode.Technology, out var invoke))
                     {
-                        var paramType = invoke.GetParameters().First();
+                        var paramType = invoke!.GetParameters().First();
                         var param = Activator.CreateInstance(paramType.ParameterType)!;
                         var paramInputProps = GetInputProps(paramType.ParameterType);
 
-                        if (deployNode.Parent != null)
+                        foreach (var parent in deployNode.Parents)
                         {
-                            PropagateParentProperties(deployNode.Parent, param, paramInputProps, vars);
+                            PropagateParentProperties(parent, param, paramInputProps, vars);
                         }
 
                         ApplyRelations(deployNode, param, vars);
@@ -298,9 +242,9 @@ namespace LiveArch.Deployment
                     var param = Activator.CreateInstance(paramType.ParameterType)!;
                     var paramInputProps = GetInputProps(paramType.ParameterType);
 
-                    if (deployNode.Parent != null)
+                    foreach (var parent in deployNode.Parents)
                     {
-                        PropagateParentProperties(deployNode.Parent, param, paramInputProps, vars);
+                        PropagateParentProperties(parent, param, paramInputProps, vars);
                     }
 
                     ApplyRelations(deployNode, param, vars);
@@ -399,16 +343,19 @@ namespace LiveArch.Deployment
         private void PropagateParentProperties(IDeploymentNode deployNode, object param, Dictionary<string, PropertyInfo> paramInputProps, IReadOnlyDictionary<string, object> vars)
         {
             var parentVars = vars;
-            if (deployNode.Parent != null && TryGetParentVars(vars, out parentVars))
+            if (deployNode.Parents != null && TryGetParentVars(vars, out parentVars))
             {
-                PropagateParentProperties(deployNode.Parent, param, paramInputProps, parentVars!);
+                foreach (var parent in deployNode.Parents)
+                {
+                    PropagateParentProperties(parent, param, paramInputProps, parentVars!);
+                }
             }
             if (!TryGetResourceByNode(deployNode.Node, parentVars ?? vars, out var resource))
             {
                 return;
             }
 
-            if (registry.TryGetValue(resource!.GetType(), out var rules))
+            if (hierarchyRegistry.TryGetValue(resource!.GetType(), out var rules))
             {
                 foreach (var rule in rules)
                 {

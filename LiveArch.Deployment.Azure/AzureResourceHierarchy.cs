@@ -8,12 +8,12 @@ namespace LiveArch.Deployment
         {
             new ResourcePropagationRules<Pulumi.AzureNative.Resources.ResourceGroup>
             {
-                { rg => rg.Name, [ "resourceGroupName" ] },
+                { rg => rg.Name, [ "resourceGroupName", "sub.resourceGroupName" ] },
                 { rg => rg.Location, [ "location" ] },
             },
             new ResourcePropagationRules<Pulumi.AzureNative.Resources.GetResourceGroupResult>
             {
-                { rg => rg.Name, [ "resourceGroupName" ] },
+                { rg => rg.Name, [ "resourceGroupName", "sub.resourceGroupName" ] },
                 { rg => rg.Location, [ "location" ] },
             },
 
@@ -24,6 +24,11 @@ namespace LiveArch.Deployment
             new ResourcePropagationRules<Pulumi.AzureNative.Web.GetAppServicePlanResult>
             {
                 { plan => plan.Id, [ "serverFarmId" ] },
+            },
+
+            new ResourcePropagationRules<Pulumi.AzureNative.Web.WebApp>
+            {
+                { web => web.Identity.Apply(id => id?.PrincipalId), [ "principalId" ] },
             },
 
             new ResourcePropagationRules<Pulumi.AzureNative.Network.VirtualNetwork>
@@ -64,20 +69,20 @@ namespace LiveArch.Deployment
 
             new ResourcePropagationRules<Pulumi.AzureNative.ServiceBus.Namespace>
             {
-                { ns => ns.Name, [ "namespaceName" ] }
+                { ns => ns.Name, [ "namespaceName", "sub.namespaceName" ] }
             },
             new ResourcePropagationRules<Pulumi.AzureNative.ServiceBus.GetNamespaceResult>
             {
-                { ns => ns.Name, [ "namespaceName" ] }
+                { ns => ns.Name, [ "namespaceName", "sub.namespaceName" ] }
             },
 
             new ResourcePropagationRules<Pulumi.AzureNative.ServiceBus.Topic>
             {
-                { ns => ns.Name, [ "topicName" ] }
+                { ns => ns.Name, [ "topicName", "sub.topicName" ] }
             },
             new ResourcePropagationRules<Pulumi.AzureNative.ServiceBus.GetTopicResult>
             {
-                { ns => ns.Name, [ "topicName" ] }
+                { ns => ns.Name, [ "topicName", "sub.topicName" ] }
             }
         };
     }
