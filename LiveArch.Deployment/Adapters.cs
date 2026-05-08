@@ -103,8 +103,8 @@ namespace LiveArch.Deployment
             isDisabled;
 
         public IReadOnlyCollection<IDeploymentNode> Parents => [
+            new ElementAdapter(relationshipInstance.Source, substituteVariables),
             new ElementAdapter(relationshipInstance.Destination, substituteVariables),
-            new ElementAdapter(relationshipInstance.Source, substituteVariables)
         ];
 
         public IDictionary<string, string> Properties => relationshipModel.Properties;
