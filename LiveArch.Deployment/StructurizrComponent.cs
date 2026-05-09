@@ -1,12 +1,9 @@
 ﻿using LiveArch.Deployment.Controls;
+using LiveArch.Deployment.Docker;
 using LiveArch.Deployment.ResourceHierarchy;
 using LiveArch.Deployment.ResourceTypes;
 using LiveArch.Deployment.Transformers;
 using Pulumi;
-using Pulumi.AzureNative.App;
-using Pulumi.AzureNative.Resources;
-using Pulumi.AzureNative.Web;
-using Pulumi.AzureNative.Web.Inputs;
 using Pulumi.DockerBuild;
 using Structurizr;
 using System;
@@ -33,6 +30,7 @@ namespace LiveArch.Deployment
         private readonly string environment;
         private readonly ResourceHierarchyRegistry hierarchyRegistry;
         private readonly ResourceTypesRegistry resourceTypesRegistry;
+        private readonly DockerImageReferenceConfigurator dockerImageReferenceConfigurator;
         private readonly DeploymentView deploymentView;
         private readonly IReadOnlyDictionary<string, object> rootVars;
         private Workspace workspace;
@@ -56,13 +54,15 @@ namespace LiveArch.Deployment
             string deployment,
             IReadOnlyDictionary<string, object> variables,
             ResourceHierarchyRegistry hierarchyRegistry,
-            ResourceTypesRegistry resourceTypesRegistry)
+            ResourceTypesRegistry resourceTypesRegistry,
+            DockerImageReferenceConfigurator dockerImageReferenceConfigurator)
         {
             var json = new FileInfo(workspacePath);
             workspace = WorkspaceUtils.LoadWorkspaceFromJson(json);
             this.environment = environment;
             this.hierarchyRegistry = hierarchyRegistry;
             this.resourceTypesRegistry = resourceTypesRegistry;
+            this.dockerImageReferenceConfigurator = dockerImageReferenceConfigurator;
             this.deploymentView = workspace.Views.DeploymentViews.FirstOrDefault(v => v.Key == deployment)
                 ?? throw new InvalidOperationException($"Deployment '{deployment}' was not found in the current workspace.");
 
@@ -325,17 +325,9 @@ namespace LiveArch.Deployment
 
             if (deployNode.Node is ContainerInstance ci && newResources.TryGetValue((ci.Container, vars), out var image) && image is Image dockerImage)
             {
-                if (param is WebAppArgs web)
+                if (dockerImageReferenceConfigurator.TryGetImageReference(param, dockerImage, out var dockerImageRef))
                 {
-                    SetProperty(web, "siteConfig.linuxFxVersion", Output.Format($"DOCKER|{dockerImage.Ref}"), GetInputProps(typeof(WebAppArgs)), vars);
-                }
-                else if (param is ContainerAppArgs app)
-                {
-                    SetProperty(app, "template.containers.image", dockerImage.Ref, GetInputProps(typeof(ContainerAppArgs)), vars);
-                }
-                else if (param is DeploymentArgs k8s)
-                {
-                    SetProperty(k8s, "spec.template.spec.containers.image", dockerImage.Ref, GetInputProps(typeof(DeploymentArgs)), vars);
+                    SetProperty(param, dockerImageRef!.ResourceImagePropertyPath, dockerImageRef!.ImageRef, GetInputProps(param.GetType()), vars);
                 }
             }
         }

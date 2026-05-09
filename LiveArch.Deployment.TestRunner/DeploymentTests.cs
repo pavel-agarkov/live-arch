@@ -1,5 +1,8 @@
-﻿using LiveArch.Deployment.Azure.ServiceBus;
+﻿using LiveArch.Deployment.Azure.Docker;
+using LiveArch.Deployment.Azure.ResourceHierarchy;
+using LiveArch.Deployment.Azure.ServiceBus;
 using LiveArch.Deployment.Controls;
+using LiveArch.Deployment.Docker;
 using LiveArch.Deployment.ResourceHierarchy;
 using LiveArch.Deployment.ResourceTypes;
 using Pulumi.AzureNative.Authorization;
@@ -28,6 +31,7 @@ namespace LiveArch.Deployment.TestRunner
             { "SQL_ELASTIC_POOL_NAME", "main_prod_sql_elastic_pool" },
         };
         private readonly ResourceTypesRegistry resourceTypesRegistry;
+        private readonly DockerImageReferenceConfigurator dockerImageConfig;
         private readonly ResourceHierarchyRegistry hierarchyRegistry;
 
         public DeploymentTests()
@@ -40,6 +44,9 @@ namespace LiveArch.Deployment.TestRunner
                 new ResourceTypesAssemblyMarker(typeof(ForEachLoop)),
                 new ResourceTypesAssemblyMarker(typeof(ReadableSubscription)),
             });
+            dockerImageConfig = new DockerImageReferenceConfigurator([
+                new AzureDockerImageReferenceConfigurator()
+                ]);
         }
 
         [Fact]
@@ -74,7 +81,8 @@ namespace LiveArch.Deployment.TestRunner
 
         private async Task<StructurizrComponent> ProcessDeployment(string deployment)
         {
-            var ws = new StructurizrComponent("workspace.json", "prod", deployment, variables, hierarchyRegistry, resourceTypesRegistry);
+            var ws = new StructurizrComponent("workspace.json", "prod", deployment, variables,
+                hierarchyRegistry, resourceTypesRegistry, dockerImageConfig);
 
             await Pulumi.Deployment.TestAsync(testMocks, new TestOptions { IsPreview = false }, async () =>
             {
@@ -128,7 +136,7 @@ namespace LiveArch.Deployment.TestRunner
 
             var ra = new RoleAssignment("", new RoleAssignmentArgs
             {
-                PrincipalId = app.Identity.Apply(x=>x.PrincipalId)
+                PrincipalId = app.Identity.Apply(x => x.PrincipalId)
             });
         }
     }

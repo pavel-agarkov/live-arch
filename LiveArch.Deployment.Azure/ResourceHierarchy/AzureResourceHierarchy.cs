@@ -1,6 +1,6 @@
 ﻿using LiveArch.Deployment.ResourceHierarchy;
 
-namespace LiveArch.Deployment
+namespace LiveArch.Deployment.Azure.ResourceHierarchy
 {
     public class AzureResourceHierarchy : IResourceHierarchy
     {
