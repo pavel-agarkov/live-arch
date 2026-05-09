@@ -6,15 +6,9 @@ using LiveArch.Deployment.Transformers;
 using Pulumi;
 using Pulumi.DockerBuild;
 using Structurizr;
-using System;
 using System.Collections;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Reflection;
 using System.Text.RegularExpressions;
-using System.Threading;
-using System.Threading.Tasks;
 using Type = System.Type;
 
 namespace LiveArch.Deployment
@@ -498,7 +492,7 @@ namespace LiveArch.Deployment
 
         // source – уже созданный Pulumi ресурс или результат Get* (OutputType)
         // path – "name", "policy.objectId", "permissions.secrets"
-        public object? GetOutputValue(object source, string path)
+        private object? GetOutputValue(object source, string path)
         {
             var parts = path.Split('.', 2);
             var head = parts[0];
