@@ -15,6 +15,22 @@ namespace LiveArch.Deployment
 {
     public partial class StructurizrComponent
     {
+        private readonly record struct WaitingNodeKey(ModelItem Node, IReadOnlyDictionary<string, object> Vars);
+
+        private sealed class WaitingNodeRegistration
+        {
+            public WaitingNodeRegistration(IDeploymentNode deployNode, IReadOnlyDictionary<string, object> vars, IEnumerable<ModelItem> pendingDependencies)
+            {
+                DeployNode = deployNode;
+                Vars = vars;
+                PendingDependencies = new HashSet<ModelItem>(pendingDependencies);
+            }
+
+            public IDeploymentNode DeployNode { get; }
+            public IReadOnlyDictionary<string, object> Vars { get; }
+            public HashSet<ModelItem> PendingDependencies { get; }
+        }
+
         [GeneratedRegex(@"\$\{([a-zA-Z0-9_\.\:\-]+)\}", RegexOptions.Multiline, 1000)]
         private static partial Regex InterpolationRegex();
         private static readonly Regex VarRegex = InterpolationRegex();
@@ -30,6 +46,7 @@ namespace LiveArch.Deployment
         private Workspace workspace;
         private Dictionary<(ModelItem, IReadOnlyDictionary<string, object>), object> newResources = new();
         private Dictionary<(ModelItem, IReadOnlyDictionary<string, object>), object> oldResources = new();
+        private Dictionary<WaitingNodeKey, WaitingNodeRegistration> waitingNodes = new();
         private Dictionary<object, object> childInputWrappers = new();
 
         private Dictionary<Type, Dictionary<string, PropertyInfo>> allInputProps = new();
@@ -145,8 +162,19 @@ namespace LiveArch.Deployment
 
         private async Task<object?> CreateNodeAsync(IDeploymentNode deployNode, IReadOnlyDictionary<string, object> vars, CancellationToken cancellationToken)
         {
+            if (TryGetExistingResourceByNode(deployNode.Node, vars, out var existingResource))
+            {
+                return existingResource;
+            }
+
             if (resourceTypesRegistry.TryGetResourceType(deployNode.Technology, out var type))
             {
+                if (TryWaitForDependencies(deployNode, vars))
+                {
+                    return null;
+                }
+
+                RemoveWaitingNode(new WaitingNodeKey(deployNode.Node, vars));
                 await PreProcessNodeAsync(deployNode, vars, cancellationToken);
 
                 if (type!.IsAbstract && type.IsSealed)
@@ -180,6 +208,7 @@ namespace LiveArch.Deployment
 
                         await CreateRelationNodesAsync(deployNode, vars, cancellationToken);
                         await PostProcessNodeAsync(deployNode, resource, vars, cancellationToken);
+                        await TryResumeWaitingNodesAsync(deployNode.Node, cancellationToken);
 
                         return resource;
                     }
@@ -226,11 +255,95 @@ namespace LiveArch.Deployment
 
                     await CreateRelationNodesAsync(deployNode, vars, cancellationToken);
                     await PostProcessNodeAsync(deployNode, newRes, vars, cancellationToken);
+                    await TryResumeWaitingNodesAsync(deployNode.Node, cancellationToken);
 
                     return newRes;
                 }
             }
             return null;
+        }
+
+        private bool TryWaitForDependencies(IDeploymentNode deployNode, IReadOnlyDictionary<string, object> vars)
+        {
+            var missingDependencies = GetMissingDependencies(deployNode, vars);
+            if (missingDependencies.Count == 0)
+            {
+                return false;
+            }
+
+            RegisterWaitingNode(deployNode, vars, missingDependencies);
+            return true;
+        }
+
+        private IReadOnlyCollection<ModelItem> GetMissingDependencies(IDeploymentNode deployNode, IReadOnlyDictionary<string, object> vars)
+        {
+            var missingDependencies = new HashSet<ModelItem>();
+
+            foreach (var relation in deployNode.Relationships.In(deploymentView))
+            {
+                if (string.IsNullOrEmpty(relation.Technology) &&
+                    !relation.Properties.ContainsKey("source") &&
+                    !relation.Properties.ContainsKey("target"))
+                {
+                    continue;
+                }
+
+                if (!TryGetExistingResourceByNode(relation.Destination, vars, out _))
+                {
+                    missingDependencies.Add(relation.Destination);
+                }
+            }
+
+            if (deployNode is RelationshipAdapter)
+            {
+                foreach (var parentNode in deployNode.Parents)
+                {
+                    if (!TryGetExistingResourceByNode(parentNode.Node, vars, out _))
+                    {
+                        missingDependencies.Add(parentNode.Node);
+                    }
+                }
+            }
+
+            return missingDependencies;
+        }
+
+        private void RegisterWaitingNode(IDeploymentNode deployNode, IReadOnlyDictionary<string, object> vars, IReadOnlyCollection<ModelItem> missingDependencies)
+        {
+            var key = new WaitingNodeKey(deployNode.Node, vars);
+
+            var waitingNode = new WaitingNodeRegistration(deployNode, vars, missingDependencies);
+            waitingNodes[key] = waitingNode;
+        }
+
+        private void RemoveWaitingNode(WaitingNodeKey key)
+        {
+            waitingNodes.Remove(key);
+        }
+
+        private async Task TryResumeWaitingNodesAsync(ModelItem resourceNode, CancellationToken cancellationToken)
+        {
+            var waitersToResume = new List<WaitingNodeRegistration>();
+            foreach (var waiter in waitingNodes.ToList())
+            {
+                if (!waiter.Value.PendingDependencies.Remove(resourceNode))
+                {
+                    continue;
+                }
+
+                if (waiter.Value.PendingDependencies.Count > 0)
+                {
+                    continue;
+                }
+
+                waitingNodes.Remove(waiter.Key);
+                waitersToResume.Add(waiter.Value);
+            }
+
+            foreach (var waiter in waitersToResume)
+            {
+                await CreateNodeAsync(waiter.DeployNode, waiter.Vars, cancellationToken);
+            }
         }
 
         private async Task PreProcessNodeAsync(IDeploymentNode deployNode, IReadOnlyDictionary<string, object> vars, CancellationToken cancellationToken)
@@ -375,12 +488,7 @@ namespace LiveArch.Deployment
 
         private bool TryGetResourceByNode(ModelItem node, IReadOnlyDictionary<string, object> vars, out object? resource)
         {
-            if (!oldResources.TryGetValue((node, vars), out resource) &&
-                !newResources.TryGetValue((node, vars), out resource) &&
-                !oldResources.TryGetValue((node, GetLoopScopedVars(vars)), out resource) &&
-                !newResources.TryGetValue((node, GetLoopScopedVars(vars)), out resource) &&
-                !oldResources.TryGetValue((node, rootVars), out resource) &&
-                !newResources.TryGetValue((node, rootVars), out resource))
+            if (!TryGetExistingResourceByNode(node, vars, out resource))
             {
                 if (node is StaticStructureElement)
                 {
@@ -396,6 +504,16 @@ namespace LiveArch.Deployment
             }
 
             return true;
+        }
+
+        private bool TryGetExistingResourceByNode(ModelItem node, IReadOnlyDictionary<string, object> vars, out object? resource)
+        {
+            return oldResources.TryGetValue((node, vars), out resource) ||
+                newResources.TryGetValue((node, vars), out resource) ||
+                oldResources.TryGetValue((node, GetLoopScopedVars(vars)), out resource) ||
+                newResources.TryGetValue((node, GetLoopScopedVars(vars)), out resource) ||
+                oldResources.TryGetValue((node, rootVars), out resource) ||
+                newResources.TryGetValue((node, rootVars), out resource);
         }
 
         private bool TryGetParentVars(IReadOnlyDictionary<string, object> vars, out IReadOnlyDictionary<string, object>? parentVars)
