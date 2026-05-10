@@ -107,55 +107,7 @@ namespace LiveArch.Deployment
             var deploymentNode = new DeploymentNodeAdapter(deployNode, SubstituteVariables(vars));
             if (deploymentNode.IsDisabled == false)
             {
-                var res = await CreateNodeAsync(deploymentNode, vars, cancellationToken);
-
-                var infraNodes = deployNode.InfrastructureNodes.On(environment, deploymentView, SubstituteVariables(vars))
-                    .Select(x => new InfrastructureNodeAdapter(x, SubstituteVariables(vars)))
-                    .Where(x => x.IsDisabled == false)
-                    .ToList();
-
-                if (res is ForEachLoop loop)
-                {
-                    var sourceElement = infraNodes.FirstOrDefault(x => x.Technology == ForEachSource.Technology);
-                    if (sourceElement != null)
-                    {
-                        infraNodes.Remove(sourceElement);
-                        var sourceVars = new Dictionary<string, object>(vars)
-                        {
-                            [parent] = vars,
-                            [owner] = loop,
-                            ["level"] = ++level
-                        };
-                        var sourceComponent = await CreateNodeAsync(sourceElement, sourceVars, cancellationToken) as ForEachSource;
-                        if (sourceComponent != null)
-                        {
-                            sourceComponent.Source.Apply(async items =>
-                            {
-                                foreach (var item in items)
-                                {
-                                    var loopVars = new Dictionary<string, object>(vars)
-                                    {
-                                        [loop.Name] = item,
-                                        [parent] = vars,
-                                        [owner] = loop!,
-                                        ["level"] = ++level
-                                    };
-                                    await CreateChildResources(deployNode, infraNodes, loopVars, cancellationToken);
-                                }
-                            });
-                        }
-                    }
-                }
-                else
-                {
-                    var childVars = new Dictionary<string, object>(vars)
-                    {
-                        [parent] = vars,
-                        [owner] = res!,
-                        ["level"] = ++level
-                    };
-                    await CreateChildResources(deployNode, infraNodes, childVars, cancellationToken);
-                }
+                await CreateNodeAsync(deploymentNode, vars, cancellationToken);
             }
         }
 
@@ -182,7 +134,6 @@ namespace LiveArch.Deployment
             var container = new ContainerInstanceAdapter(containerInstance, SubstituteVariables(vars));
             if (container.IsDisabled == false)
             {
-                await BuildContainerInstance(containerInstance, vars, cancellationToken);
                 await CreateNodeAsync(container, vars, cancellationToken);
             }
         }
@@ -196,6 +147,8 @@ namespace LiveArch.Deployment
         {
             if (resourceTypesRegistry.TryGetResourceType(deployNode.Technology, out var type))
             {
+                await PreProcessNodeAsync(deployNode, vars, cancellationToken);
+
                 if (type!.IsAbstract && type.IsSealed)
                 {
                     if (resourceTypesRegistry.TryGetInvokeMethod(deployNode.Technology, out var invoke))
@@ -226,6 +179,7 @@ namespace LiveArch.Deployment
                         oldResources.TryAdd((deployNode.Node, GetLoopScopedVars(vars)), resource!);
 
                         await CreateRelationNodesAsync(deployNode, vars, cancellationToken);
+                        await PostProcessNodeAsync(deployNode, resource, vars, cancellationToken);
 
                         return resource;
                     }
@@ -271,11 +225,73 @@ namespace LiveArch.Deployment
                     newResources.TryAdd((deployNode.Node, GetLoopScopedVars(vars)), newRes!);
 
                     await CreateRelationNodesAsync(deployNode, vars, cancellationToken);
+                    await PostProcessNodeAsync(deployNode, newRes, vars, cancellationToken);
 
                     return newRes;
                 }
             }
             return null;
+        }
+
+        private async Task PreProcessNodeAsync(IDeploymentNode deployNode, IReadOnlyDictionary<string, object> vars, CancellationToken cancellationToken)
+        {
+            switch (deployNode)
+            {
+                case ContainerInstanceAdapter when deployNode.Node is ContainerInstance containerInstance:
+                    await BuildContainerInstance(containerInstance, vars, cancellationToken);
+                    break;
+            }
+        }
+
+        private async Task PostProcessNodeAsync(IDeploymentNode deployNode, object? resource, IReadOnlyDictionary<string, object> vars, CancellationToken cancellationToken)
+        {
+            switch (deployNode)
+            {
+                case DeploymentNodeAdapter when deployNode.Node is DeploymentNode deploymentNode:
+                    var infraNodes = deploymentNode.InfrastructureNodes.On(environment, deploymentView, SubstituteVariables(vars))
+                        .Select(x => new InfrastructureNodeAdapter(x, SubstituteVariables(vars)))
+                        .Where(x => x.IsDisabled == false)
+                        .ToList();
+
+                    if (resource is ForEachLoop loop)
+                    {
+                        var sourceElement = infraNodes.FirstOrDefault(x => x.Technology == ForEachSource.Technology);
+                        if (sourceElement != null)
+                        {
+                            infraNodes.Remove(sourceElement);
+                            var sourceVars = CreateChildScopeVars(vars, loop);
+                            var sourceComponent = await CreateNodeAsync(sourceElement, sourceVars, cancellationToken) as ForEachSource;
+                            if (sourceComponent != null)
+                            {
+                                sourceComponent.Source.Apply(async items =>
+                                {
+                                    foreach (var item in items)
+                                    {
+                                        var loopVars = CreateChildScopeVars(vars, loop);
+                                        loopVars[loop.Name] = item;
+                                        await CreateChildResources(deploymentNode, infraNodes, loopVars, cancellationToken);
+                                    }
+                                });
+                            }
+                        }
+
+                        return;
+                    }
+
+                    var childVars = CreateChildScopeVars(vars, resource!);
+                    await CreateChildResources(deploymentNode, infraNodes, childVars, cancellationToken);
+                    break;
+            }
+        }
+
+        private Dictionary<string, object> CreateChildScopeVars(IReadOnlyDictionary<string, object> vars, object ownerResource)
+        {
+            return new Dictionary<string, object>(vars)
+            {
+                [parent] = vars,
+                [owner] = ownerResource,
+                ["level"] = ++level
+            };
         }
 
         private IReadOnlyCollection<ITransformer> GetTransformers(Dictionary<string, string> properties)

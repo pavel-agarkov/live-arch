@@ -54,9 +54,9 @@ namespace LiveArch.Deployment.TestRunner
         {
             var ws = await ProcessDeployment("order-env");
 
-            ws.NewResources.Should().HaveCount(20);
+            ws.NewResources.GroupBy(x => x.Key.Item1).Should().HaveCount(11);
 
-            ws.OldResources.Should().HaveCount(18);
+            ws.OldResources.GroupBy(x=>x.Key.Item1).Should().HaveCount(13);
         }
 
         [Fact]
@@ -64,9 +64,9 @@ namespace LiveArch.Deployment.TestRunner
         {
             var ws = await ProcessDeployment("delivery-env");
 
-            ws.NewResources.Should().HaveCount(16);
+            ws.NewResources.GroupBy(x => x.Key.Item1).Should().HaveCount(8);
 
-            ws.OldResources.Should().HaveCount(20);
+            ws.OldResources.GroupBy(x => x.Key.Item1).Should().HaveCount(11);
         }
 
         [Fact]
@@ -74,9 +74,19 @@ namespace LiveArch.Deployment.TestRunner
         {
             var ws = await ProcessDeployment("shared-env");
 
-            ws.NewResources.Should().HaveCount(20);
+            ws.NewResources.GroupBy(x => x.Key.Item1).Should().HaveCount(4);
 
-            ws.OldResources.Should().HaveCount(18);
+            ws.OldResources.GroupBy(x => x.Key.Item1).Should().HaveCount(0);
+        }
+
+        [Fact]
+        public async Task ShouldGetAllSharedResourceReferences()
+        {
+            var ws = await ProcessDeployment("shared-ref-env");
+
+            ws.NewResources.GroupBy(x => x.Key.Item1).Should().HaveCount(0);
+
+            ws.OldResources.GroupBy(x => x.Key.Item1).Should().HaveCount(4);
         }
 
         private async Task<StructurizrComponent> ProcessDeployment(string deployment)
