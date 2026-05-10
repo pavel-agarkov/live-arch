@@ -15,20 +15,34 @@ namespace LiveArch.Deployment
 {
     public partial class StructurizrComponent
     {
-        private readonly record struct WaitingNodeKey(ModelItem Node, IReadOnlyDictionary<string, object> Vars);
+        public readonly record struct ResourceKey(ModelItem Node, IReadOnlyDictionary<string, object> Vars);
 
-        private sealed class WaitingNodeRegistration
+        private readonly record struct PendingDependency(ModelItem Node, IReadOnlyDictionary<string, object> Vars)
         {
-            public WaitingNodeRegistration(IDeploymentNode deployNode, IReadOnlyDictionary<string, object> vars, IEnumerable<ModelItem> pendingDependencies)
+            public bool IsSatisfiedBy(
+                ResourceKey resourceKey,
+                Func<IReadOnlyDictionary<string, object>, IReadOnlyDictionary<string, object>> getLoopScopedVars,
+                IReadOnlyDictionary<string, object> rootVars)
             {
-                DeployNode = deployNode;
-                Vars = vars;
-                PendingDependencies = new HashSet<ModelItem>(pendingDependencies);
-            }
+                if (resourceKey.Node != Node)
+                {
+                    return false;
+                }
 
-            public IDeploymentNode DeployNode { get; }
-            public IReadOnlyDictionary<string, object> Vars { get; }
-            public HashSet<ModelItem> PendingDependencies { get; }
+                return resourceKey.Vars == Vars ||
+                    resourceKey.Vars == getLoopScopedVars(Vars) ||
+                    resourceKey.Vars == rootVars;
+            }
+        }
+
+        private sealed class WaitingNodeRegistration(
+            IDeploymentNode deployNode,
+            IReadOnlyDictionary<string, object> vars,
+            IEnumerable<PendingDependency> pendingDependencies)
+        {
+            public IDeploymentNode DeployNode { get; } = deployNode;
+            public IReadOnlyDictionary<string, object> Vars { get; } = vars;
+            public HashSet<PendingDependency> PendingDependencies { get; } = [.. pendingDependencies];
         }
 
         [GeneratedRegex(@"\$\{([a-zA-Z0-9_\.\:\-]+)\}", RegexOptions.Multiline, 1000)]
@@ -44,9 +58,9 @@ namespace LiveArch.Deployment
         private readonly DeploymentView deploymentView;
         private readonly IReadOnlyDictionary<string, object> rootVars;
         private Workspace workspace;
-        private Dictionary<(ModelItem, IReadOnlyDictionary<string, object>), object> newResources = new();
-        private Dictionary<(ModelItem, IReadOnlyDictionary<string, object>), object> oldResources = new();
-        private Dictionary<WaitingNodeKey, WaitingNodeRegistration> waitingNodes = new();
+        private Dictionary<ResourceKey, object> newResources = new();
+        private Dictionary<ResourceKey, object> oldResources = new();
+        private Dictionary<ResourceKey, WaitingNodeRegistration> waitingNodes = new();
         private Dictionary<object, object> childInputWrappers = new();
 
         private Dictionary<Type, Dictionary<string, PropertyInfo>> allInputProps = new();
@@ -56,8 +70,8 @@ namespace LiveArch.Deployment
         private readonly InvokeOptions? invokeOptions = null;
         private readonly CustomResourceOptions? customResourceOptions = null;
 
-        public IReadOnlyDictionary<(ModelItem, IReadOnlyDictionary<string, object>), object> NewResources => newResources;
-        public IReadOnlyDictionary<(ModelItem, IReadOnlyDictionary<string, object>), object> OldResources => oldResources;
+        public IReadOnlyDictionary<ResourceKey, object> NewResources => newResources;
+        public IReadOnlyDictionary<ResourceKey, object> OldResources => oldResources;
 
         public StructurizrComponent(
             string workspacePath,
@@ -174,7 +188,7 @@ namespace LiveArch.Deployment
                     return null;
                 }
 
-                RemoveWaitingNode(new WaitingNodeKey(deployNode.Node, vars));
+                RemoveWaitingNode(new ResourceKey(deployNode.Node, vars));
                 await PreProcessNodeAsync(deployNode, vars, cancellationToken);
 
                 if (type!.IsAbstract && type.IsSealed)
@@ -203,12 +217,12 @@ namespace LiveArch.Deployment
                         var resultProperty = task.GetType().GetProperty("Result");
                         var resource = resultProperty!.GetValue(task);
 
-                        oldResources.Add((deployNode.Node, vars), resource!);
-                        oldResources.TryAdd((deployNode.Node, GetLoopScopedVars(vars)), resource!);
+                        oldResources.Add(new ResourceKey(deployNode.Node, vars), resource!);
+                        oldResources.TryAdd(new ResourceKey(deployNode.Node, GetLoopScopedVars(vars)), resource!);
 
                         await CreateRelationNodesAsync(deployNode, vars, cancellationToken);
                         await PostProcessNodeAsync(deployNode, resource, vars, cancellationToken);
-                        await TryResumeWaitingNodesAsync(deployNode.Node, cancellationToken);
+                        await TryResumeWaitingNodesAsync(new ResourceKey(deployNode.Node, vars), cancellationToken);
 
                         return resource;
                     }
@@ -250,12 +264,12 @@ namespace LiveArch.Deployment
                     }
 
                     var newRes = Activator.CreateInstance(type, [SubstituteVariables(resVar, vars), param, customResourceOptions!]);
-                    newResources.Add((deployNode.Node, vars), newRes!);
-                    newResources.TryAdd((deployNode.Node, GetLoopScopedVars(vars)), newRes!);
+                    newResources.Add(new ResourceKey(deployNode.Node, vars), newRes!);
+                    newResources.TryAdd(new ResourceKey(deployNode.Node, GetLoopScopedVars(vars)), newRes!);
 
                     await CreateRelationNodesAsync(deployNode, vars, cancellationToken);
                     await PostProcessNodeAsync(deployNode, newRes, vars, cancellationToken);
-                    await TryResumeWaitingNodesAsync(deployNode.Node, cancellationToken);
+                    await TryResumeWaitingNodesAsync(new ResourceKey(deployNode.Node, vars), cancellationToken);
 
                     return newRes;
                 }
@@ -275,9 +289,9 @@ namespace LiveArch.Deployment
             return true;
         }
 
-        private IReadOnlyCollection<ModelItem> GetMissingDependencies(IDeploymentNode deployNode, IReadOnlyDictionary<string, object> vars)
+        private IReadOnlyCollection<PendingDependency> GetMissingDependencies(IDeploymentNode deployNode, IReadOnlyDictionary<string, object> vars)
         {
-            var missingDependencies = new HashSet<ModelItem>();
+            var missingDependencies = new HashSet<PendingDependency>();
 
             foreach (var relation in deployNode.Relationships.In(deploymentView))
             {
@@ -290,7 +304,7 @@ namespace LiveArch.Deployment
 
                 if (!TryGetExistingResourceByNode(relation.Destination, vars, out _))
                 {
-                    missingDependencies.Add(relation.Destination);
+                    missingDependencies.Add(new PendingDependency(relation.Destination, vars));
                 }
             }
 
@@ -300,7 +314,7 @@ namespace LiveArch.Deployment
                 {
                     if (!TryGetExistingResourceByNode(parentNode.Node, vars, out _))
                     {
-                        missingDependencies.Add(parentNode.Node);
+                        missingDependencies.Add(new PendingDependency(parentNode.Node, vars));
                     }
                 }
             }
@@ -308,27 +322,36 @@ namespace LiveArch.Deployment
             return missingDependencies;
         }
 
-        private void RegisterWaitingNode(IDeploymentNode deployNode, IReadOnlyDictionary<string, object> vars, IReadOnlyCollection<ModelItem> missingDependencies)
+        private void RegisterWaitingNode(IDeploymentNode deployNode, IReadOnlyDictionary<string, object> vars, IReadOnlyCollection<PendingDependency> missingDependencies)
         {
-            var key = new WaitingNodeKey(deployNode.Node, vars);
+            var key = new ResourceKey(deployNode.Node, vars);
 
             var waitingNode = new WaitingNodeRegistration(deployNode, vars, missingDependencies);
             waitingNodes[key] = waitingNode;
         }
 
-        private void RemoveWaitingNode(WaitingNodeKey key)
+        private void RemoveWaitingNode(ResourceKey key)
         {
             waitingNodes.Remove(key);
         }
 
-        private async Task TryResumeWaitingNodesAsync(ModelItem resourceNode, CancellationToken cancellationToken)
+        private async Task TryResumeWaitingNodesAsync(ResourceKey resourceKey, CancellationToken cancellationToken)
         {
             var waitersToResume = new List<WaitingNodeRegistration>();
             foreach (var waiter in waitingNodes.ToList())
             {
-                if (!waiter.Value.PendingDependencies.Remove(resourceNode))
+                var matchingDependencies = waiter.Value.PendingDependencies
+                    .Where(x => x.IsSatisfiedBy(resourceKey, GetLoopScopedVars, rootVars))
+                    .ToList();
+
+                if (matchingDependencies.Count == 0)
                 {
                     continue;
+                }
+
+                foreach (var dependency in matchingDependencies)
+                {
+                    waiter.Value.PendingDependencies.Remove(dependency);
                 }
 
                 if (waiter.Value.PendingDependencies.Count > 0)
@@ -446,7 +469,7 @@ namespace LiveArch.Deployment
                 }
             }
 
-            if (deployNode.Node is ContainerInstance ci && newResources.TryGetValue((ci.Container, vars), out var image) && image is Image dockerImage)
+            if (deployNode.Node is ContainerInstance ci && newResources.TryGetValue(new ResourceKey(ci.Container, vars), out var image) && image is Image dockerImage)
             {
                 if (dockerImageReferenceConfigurator.TryGetImageReference(param, dockerImage, out var dockerImageRef))
                 {
@@ -508,12 +531,12 @@ namespace LiveArch.Deployment
 
         private bool TryGetExistingResourceByNode(ModelItem node, IReadOnlyDictionary<string, object> vars, out object? resource)
         {
-            return oldResources.TryGetValue((node, vars), out resource) ||
-                newResources.TryGetValue((node, vars), out resource) ||
-                oldResources.TryGetValue((node, GetLoopScopedVars(vars)), out resource) ||
-                newResources.TryGetValue((node, GetLoopScopedVars(vars)), out resource) ||
-                oldResources.TryGetValue((node, rootVars), out resource) ||
-                newResources.TryGetValue((node, rootVars), out resource);
+            return oldResources.TryGetValue(new ResourceKey(node, vars), out resource) ||
+                newResources.TryGetValue(new ResourceKey(node, vars), out resource) ||
+                oldResources.TryGetValue(new ResourceKey(node, GetLoopScopedVars(vars)), out resource) ||
+                newResources.TryGetValue(new ResourceKey(node, GetLoopScopedVars(vars)), out resource) ||
+                oldResources.TryGetValue(new ResourceKey(node, rootVars), out resource) ||
+                newResources.TryGetValue(new ResourceKey(node, rootVars), out resource);
         }
 
         private bool TryGetParentVars(IReadOnlyDictionary<string, object> vars, out IReadOnlyDictionary<string, object>? parentVars)
