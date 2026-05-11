@@ -48,8 +48,8 @@ namespace LiveArch.Deployment
         [GeneratedRegex(@"\$\{([a-zA-Z0-9_\.\:\-]+)\}", RegexOptions.Multiline, 1000)]
         private static partial Regex InterpolationRegex();
         private static readonly Regex VarRegex = InterpolationRegex();
-        private readonly string parent = Guid.NewGuid().ToString();
-        private readonly string owner = Guid.NewGuid().ToString();
+        private readonly string parent = nameof(parent) + Guid.NewGuid().ToString();
+        private readonly string owner = nameof(owner) + Guid.NewGuid().ToString();
         private int level = 0;
         private readonly string environment;
         private readonly ResourceHierarchyRegistry hierarchyRegistry;
@@ -144,11 +144,6 @@ namespace LiveArch.Deployment
 
         private async Task CreateChildResources(DeploymentNode deployNode, List<InfrastructureNodeAdapter> infraNodes, IReadOnlyDictionary<string, object> childVars, CancellationToken cancellationToken)
         {
-            foreach (var infraNode in infraNodes)
-            {
-                await CreateNodeAsync(infraNode, childVars, cancellationToken);
-            }
-
             foreach (var containerInstance in deployNode.ContainerInstances.On(environment, deploymentView, SubstituteVariables(childVars)))
             {
                 await ProcessContainerInstanceAsync(containerInstance!, childVars, cancellationToken);
@@ -157,6 +152,11 @@ namespace LiveArch.Deployment
             foreach (var childNode in deployNode.Children)
             {
                 await ProcessDeploymentNodeAsync(childNode!, childVars, cancellationToken);
+            }
+
+            foreach (var infraNode in infraNodes)
+            {
+                await CreateNodeAsync(infraNode, childVars, cancellationToken);
             }
         }
 
