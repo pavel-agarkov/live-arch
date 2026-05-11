@@ -131,6 +131,35 @@ namespace LiveArch.Deployment
             return s => SubstituteVariables(s, context);
         }
 
+        private IEnumerable<RelationshipAdapter> GetRelationshipAdapters(IDeploymentNode deployNode)
+        {
+            return deployNode.Relationships.In(deploymentView);
+        }
+
+        private static bool HasMappedDependency(RelationshipAdapter relationship)
+        {
+            return relationship.Properties.ContainsKey("source") &&
+                relationship.Properties.ContainsKey("target");
+        }
+
+        private bool HasExplicitDependency(RelationshipAdapter relationship, DeploymentContext context)
+        {
+            if (!relationship.Properties.TryGetValue("dependsOn", out var dependsOnValue))
+            {
+                return false;
+            }
+
+            return bool.TryParse(SubstituteVariables(dependsOnValue, context).ToString(), out var dependsOn) &&
+                dependsOn;
+        }
+
+        private bool RequiresDependency(RelationshipAdapter relationship, DeploymentContext context)
+        {
+            return !string.IsNullOrEmpty(relationship.Technology) ||
+                HasMappedDependency(relationship) ||
+                HasExplicitDependency(relationship, context);
+        }
+
         private async Task ProcessDeploymentNodeAsync(DeploymentNode deployNode, DeploymentContext context, CancellationToken cancellationToken)
         {
             var deploymentNode = new DeploymentNodeAdapter(deployNode, SubstituteVariables(context));
@@ -289,15 +318,14 @@ namespace LiveArch.Deployment
         {
             var missingDependencies = new HashSet<ModelItem>();
 
-            foreach (var relation in deployNode.Relationships.In(deploymentView))
+            foreach (var relationship in GetRelationshipAdapters(deployNode))
             {
-                if (string.IsNullOrEmpty(relation.Technology) &&
-                    !relation.Properties.ContainsKey("source") &&
-                    !relation.Properties.ContainsKey("target"))
+                if (!RequiresDependency(relationship, context))
                 {
                     continue;
                 }
 
+                var relation = (Relationship)relationship.Node;
                 if (!TryGetExistingResourceByNode(relation.Destination, context.Scope, out _))
                 {
                     missingDependencies.Add(relation.Destination);
@@ -415,7 +443,8 @@ namespace LiveArch.Deployment
                 return;
             }
 
-            await CreateChildResources(deploymentNode, GetInfrastructureNodes(deploymentNode, context), context, cancellationToken);
+            await CreateChildResources(deploymentNode,
+                GetInfrastructureNodes(deploymentNode, context), context, cancellationToken);
         }
 
         private async Task ProcessForEachLoopAsync(DeploymentNode deploymentNode, ForEachLoop loop, DeploymentContext context, CancellationToken cancellationToken)
@@ -431,7 +460,8 @@ namespace LiveArch.Deployment
                 foreach (var item in items)
                 {
                     var loopContext = CreateChildContext(context.Scope, loop, context.Variables, variables => variables[loop.Name] = item);
-                    await CreateChildResources(deploymentNode, GetInfrastructureNodes(deploymentNode, loopContext, x => x.Technology != ForEachSource.Technology), loopContext, cancellationToken);
+                    await CreateChildResources(deploymentNode,
+                        GetInfrastructureNodes(deploymentNode, loopContext, x => x.Technology != ForEachSource.Technology), loopContext, cancellationToken);
                 }
             });
         }
@@ -478,24 +508,23 @@ namespace LiveArch.Deployment
         {
             if (deployNode is not RelationshipAdapter)
             {
-                foreach (var relation in deployNode.Relationships.In(deploymentView)
-                    .Where(r => !string.IsNullOrEmpty(r.Technology)))
+                foreach (var relNode in GetRelationshipAdapters(deployNode)
+                    .Where(relationship => !string.IsNullOrEmpty(relationship.Technology)))
                 {
-                    var relNode = new RelationshipAdapter(relation, SubstituteVariables(context));
-                    if (relNode.IsDisabled == false)
-                        await CreateNodeAsync(relNode, context, cancellationToken);
+                    await CreateNodeAsync(relNode, context, cancellationToken);
                 }
             }
         }
 
         private void ApplyRelations(IDeploymentNode deployNode, object param, DeploymentContext context)
         {
-            foreach (var relation in deployNode.Relationships.In(deploymentView))
+            foreach (var relationship in GetRelationshipAdapters(deployNode))
             {
+                var relation = (Relationship)relationship.Node;
                 if (TryGetResourceByNode(relation.Destination, context, out var source) &&
-                    relation.Properties.TryGetValue("source", out var sourcePath) && relation.Properties.TryGetValue("target", out var targetPath))
+                    relationship.Properties.TryGetValue("source", out var sourcePath) && relationship.Properties.TryGetValue("target", out var targetPath))
                 {
-                    ApplyDependency(source!, param, sourcePath, targetPath, context, GetTransformers(relation.Properties));
+                    ApplyDependency(source!, param, sourcePath, targetPath, context, GetTransformers(new Dictionary<string, string>(relationship.Properties)));
                 }
             }
 

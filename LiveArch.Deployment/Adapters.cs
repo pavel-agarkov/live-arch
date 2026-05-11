@@ -10,7 +10,7 @@ namespace LiveArch.Deployment
         ModelItem Node { get; }
         string Technology { get; }
         IDictionary<string, string> Properties { get; }
-        ISet<Relationship> Relationships { get; }
+        IReadOnlyCollection<RelationshipAdapter> Relationships { get; }
         IReadOnlyCollection<IDeploymentNode> Parents { get; }
 
         bool IsDisabled { get; }
@@ -21,11 +21,16 @@ namespace LiveArch.Deployment
     {
         protected readonly TNode node;
         protected readonly Func<string, object> substituteVariables;
+        private readonly IReadOnlyCollection<RelationshipAdapter> relationships;
 
         protected DeploymentAdapter(TNode node, Func<string, object> substituteVariables)
         {
             this.node = node;
             this.substituteVariables = substituteVariables;
+            relationships = [..
+                node.Relationships
+                    .Select(relationship => new RelationshipAdapter(relationship, substituteVariables))
+                    .Where(relationship => !relationship.IsDisabled)];
         }
 
         public bool IsDisabled =>
@@ -38,7 +43,7 @@ namespace LiveArch.Deployment
 
         public ModelItem Node => node;
 
-        public ISet<Relationship> Relationships => node.Relationships;
+        public IReadOnlyCollection<RelationshipAdapter> Relationships => relationships;
         public virtual string Technology => substituteVariables(
               node is DeploymentNode dn ? dn.Technology
             : node is InfrastructureNode ind ? ind.Technology
@@ -111,8 +116,8 @@ namespace LiveArch.Deployment
 
         public ModelItem Node => relationshipInstance;
 
-        public ISet<Relationship> Relationships => new HashSet<Relationship>(0);
+        public IReadOnlyCollection<RelationshipAdapter> Relationships { get; } = Array.Empty<RelationshipAdapter>();
 
-        public virtual string Technology => relationshipInstance.Technology;
+        public virtual string Technology => substituteVariables(relationshipModel.Technology ?? string.Empty).ToString()!;
     }
 }

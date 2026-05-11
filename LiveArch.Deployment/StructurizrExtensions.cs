@@ -16,10 +16,10 @@ namespace LiveArch.Deployment
                    select element;
         }
 
-        public static IEnumerable<Relationship> In(this IEnumerable<Relationship> relationships, DeploymentView view)
+        public static IEnumerable<RelationshipAdapter> In(this IEnumerable<RelationshipAdapter> relationships, DeploymentView view)
         {
             return from rel in relationships
-                   join relInView in view.Relationships on rel.Id equals relInView.Id
+                   join relInView in view.Relationships on rel.Node.Id equals relInView.Id
                    select rel;
         }
     }
