@@ -29,7 +29,11 @@ group "Ordering" {
                 dockerfile.location "../.Dockerfile"
                 push "true"
             }
-            -> orderDb "uses"
+            -> orderDb "uses" {
+                properties {
+                    dependsOn true
+                }
+            }
             -> deliveryEventsTopic "consume Delivery Completed Message" "azurela:servicebus:ReadableSubscription" {
                 properties {
                     var "order-worker-subscription-to-delivery-events-topic"

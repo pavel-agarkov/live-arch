@@ -13,7 +13,7 @@
           "id" : "34",
           "name" : "Order Events Topic",
           "properties" : {
-            "structurizr.dsl.identifier" : "26c321ca-b056-436b-bcae-909d1ebd7871",
+            "structurizr.dsl.identifier" : "14c362a6-3bfc-45fc-a43d-d26dba045e68",
             "var" : "order-events-topic",
             "topicName" : "${ENV}-order-events-topic"
           },
@@ -24,7 +24,7 @@
           "id" : "35",
           "name" : "Delivery Events Topic",
           "properties" : {
-            "structurizr.dsl.identifier" : "03be8b27-23ce-43a1-8f84-9ce9e4f58730",
+            "structurizr.dsl.identifier" : "3b700c20-e745-4528-ac74-de25ca17f671",
             "var" : "delivery-events-topic",
             "topicName" : "${ENV}-delivery-events-topic"
           },
@@ -34,25 +34,11 @@
         "instances" : "1",
         "name" : "Service Bus Namespace",
         "properties" : {
-          "structurizr.dsl.identifier" : "9f2e3356-08e2-4416-b601-96b23b890b0d",
+          "structurizr.dsl.identifier" : "e69c98d5-f12b-46e2-a163-1c4b41de233f",
           "namespaceName" : "${ENV}-sbns"
         },
         "tags" : "Element,Deployment Node,Microsoft Azure - Azure Service Bus",
         "technology" : "azure-native:servicebus:Namespace"
-      }, {
-        "environment" : "${ENV}",
-        "id" : "36",
-        "instances" : "1",
-        "name" : "App Service Plan",
-        "properties" : {
-          "structurizr.dsl.identifier" : "98f6b0e1-ccb3-4ddd-bec0-74f0d34d76d6",
-          "sku.tier" : "Basic",
-          "kind" : "linux",
-          "name" : "${ENV}-app-service-plan",
-          "sku.name" : "B1"
-        },
-        "tags" : "Element,Deployment Node,Microsoft Azure - App Service Plans",
-        "technology" : "azure-native:appservice:Plan"
       } ],
       "environment" : "${ENV}",
       "id" : "32",
@@ -70,7 +56,7 @@
           "containerId" : "2",
           "deploymentGroups" : [ "Default" ],
           "environment" : "${ENV}",
-          "id" : "39",
+          "id" : "38",
           "instanceId" : 1,
           "properties" : {
             "structurizr.dsl.identifier" : "orderEventsTopicReference",
@@ -82,7 +68,7 @@
           "containerId" : "4",
           "deploymentGroups" : [ "Default" ],
           "environment" : "${ENV}",
-          "id" : "40",
+          "id" : "39",
           "instanceId" : 1,
           "properties" : {
             "structurizr.dsl.identifier" : "deliveryEventsTopicReference",
@@ -92,18 +78,18 @@
           "tags" : "Container Instance"
         } ],
         "environment" : "${ENV}",
-        "id" : "38",
+        "id" : "37",
         "instances" : "1",
         "name" : "Service Bus Namespace",
         "properties" : {
-          "structurizr.dsl.identifier" : "8c6a5148-f4c0-45ea-8ee5-3922da35ade6",
+          "structurizr.dsl.identifier" : "9e01216f-2916-4511-92d1-bbed94e3380e",
           "namespaceName" : "${ENV}-sbns"
         },
         "tags" : "Element,Deployment Node,Microsoft Azure - Azure Service Bus",
         "technology" : "azure-native:servicebus:getNamespace"
       } ],
       "environment" : "${ENV}",
-      "id" : "37",
+      "id" : "36",
       "instances" : "1",
       "name" : "Shared Resource Group Reference",
       "properties" : {
@@ -120,73 +106,173 @@
               "containerId" : "7",
               "deploymentGroups" : [ "Default" ],
               "environment" : "${ENV}",
-              "id" : "45",
+              "id" : "44",
               "instanceId" : 1,
               "properties" : {
-                "structurizr.dsl.identifier" : "f12c36ad-2710-48c6-9b1a-8cbd02bba5ad",
+                "structurizr.dsl.identifier" : "8ef571c2-a7d5-41d8-8efb-0f8e30f5f110",
                 "var" : "order-db",
                 "name" : "${ENV}-order-db"
               },
               "tags" : "Container Instance"
             } ],
             "environment" : "${ENV}",
-            "id" : "44",
+            "id" : "43",
             "instances" : "1",
             "name" : "Elastic Pool",
             "properties" : {
-              "structurizr.dsl.identifier" : "370667db-5606-4430-b163-73641bc8f086",
+              "structurizr.dsl.identifier" : "16fe70a8-12d0-4142-a425-12cf90ae3073",
               "elasticPoolName" : "${SQL_ELASTIC_POOL_NAME}"
             },
             "tags" : "Element,Deployment Node,Microsoft Azure - SQL Elastic Pools",
             "technology" : "azure-native:sql:getElasticPool"
           } ],
           "environment" : "${ENV}",
-          "id" : "43",
+          "id" : "42",
           "instances" : "1",
           "name" : "SQL Server",
           "properties" : {
-            "structurizr.dsl.identifier" : "4ce7896d-f1f0-4e6a-a4f5-100603851bb5",
+            "structurizr.dsl.identifier" : "8a078cbf-7cfe-41a8-abed-c6f8a4ea79e8",
             "sqlServerName" : "${SQL_SERVER_NAME}"
           },
           "tags" : "Element,Deployment Node,Microsoft Azure - Azure SQL",
           "technology" : "azure-native:azuredata:getSqlServer"
         } ],
         "environment" : "${ENV}",
-        "id" : "42",
+        "id" : "41",
         "instances" : "1",
         "name" : "SQL Server Registration",
         "properties" : {
-          "structurizr.dsl.identifier" : "0bfdbc4d-96ba-41c8-b58d-361071e45493",
+          "structurizr.dsl.identifier" : "6aa94a26-e917-4bb7-8c48-e71939ecb088",
           "sqlServerRegistrationName" : "${SQL_SERVER_REGISTRATION_NAME}"
         },
         "tags" : "Element,Deployment Node,Microsoft Azure - SQL Server Registries",
         "technology" : "azure-native:azuredata:getSqlServerRegistration"
       }, {
+        "children" : [ {
+          "containerInstances" : [ {
+            "containerId" : "8",
+            "deploymentGroups" : [ "Default" ],
+            "environment" : "${ENV}",
+            "id" : "48",
+            "instanceId" : 1,
+            "properties" : {
+              "structurizr.dsl.identifier" : "orderApiInstance",
+              "siteConfig.AppSettings:WEBSITES_PORT" : "8080",
+              "siteConfig.Cors.allowedOrigins" : "https://web-${ENV}.azurewebsites.net,https://mobile-${ENV}.azurewebsites.net",
+              "var" : "order-api",
+              "name" : "${ENV}-order-api",
+              "siteConfig.Cors.allowedOrigins+=" : "https://${ENV}-order-api.azurewebsites.net,https://${ENV}-delivery-api.azurewebsites.net",
+              "identity.type" : "UserAssigned"
+            },
+            "relationships" : [ {
+              "description" : "publish Order Placed Message",
+              "destinationId" : "38",
+              "id" : "49",
+              "linkedRelationshipId" : "10",
+              "sourceId" : "48"
+            }, {
+              "description" : "uses",
+              "destinationId" : "44",
+              "id" : "50",
+              "linkedRelationshipId" : "9",
+              "sourceId" : "48"
+            }, {
+              "description" : "identity",
+              "destinationId" : "54",
+              "id" : "55",
+              "properties" : {
+                "source" : "id",
+                "target" : "identity.userAssignedIdentities"
+              },
+              "sourceId" : "48",
+              "tags" : "Relationship"
+            } ],
+            "tags" : "Container Instance"
+          }, {
+            "containerId" : "14",
+            "deploymentGroups" : [ "Default" ],
+            "environment" : "${ENV}",
+            "id" : "51",
+            "instanceId" : 1,
+            "properties" : {
+              "structurizr.dsl.identifier" : "orderWorkerInstance",
+              "var" : "order-worker",
+              "name" : "${ENV}-order-worker",
+              "identity.type" : "UserAssigned"
+            },
+            "relationships" : [ {
+              "description" : "consume Delivery Completed Message",
+              "destinationId" : "39",
+              "id" : "52",
+              "linkedRelationshipId" : "16",
+              "sourceId" : "51",
+              "technology" : "azurela:servicebus:ReadableSubscription"
+            }, {
+              "description" : "uses",
+              "destinationId" : "44",
+              "id" : "53",
+              "linkedRelationshipId" : "15",
+              "sourceId" : "51"
+            }, {
+              "description" : "identity",
+              "destinationId" : "54",
+              "id" : "56",
+              "properties" : {
+                "source" : "id",
+                "target" : "identity.userAssignedIdentities"
+              },
+              "sourceId" : "51",
+              "tags" : "Relationship"
+            } ],
+            "tags" : "Container Instance"
+          } ],
+          "environment" : "${ENV}",
+          "id" : "47",
+          "instances" : "1",
+          "name" : "App Service Plan",
+          "properties" : {
+            "structurizr.dsl.identifier" : "a2532aa5-ed15-41b3-8588-3dad951cf256",
+            "name" : "${ENV}-app-service-plan"
+          },
+          "tags" : "Element,Deployment Node,Microsoft Azure - App Service Plans",
+          "technology" : "azure-native:web:getAppServicePlan"
+        } ],
         "environment" : "${ENV}",
-        "id" : "49",
+        "id" : "46",
+        "instances" : "1",
+        "name" : "Virtual Network",
+        "properties" : {
+          "structurizr.dsl.identifier" : "6a2439f3-af7d-495b-b2fc-bf6dfebe109e",
+          "virtualNetworkName" : "${VNET_NAME}"
+        },
+        "tags" : "Element,Deployment Node,Microsoft Azure - Virtual Networks",
+        "technology" : "azure-native:network:getVirtualNetwork"
+      }, {
+        "environment" : "${ENV}",
+        "id" : "58",
         "infrastructureNodes" : [ {
           "environment" : "${ENV}",
-          "id" : "50",
+          "id" : "59",
           "name" : "Source",
           "properties" : {
-            "structurizr.dsl.identifier" : "e4518c4b-dc22-4160-a25d-eb4c7e33e65a"
+            "structurizr.dsl.identifier" : "84d0e8fb-61f4-48b7-ad65-aa360617f49a"
           },
           "relationships" : [ {
             "description" : "take",
-            "destinationId" : "48",
-            "id" : "51",
+            "destinationId" : "57",
+            "id" : "60",
             "properties" : {
               "source" : "value",
               "target" : "source"
             },
-            "sourceId" : "50",
+            "sourceId" : "59",
             "tags" : "Relationship"
           } ],
           "tags" : "Element,Infrastructure Node",
           "technology" : "foreach:source"
         }, {
           "environment" : "${ENV}",
-          "id" : "52",
+          "id" : "61",
           "name" : "Storage Account",
           "properties" : {
             "structurizr.dsl.identifier" : "sa",
@@ -197,32 +283,32 @@
           "technology" : "azure-native:storage:getStorageAccount"
         }, {
           "environment" : "${ENV}",
-          "id" : "53",
+          "id" : "62",
           "name" : "Storage Account Access Role Assignment",
           "properties" : {
-            "structurizr.dsl.identifier" : "dba7c5c6-4a1f-42fe-809a-66edbe9b3908",
+            "structurizr.dsl.identifier" : "32dc674d-aae6-49a7-b8bc-9b043dd89660",
             "roleDefinitionId" : "ba92f5b4-2d11-453d-a403-e96b0029c9fe",
             "var" : "order-service-${saName}-access-policy"
           },
           "relationships" : [ {
             "description" : "scope",
-            "destinationId" : "52",
-            "id" : "54",
+            "destinationId" : "61",
+            "id" : "63",
             "properties" : {
               "source" : "id",
               "target" : "scope"
             },
-            "sourceId" : "53",
+            "sourceId" : "62",
             "tags" : "Relationship"
           }, {
             "description" : "principal",
-            "destinationId" : "47",
-            "id" : "55",
+            "destinationId" : "54",
+            "id" : "64",
             "properties" : {
               "source" : "principalId",
               "target" : "principalId"
             },
-            "sourceId" : "53",
+            "sourceId" : "62",
             "tags" : "Relationship"
           } ],
           "tags" : "Element,Infrastructure Node,Microsoft Azure - Entra Managed Identities",
@@ -235,112 +321,12 @@
         },
         "tags" : "Element,Deployment Node",
         "technology" : "foreach:loop"
-      }, {
-        "children" : [ {
-          "containerInstances" : [ {
-            "containerId" : "8",
-            "deploymentGroups" : [ "Default" ],
-            "environment" : "${ENV}",
-            "id" : "61",
-            "instanceId" : 1,
-            "properties" : {
-              "structurizr.dsl.identifier" : "a93491f5-8e71-4037-ab56-1c43359e8769",
-              "siteConfig.AppSettings:WEBSITES_PORT" : "8080",
-              "siteConfig.Cors.allowedOrigins" : "https://web-${ENV}.azurewebsites.net,https://mobile-${ENV}.azurewebsites.net",
-              "var" : "order-api",
-              "name" : "${ENV}-order-api",
-              "siteConfig.Cors.allowedOrigins+=" : "https://${ENV}-order-api.azurewebsites.net,https://${ENV}-delivery-api.azurewebsites.net",
-              "identity.type" : "UserAssigned"
-            },
-            "relationships" : [ {
-              "description" : "publish Order Placed Message",
-              "destinationId" : "39",
-              "id" : "62",
-              "linkedRelationshipId" : "10",
-              "sourceId" : "61"
-            }, {
-              "description" : "uses",
-              "destinationId" : "45",
-              "id" : "63",
-              "linkedRelationshipId" : "9",
-              "sourceId" : "61"
-            }, {
-              "description" : "identity",
-              "destinationId" : "47",
-              "id" : "64",
-              "properties" : {
-                "source" : "id",
-                "target" : "identity.userAssignedIdentities"
-              },
-              "sourceId" : "61",
-              "tags" : "Relationship"
-            } ],
-            "tags" : "Container Instance"
-          }, {
-            "containerId" : "14",
-            "deploymentGroups" : [ "Default" ],
-            "environment" : "${ENV}",
-            "id" : "65",
-            "instanceId" : 1,
-            "properties" : {
-              "structurizr.dsl.identifier" : "abca51ce-516f-43ed-a608-e85409f98261",
-              "var" : "order-worker",
-              "name" : "${ENV}-order-worker",
-              "identity.type" : "UserAssigned"
-            },
-            "relationships" : [ {
-              "description" : "consume Delivery Completed Message",
-              "destinationId" : "40",
-              "id" : "66",
-              "linkedRelationshipId" : "16",
-              "sourceId" : "65",
-              "technology" : "azurela:servicebus:ReadableSubscription"
-            }, {
-              "description" : "uses",
-              "destinationId" : "45",
-              "id" : "67",
-              "linkedRelationshipId" : "15",
-              "sourceId" : "65"
-            }, {
-              "description" : "identity",
-              "destinationId" : "47",
-              "id" : "68",
-              "properties" : {
-                "source" : "id",
-                "target" : "identity.userAssignedIdentities"
-              },
-              "sourceId" : "65",
-              "tags" : "Relationship"
-            } ],
-            "tags" : "Container Instance"
-          } ],
-          "environment" : "${ENV}",
-          "id" : "60",
-          "instances" : "1",
-          "name" : "App Service Plan",
-          "properties" : {
-            "structurizr.dsl.identifier" : "805a5cb6-eb53-4308-af35-86a1ca9ca102",
-            "name" : "${ENV}-app-service-plan"
-          },
-          "tags" : "Element,Deployment Node,Microsoft Azure - App Service Plans",
-          "technology" : "azure-native:web:getAppServicePlan"
-        } ],
-        "environment" : "${ENV}",
-        "id" : "59",
-        "instances" : "1",
-        "name" : "Virtual Network",
-        "properties" : {
-          "structurizr.dsl.identifier" : "bcd7660d-8153-4753-a22c-73435d111372",
-          "virtualNetworkName" : "${VNET_NAME}"
-        },
-        "tags" : "Element,Deployment Node,Microsoft Azure - Virtual Networks",
-        "technology" : "azure-native:network:getVirtualNetwork"
       } ],
       "environment" : "${ENV}",
-      "id" : "41",
+      "id" : "40",
       "infrastructureNodes" : [ {
         "environment" : "${ENV}",
-        "id" : "46",
+        "id" : "45",
         "name" : "Key Vault",
         "properties" : {
           "structurizr.dsl.identifier" : "prodKeyVault",
@@ -350,7 +336,7 @@
         "technology" : "azure-native:keyvault:getVault"
       }, {
         "environment" : "${ENV}",
-        "id" : "47",
+        "id" : "54",
         "name" : "Managed Identity",
         "properties" : {
           "structurizr.dsl.identifier" : "prodMi",
@@ -361,7 +347,7 @@
         "technology" : "azure-native:managedidentity:UserAssignedIdentity"
       }, {
         "environment" : "${ENV}",
-        "id" : "48",
+        "id" : "57",
         "name" : "Storage Accounts",
         "properties" : {
           "structurizr.dsl.identifier" : "saList",
@@ -372,33 +358,33 @@
         "technology" : "azure-native:appconfiguration:getKeyValue"
       }, {
         "environment" : "${ENV}",
-        "id" : "56",
+        "id" : "65",
         "name" : "Key Vault Access Policy",
         "properties" : {
-          "structurizr.dsl.identifier" : "7878de51-6882-484d-b15d-cfdcd24629f2",
+          "structurizr.dsl.identifier" : "53214763-ca0b-400d-98dd-1573b72991cc",
           "var" : "order-service-kv-access-policy",
           "policy.permissions.secrets" : "get, list",
           "policy.tenantId" : "${TENANT_ID}"
         },
         "relationships" : [ {
           "description" : "principal",
-          "destinationId" : "47",
-          "id" : "57",
+          "destinationId" : "54",
+          "id" : "66",
           "properties" : {
             "source" : "principalId",
             "target" : "policy.objectId"
           },
-          "sourceId" : "56",
+          "sourceId" : "65",
           "tags" : "Relationship"
         }, {
           "description" : "vault",
-          "destinationId" : "46",
-          "id" : "58",
+          "destinationId" : "45",
+          "id" : "67",
           "properties" : {
             "source" : "name",
             "target" : "vaultName"
           },
-          "sourceId" : "56",
+          "sourceId" : "65",
           "tags" : "Relationship"
         } ],
         "tags" : "Element,Infrastructure Node,Microsoft Azure - Entra Managed Identities",
@@ -420,43 +406,43 @@
               "containerId" : "20",
               "deploymentGroups" : [ "Default" ],
               "environment" : "${ENV}",
-              "id" : "73",
+              "id" : "72",
               "instanceId" : 1,
               "properties" : {
-                "structurizr.dsl.identifier" : "e1578776-68d1-4e55-ae7f-5edad2a6cbd6",
+                "structurizr.dsl.identifier" : "83f7d387-00a1-48e5-8869-d6388df63b41",
                 "var" : "delivery-db",
                 "name" : "${ENV}-delivery-db"
               },
               "tags" : "Container Instance"
             } ],
             "environment" : "${ENV}",
-            "id" : "72",
+            "id" : "71",
             "instances" : "1",
             "name" : "Elastic Pool",
             "properties" : {
-              "structurizr.dsl.identifier" : "7f4e87cd-04cb-48f8-a2cd-c9e99d6a4970",
+              "structurizr.dsl.identifier" : "d7f63837-e688-4df1-bb14-cd6291243333",
               "elasticPoolName" : "${SQL_ELASTIC_POOL_NAME}"
             },
             "tags" : "Element,Deployment Node,Microsoft Azure - SQL Elastic Pools",
             "technology" : "azure-native:sql:getElasticPool"
           } ],
           "environment" : "${ENV}",
-          "id" : "71",
+          "id" : "70",
           "instances" : "1",
           "name" : "SQL Server",
           "properties" : {
-            "structurizr.dsl.identifier" : "74c338d9-c46c-4043-8338-88594ffb7d02",
+            "structurizr.dsl.identifier" : "7a23544c-5fbe-4553-8b8d-641e9de83522",
             "sqlServerName" : "${SQL_SERVER_NAME}"
           },
           "tags" : "Element,Deployment Node,Microsoft Azure - Azure SQL",
           "technology" : "azure-native:azuredata:getSqlServer"
         } ],
         "environment" : "${ENV}",
-        "id" : "70",
+        "id" : "69",
         "instances" : "1",
         "name" : "SQL Server Registration",
         "properties" : {
-          "structurizr.dsl.identifier" : "4af2e48e-73ae-4695-b0c2-4be06b65af88",
+          "structurizr.dsl.identifier" : "0c1c792a-7437-4d4e-94e8-aa9a36424a98",
           "sqlServerRegistrationName" : "${SQL_SERVER_REGISTRATION_NAME}"
         },
         "tags" : "Element,Deployment Node,Microsoft Azure - SQL Server Registries",
@@ -467,35 +453,35 @@
             "containerId" : "21",
             "deploymentGroups" : [ "Default" ],
             "environment" : "${ENV}",
-            "id" : "81",
+            "id" : "80",
             "instanceId" : 1,
             "properties" : {
-              "structurizr.dsl.identifier" : "c1ca5295-8435-4460-9d14-4796145695db",
+              "structurizr.dsl.identifier" : "fa2434df-6879-4d81-a815-ea748d1fc807",
               "var" : "delivery-api",
               "name" : "${ENV}-delivery-api",
               "identity.type" : "UserAssigned"
             },
             "relationships" : [ {
               "description" : "publish Delivery Events",
-              "destinationId" : "40",
-              "id" : "82",
+              "destinationId" : "39",
+              "id" : "81",
               "linkedRelationshipId" : "23",
-              "sourceId" : "81"
+              "sourceId" : "80"
             }, {
               "description" : "uses",
-              "destinationId" : "73",
-              "id" : "83",
+              "destinationId" : "72",
+              "id" : "82",
               "linkedRelationshipId" : "22",
-              "sourceId" : "81"
+              "sourceId" : "80"
             }, {
               "description" : "identity",
-              "destinationId" : "75",
-              "id" : "84",
+              "destinationId" : "74",
+              "id" : "83",
               "properties" : {
                 "source" : "id",
                 "target" : "identity.userAssignedIdentities"
               },
-              "sourceId" : "81",
+              "sourceId" : "80",
               "tags" : "Relationship"
             } ],
             "tags" : "Container Instance"
@@ -503,67 +489,67 @@
             "containerId" : "27",
             "deploymentGroups" : [ "Default" ],
             "environment" : "${ENV}",
-            "id" : "85",
+            "id" : "84",
             "instanceId" : 1,
             "properties" : {
-              "structurizr.dsl.identifier" : "524f3403-824a-4742-be90-32c150730a9d",
+              "structurizr.dsl.identifier" : "39b5eaed-9948-4843-b9b0-a36cae7df9ad",
               "var" : "delivery-worker",
               "name" : "${ENV}-delivery-worker",
               "identity.type" : "UserAssigned"
             },
             "relationships" : [ {
               "description" : "consume Order Placed Message",
-              "destinationId" : "39",
-              "id" : "86",
+              "destinationId" : "38",
+              "id" : "85",
               "linkedRelationshipId" : "29",
-              "sourceId" : "85",
+              "sourceId" : "84",
               "technology" : "azurela:servicebus:ReadableSubscription"
             }, {
               "description" : "uses",
-              "destinationId" : "73",
-              "id" : "87",
+              "destinationId" : "72",
+              "id" : "86",
               "linkedRelationshipId" : "28",
-              "sourceId" : "85"
+              "sourceId" : "84"
             }, {
               "description" : "identity",
-              "destinationId" : "75",
-              "id" : "88",
+              "destinationId" : "74",
+              "id" : "87",
               "properties" : {
                 "source" : "id",
                 "target" : "identity.userAssignedIdentities"
               },
-              "sourceId" : "85",
+              "sourceId" : "84",
               "tags" : "Relationship"
             } ],
             "tags" : "Container Instance"
           } ],
           "environment" : "${ENV}",
-          "id" : "80",
+          "id" : "79",
           "instances" : "1",
           "name" : "App Service Plan",
           "properties" : {
-            "structurizr.dsl.identifier" : "859b406f-2610-49a3-b05c-d73fe0a70148",
+            "structurizr.dsl.identifier" : "adc5552a-f151-4299-9360-171440180846",
             "name" : "${ENV}-app-service-plan"
           },
           "tags" : "Element,Deployment Node,Microsoft Azure - App Service Plans",
           "technology" : "azure-native:web:getAppServicePlan"
         } ],
         "environment" : "${ENV}",
-        "id" : "79",
+        "id" : "78",
         "instances" : "1",
         "name" : "Virtual Network",
         "properties" : {
-          "structurizr.dsl.identifier" : "146c2395-7dbb-49c1-a379-228ee4f55954",
+          "structurizr.dsl.identifier" : "0591268b-34da-47d8-8812-41ed54af6414",
           "virtualNetworkName" : "${VNET_NAME}"
         },
         "tags" : "Element,Deployment Node,Microsoft Azure - Virtual Networks",
         "technology" : "azure-native:network:getVirtualNetwork"
       } ],
       "environment" : "${ENV}",
-      "id" : "69",
+      "id" : "68",
       "infrastructureNodes" : [ {
         "environment" : "${ENV}",
-        "id" : "74",
+        "id" : "73",
         "name" : "Key Vault",
         "properties" : {
           "structurizr.dsl.identifier" : "deliveryKeyVault",
@@ -573,7 +559,7 @@
         "technology" : "azure-native:keyvault:getVault"
       }, {
         "environment" : "${ENV}",
-        "id" : "75",
+        "id" : "74",
         "name" : "Managed Identity",
         "properties" : {
           "structurizr.dsl.identifier" : "deliveryMi",
@@ -584,33 +570,33 @@
         "technology" : "azure-native:managedidentity:UserAssignedIdentity"
       }, {
         "environment" : "${ENV}",
-        "id" : "76",
+        "id" : "75",
         "name" : "Key Vault Access Policy",
         "properties" : {
-          "structurizr.dsl.identifier" : "5c9d39bd-9f72-4fe7-8af2-f9ab48922cbf",
+          "structurizr.dsl.identifier" : "eae539f0-aec1-4e61-9f6e-c9ffa9fdab27",
           "var" : "delivery-service-kv-access-policy",
           "policy.permissions.secrets" : "get, list",
           "policy.tenantId" : "${TENANT_ID}"
         },
         "relationships" : [ {
           "description" : "principal",
-          "destinationId" : "75",
-          "id" : "77",
+          "destinationId" : "74",
+          "id" : "76",
           "properties" : {
             "source" : "principalId",
             "target" : "policy.objectId"
           },
-          "sourceId" : "76",
+          "sourceId" : "75",
           "tags" : "Relationship"
         }, {
           "description" : "vault",
-          "destinationId" : "74",
-          "id" : "78",
+          "destinationId" : "73",
+          "id" : "77",
           "properties" : {
             "source" : "name",
             "target" : "vaultName"
           },
-          "sourceId" : "76",
+          "sourceId" : "75",
           "tags" : "Relationship"
         } ],
         "tags" : "Element,Infrastructure Node,Microsoft Azure - Entra Managed Identities",
@@ -734,6 +720,9 @@
           "description" : "uses",
           "destinationId" : "7",
           "id" : "15",
+          "properties" : {
+            "dependsOn" : "true"
+          },
           "sourceId" : "14",
           "tags" : "Relationship"
         }, {
@@ -904,7 +893,7 @@
   },
   "name" : "EnterpriseArchitecture",
   "properties" : {
-    "structurizr.inspection.error" : "91",
+    "structurizr.inspection.error" : "88",
     "structurizr.inspection.info" : "0",
     "structurizr.inspection.ignore" : "0",
     "structurizr.inspection.warning" : "0"
@@ -2990,6 +2979,10 @@
         "vertices" : true
       },
       "elements" : [ {
+        "id" : "36",
+        "x" : 0,
+        "y" : 0
+      }, {
         "id" : "37",
         "x" : 0,
         "y" : 0
@@ -3038,23 +3031,19 @@
         "x" : 0,
         "y" : 0
       }, {
-        "id" : "49",
+        "id" : "51",
         "x" : 0,
         "y" : 0
       }, {
-        "id" : "50",
+        "id" : "54",
         "x" : 0,
         "y" : 0
       }, {
-        "id" : "52",
+        "id" : "57",
         "x" : 0,
         "y" : 0
       }, {
-        "id" : "53",
-        "x" : 0,
-        "y" : 0
-      }, {
-        "id" : "56",
+        "id" : "58",
         "x" : 0,
         "y" : 0
       }, {
@@ -3062,15 +3051,19 @@
         "x" : 0,
         "y" : 0
       }, {
-        "id" : "60",
-        "x" : 0,
-        "y" : 0
-      }, {
         "id" : "61",
         "x" : 0,
         "y" : 0
       }, {
+        "id" : "62",
+        "x" : 0,
+        "y" : 0
+      }, {
         "id" : "65",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "68",
         "x" : 0,
         "y" : 0
       }, {
@@ -3102,7 +3095,7 @@
         "x" : 0,
         "y" : 0
       }, {
-        "id" : "76",
+        "id" : "78",
         "x" : 0,
         "y" : 0
       }, {
@@ -3114,11 +3107,7 @@
         "x" : 0,
         "y" : 0
       }, {
-        "id" : "81",
-        "x" : 0,
-        "y" : 0
-      }, {
-        "id" : "85",
+        "id" : "84",
         "x" : 0,
         "y" : 0
       } ],
@@ -3127,17 +3116,19 @@
       "name" : "Deployment View: ${ENV}",
       "order" : 2,
       "relationships" : [ {
-        "id" : "51"
+        "id" : "49"
       }, {
-        "id" : "54"
+        "id" : "50"
+      }, {
+        "id" : "52"
+      }, {
+        "id" : "53"
       }, {
         "id" : "55"
       }, {
-        "id" : "57"
+        "id" : "56"
       }, {
-        "id" : "58"
-      }, {
-        "id" : "62"
+        "id" : "60"
       }, {
         "id" : "63"
       }, {
@@ -3147,23 +3138,21 @@
       }, {
         "id" : "67"
       }, {
-        "id" : "68"
+        "id" : "76"
       }, {
         "id" : "77"
       }, {
-        "id" : "78"
+        "id" : "81"
       }, {
         "id" : "82"
       }, {
         "id" : "83"
       }, {
-        "id" : "84"
+        "id" : "85"
       }, {
         "id" : "86"
       }, {
         "id" : "87"
-      }, {
-        "id" : "88"
       } ]
     }, {
       "automaticLayout" : {
@@ -3205,6 +3194,10 @@
       },
       "description" : "Shared resources for reference",
       "elements" : [ {
+        "id" : "36",
+        "x" : 0,
+        "y" : 0
+      }, {
         "id" : "37",
         "x" : 0,
         "y" : 0
@@ -3214,10 +3207,6 @@
         "y" : 0
       }, {
         "id" : "39",
-        "x" : 0,
-        "y" : 0
-      }, {
-        "id" : "40",
         "x" : 0,
         "y" : 0
       } ],
@@ -3234,6 +3223,10 @@
         "vertices" : true
       },
       "elements" : [ {
+        "id" : "36",
+        "x" : 0,
+        "y" : 0
+      }, {
         "id" : "37",
         "x" : 0,
         "y" : 0
@@ -3282,23 +3275,19 @@
         "x" : 0,
         "y" : 0
       }, {
-        "id" : "49",
+        "id" : "51",
         "x" : 0,
         "y" : 0
       }, {
-        "id" : "50",
+        "id" : "54",
         "x" : 0,
         "y" : 0
       }, {
-        "id" : "52",
+        "id" : "57",
         "x" : 0,
         "y" : 0
       }, {
-        "id" : "53",
-        "x" : 0,
-        "y" : 0
-      }, {
-        "id" : "56",
+        "id" : "58",
         "x" : 0,
         "y" : 0
       }, {
@@ -3306,11 +3295,11 @@
         "x" : 0,
         "y" : 0
       }, {
-        "id" : "60",
+        "id" : "61",
         "x" : 0,
         "y" : 0
       }, {
-        "id" : "61",
+        "id" : "62",
         "x" : 0,
         "y" : 0
       }, {
@@ -3323,17 +3312,19 @@
       "name" : "Deployment View: ${ENV}",
       "order" : 10,
       "relationships" : [ {
-        "id" : "51"
+        "id" : "49"
       }, {
-        "id" : "54"
+        "id" : "50"
+      }, {
+        "id" : "52"
+      }, {
+        "id" : "53"
       }, {
         "id" : "55"
       }, {
-        "id" : "57"
+        "id" : "56"
       }, {
-        "id" : "58"
-      }, {
-        "id" : "62"
+        "id" : "60"
       }, {
         "id" : "63"
       }, {
@@ -3342,8 +3333,6 @@
         "id" : "66"
       }, {
         "id" : "67"
-      }, {
-        "id" : "68"
       } ]
     }, {
       "automaticLayout" : {
@@ -3354,6 +3343,10 @@
         "vertices" : true
       },
       "elements" : [ {
+        "id" : "36",
+        "x" : 0,
+        "y" : 0
+      }, {
         "id" : "37",
         "x" : 0,
         "y" : 0
@@ -3366,7 +3359,7 @@
         "x" : 0,
         "y" : 0
       }, {
-        "id" : "40",
+        "id" : "68",
         "x" : 0,
         "y" : 0
       }, {
@@ -3398,7 +3391,7 @@
         "x" : 0,
         "y" : 0
       }, {
-        "id" : "76",
+        "id" : "78",
         "x" : 0,
         "y" : 0
       }, {
@@ -3410,11 +3403,7 @@
         "x" : 0,
         "y" : 0
       }, {
-        "id" : "81",
-        "x" : 0,
-        "y" : 0
-      }, {
-        "id" : "85",
+        "id" : "84",
         "x" : 0,
         "y" : 0
       } ],
@@ -3423,21 +3412,21 @@
       "name" : "Deployment View: ${ENV}",
       "order" : 13,
       "relationships" : [ {
+        "id" : "76"
+      }, {
         "id" : "77"
       }, {
-        "id" : "78"
+        "id" : "81"
       }, {
         "id" : "82"
       }, {
         "id" : "83"
       }, {
-        "id" : "84"
+        "id" : "85"
       }, {
         "id" : "86"
       }, {
         "id" : "87"
-      }, {
-        "id" : "88"
       } ]
     } ],
     "systemLandscapeViews" : [ {

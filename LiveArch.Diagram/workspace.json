@@ -2,8 +2,7 @@
   "configuration" : { },
   "description" : "An example of an enterprise architecture model using Structurizr DSL with Microsoft Azure components",
   "documentation" : { },
-  "id" : 1,
-  "lastModifiedDate" : "2026-05-11T11:31:19Z",
+  "id" : 0,
   "model" : {
     "deploymentNodes" : [ {
       "children" : [ {
@@ -14,7 +13,7 @@
           "id" : "34",
           "name" : "Order Events Topic",
           "properties" : {
-            "structurizr.dsl.identifier" : "5c570537-cf6d-41d4-83a9-68f3626f700c",
+            "structurizr.dsl.identifier" : "14c362a6-3bfc-45fc-a43d-d26dba045e68",
             "var" : "order-events-topic",
             "topicName" : "${ENV}-order-events-topic"
           },
@@ -25,7 +24,7 @@
           "id" : "35",
           "name" : "Delivery Events Topic",
           "properties" : {
-            "structurizr.dsl.identifier" : "c5e17aa3-4265-43bc-8980-7190afa9f020",
+            "structurizr.dsl.identifier" : "3b700c20-e745-4528-ac74-de25ca17f671",
             "var" : "delivery-events-topic",
             "topicName" : "${ENV}-delivery-events-topic"
           },
@@ -35,7 +34,7 @@
         "instances" : "1",
         "name" : "Service Bus Namespace",
         "properties" : {
-          "structurizr.dsl.identifier" : "14e27744-2479-48a4-ae15-5f7bd3e292c2",
+          "structurizr.dsl.identifier" : "e69c98d5-f12b-46e2-a163-1c4b41de233f",
           "namespaceName" : "${ENV}-sbns"
         },
         "tags" : "Element,Deployment Node,Microsoft Azure - Azure Service Bus",
@@ -83,7 +82,7 @@
         "instances" : "1",
         "name" : "Service Bus Namespace",
         "properties" : {
-          "structurizr.dsl.identifier" : "c3b77e9c-db97-4f6e-a9b0-a68a35076be6",
+          "structurizr.dsl.identifier" : "9e01216f-2916-4511-92d1-bbed94e3380e",
           "namespaceName" : "${ENV}-sbns"
         },
         "tags" : "Element,Deployment Node,Microsoft Azure - Azure Service Bus",
@@ -110,7 +109,7 @@
               "id" : "44",
               "instanceId" : 1,
               "properties" : {
-                "structurizr.dsl.identifier" : "ba166fab-24fb-412f-a4b9-6e738f1a9ac7",
+                "structurizr.dsl.identifier" : "8ef571c2-a7d5-41d8-8efb-0f8e30f5f110",
                 "var" : "order-db",
                 "name" : "${ENV}-order-db"
               },
@@ -121,7 +120,7 @@
             "instances" : "1",
             "name" : "Elastic Pool",
             "properties" : {
-              "structurizr.dsl.identifier" : "93d80703-1a47-4474-87d9-0a90432e5d26",
+              "structurizr.dsl.identifier" : "16fe70a8-12d0-4142-a425-12cf90ae3073",
               "elasticPoolName" : "${SQL_ELASTIC_POOL_NAME}"
             },
             "tags" : "Element,Deployment Node,Microsoft Azure - SQL Elastic Pools",
@@ -132,7 +131,7 @@
           "instances" : "1",
           "name" : "SQL Server",
           "properties" : {
-            "structurizr.dsl.identifier" : "d0b0fd67-6714-44e0-a669-629d66757089",
+            "structurizr.dsl.identifier" : "8a078cbf-7cfe-41a8-abed-c6f8a4ea79e8",
             "sqlServerName" : "${SQL_SERVER_NAME}"
           },
           "tags" : "Element,Deployment Node,Microsoft Azure - Azure SQL",
@@ -143,7 +142,7 @@
         "instances" : "1",
         "name" : "SQL Server Registration",
         "properties" : {
-          "structurizr.dsl.identifier" : "ea9670c8-4c0f-454c-9af7-35a40a29a7d9",
+          "structurizr.dsl.identifier" : "6aa94a26-e917-4bb7-8c48-e71939ecb088",
           "sqlServerRegistrationName" : "${SQL_SERVER_REGISTRATION_NAME}"
         },
         "tags" : "Element,Deployment Node,Microsoft Azure - SQL Server Registries",
@@ -232,7 +231,7 @@
           "instances" : "1",
           "name" : "App Service Plan",
           "properties" : {
-            "structurizr.dsl.identifier" : "bf99a110-0332-4125-920c-864d95521b73",
+            "structurizr.dsl.identifier" : "a2532aa5-ed15-41b3-8588-3dad951cf256",
             "name" : "${ENV}-app-service-plan"
           },
           "tags" : "Element,Deployment Node,Microsoft Azure - App Service Plans",
@@ -243,7 +242,7 @@
         "instances" : "1",
         "name" : "Virtual Network",
         "properties" : {
-          "structurizr.dsl.identifier" : "4843bd8d-de83-4dc5-8841-ee825900ecc1",
+          "structurizr.dsl.identifier" : "6a2439f3-af7d-495b-b2fc-bf6dfebe109e",
           "virtualNetworkName" : "${VNET_NAME}"
         },
         "tags" : "Element,Deployment Node,Microsoft Azure - Virtual Networks",
@@ -256,7 +255,7 @@
           "id" : "59",
           "name" : "Source",
           "properties" : {
-            "structurizr.dsl.identifier" : "6390adb2-a4c8-48a7-a73f-2b3dc428d764"
+            "structurizr.dsl.identifier" : "84d0e8fb-61f4-48b7-ad65-aa360617f49a"
           },
           "relationships" : [ {
             "description" : "take",
@@ -287,7 +286,7 @@
           "id" : "62",
           "name" : "Storage Account Access Role Assignment",
           "properties" : {
-            "structurizr.dsl.identifier" : "6bf4af53-c8fb-4815-94f9-a69d8001dcda",
+            "structurizr.dsl.identifier" : "32dc674d-aae6-49a7-b8bc-9b043dd89660",
             "roleDefinitionId" : "ba92f5b4-2d11-453d-a403-e96b0029c9fe",
             "var" : "order-service-${saName}-access-policy"
           },
@@ -362,7 +361,7 @@
         "id" : "65",
         "name" : "Key Vault Access Policy",
         "properties" : {
-          "structurizr.dsl.identifier" : "c361ab52-1977-4fcb-b020-1690f93d70fc",
+          "structurizr.dsl.identifier" : "53214763-ca0b-400d-98dd-1573b72991cc",
           "var" : "order-service-kv-access-policy",
           "policy.permissions.secrets" : "get, list",
           "policy.tenantId" : "${TENANT_ID}"
@@ -410,7 +409,7 @@
               "id" : "72",
               "instanceId" : 1,
               "properties" : {
-                "structurizr.dsl.identifier" : "361d3d1a-4129-477a-a305-064f84f3dc2e",
+                "structurizr.dsl.identifier" : "83f7d387-00a1-48e5-8869-d6388df63b41",
                 "var" : "delivery-db",
                 "name" : "${ENV}-delivery-db"
               },
@@ -421,7 +420,7 @@
             "instances" : "1",
             "name" : "Elastic Pool",
             "properties" : {
-              "structurizr.dsl.identifier" : "668967e6-8794-4797-8d28-71c490da956c",
+              "structurizr.dsl.identifier" : "d7f63837-e688-4df1-bb14-cd6291243333",
               "elasticPoolName" : "${SQL_ELASTIC_POOL_NAME}"
             },
             "tags" : "Element,Deployment Node,Microsoft Azure - SQL Elastic Pools",
@@ -432,7 +431,7 @@
           "instances" : "1",
           "name" : "SQL Server",
           "properties" : {
-            "structurizr.dsl.identifier" : "7e2b2250-ef5b-43c6-b7c9-0109d0191f01",
+            "structurizr.dsl.identifier" : "7a23544c-5fbe-4553-8b8d-641e9de83522",
             "sqlServerName" : "${SQL_SERVER_NAME}"
           },
           "tags" : "Element,Deployment Node,Microsoft Azure - Azure SQL",
@@ -443,7 +442,7 @@
         "instances" : "1",
         "name" : "SQL Server Registration",
         "properties" : {
-          "structurizr.dsl.identifier" : "71beef16-ee5e-449d-ad65-4ad1e6f8c41c",
+          "structurizr.dsl.identifier" : "0c1c792a-7437-4d4e-94e8-aa9a36424a98",
           "sqlServerRegistrationName" : "${SQL_SERVER_REGISTRATION_NAME}"
         },
         "tags" : "Element,Deployment Node,Microsoft Azure - SQL Server Registries",
@@ -457,7 +456,7 @@
             "id" : "80",
             "instanceId" : 1,
             "properties" : {
-              "structurizr.dsl.identifier" : "9e6d45c5-d9e0-4403-bbd0-cf9e815da246",
+              "structurizr.dsl.identifier" : "fa2434df-6879-4d81-a815-ea748d1fc807",
               "var" : "delivery-api",
               "name" : "${ENV}-delivery-api",
               "identity.type" : "UserAssigned"
@@ -493,7 +492,7 @@
             "id" : "84",
             "instanceId" : 1,
             "properties" : {
-              "structurizr.dsl.identifier" : "cde47a3a-7c1d-497b-8fcd-44a6813f4548",
+              "structurizr.dsl.identifier" : "39b5eaed-9948-4843-b9b0-a36cae7df9ad",
               "var" : "delivery-worker",
               "name" : "${ENV}-delivery-worker",
               "identity.type" : "UserAssigned"
@@ -529,7 +528,7 @@
           "instances" : "1",
           "name" : "App Service Plan",
           "properties" : {
-            "structurizr.dsl.identifier" : "b1ec8366-00b6-463a-871c-ee320cf15e8d",
+            "structurizr.dsl.identifier" : "adc5552a-f151-4299-9360-171440180846",
             "name" : "${ENV}-app-service-plan"
           },
           "tags" : "Element,Deployment Node,Microsoft Azure - App Service Plans",
@@ -540,7 +539,7 @@
         "instances" : "1",
         "name" : "Virtual Network",
         "properties" : {
-          "structurizr.dsl.identifier" : "c8c9da53-be1b-49bc-a490-c6f01a1e9a99",
+          "structurizr.dsl.identifier" : "0591268b-34da-47d8-8812-41ed54af6414",
           "virtualNetworkName" : "${VNET_NAME}"
         },
         "tags" : "Element,Deployment Node,Microsoft Azure - Virtual Networks",
@@ -574,7 +573,7 @@
         "id" : "75",
         "name" : "Key Vault Access Policy",
         "properties" : {
-          "structurizr.dsl.identifier" : "d3aca32d-b0df-40c9-b90b-7b625897ab82",
+          "structurizr.dsl.identifier" : "eae539f0-aec1-4e61-9f6e-c9ffa9fdab27",
           "var" : "delivery-service-kv-access-policy",
           "policy.permissions.secrets" : "get, list",
           "policy.tenantId" : "${TENANT_ID}"
@@ -721,6 +720,9 @@
           "description" : "uses",
           "destinationId" : "7",
           "id" : "15",
+          "properties" : {
+            "dependsOn" : "true"
+          },
           "sourceId" : "14",
           "tags" : "Relationship"
         }, {
