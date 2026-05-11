@@ -1,8 +1,15 @@
-﻿using LiveArch.Deployment.ResourceHierarchy;
+﻿using LiveArch.Deployment.Azure.Docker;
+using LiveArch.Deployment.Azure.ResourceHierarchy;
+using LiveArch.Deployment.Azure.ServiceBus;
+using LiveArch.Deployment.Controls;
+using LiveArch.Deployment.Docker;
+using LiveArch.Deployment.ResourceHierarchy;
+using LiveArch.Deployment.ResourceTypes;
 using Pulumi.AzureNative.Authorization;
-using Pulumi.AzureNative.DevCenter;
+using Pulumi.AzureNative.Resources;
 using Pulumi.AzureNative.Web;
 using Pulumi.AzureNative.Web.Inputs;
+using Pulumi.DockerBuild;
 using Pulumi.Testing;
 using ManagedServiceIdentityType = Pulumi.AzureNative.Web.ManagedServiceIdentityType;
 
@@ -23,11 +30,23 @@ namespace LiveArch.Deployment.TestRunner
             { "SQL_SERVER_NAME", "main_prod_sql_server" },
             { "SQL_ELASTIC_POOL_NAME", "main_prod_sql_elastic_pool" },
         };
-        private readonly ResourceHierarchyRegistry registry;
+        private readonly ResourceTypesRegistry resourceTypesRegistry;
+        private readonly DockerImageReferenceConfigurator dockerImageConfig;
+        private readonly ResourceHierarchyRegistry hierarchyRegistry;
 
         public DeploymentTests()
         {
-            registry = new ResourceHierarchyBuilder([new AzureResourceHierarchy()]).Registry;
+            hierarchyRegistry = new ResourceHierarchyBuilder([new AzureResourceHierarchy()]).Registry;
+            resourceTypesRegistry = new ResourceTypesRegistry(new[]
+            {
+                new ResourceTypesAssemblyMarker(typeof(Image)),
+                new ResourceTypesAssemblyMarker(typeof(ResourceGroup)),
+                new ResourceTypesAssemblyMarker(typeof(ForEachLoop)),
+                new ResourceTypesAssemblyMarker(typeof(ReadableSubscription)),
+            });
+            dockerImageConfig = new DockerImageReferenceConfigurator([
+                new AzureDockerImageReferenceConfigurator()
+                ]);
         }
 
         [Fact]
@@ -35,9 +54,9 @@ namespace LiveArch.Deployment.TestRunner
         {
             var ws = await ProcessDeployment("order-env");
 
-            ws.NewResources.Should().HaveCount(20);
+            ws.NewResources.GroupBy(x => x.Key.Node).Should().HaveCount(11);
 
-            ws.OldResources.Should().HaveCount(18);
+            ws.OldResources.GroupBy(x=>x.Key.Node).Should().HaveCount(13);
         }
 
         [Fact]
@@ -45,9 +64,9 @@ namespace LiveArch.Deployment.TestRunner
         {
             var ws = await ProcessDeployment("delivery-env");
 
-            ws.NewResources.Should().HaveCount(16);
+            ws.NewResources.GroupBy(x => x.Key.Node).Should().HaveCount(8);
 
-            ws.OldResources.Should().HaveCount(13);
+            ws.OldResources.GroupBy(x => x.Key.Node).Should().HaveCount(11);
         }
 
         [Fact]
@@ -55,14 +74,25 @@ namespace LiveArch.Deployment.TestRunner
         {
             var ws = await ProcessDeployment("shared-env");
 
-            ws.NewResources.Should().HaveCount(20);
+            ws.NewResources.GroupBy(x => x.Key.Node).Should().HaveCount(4);
 
-            ws.OldResources.Should().HaveCount(18);
+            ws.OldResources.GroupBy(x => x.Key.Node).Should().HaveCount(0);
+        }
+
+        [Fact]
+        public async Task ShouldGetAllSharedResourceReferences()
+        {
+            var ws = await ProcessDeployment("shared-ref-env");
+
+            ws.NewResources.GroupBy(x => x.Key.Node).Should().HaveCount(0);
+
+            ws.OldResources.GroupBy(x => x.Key.Node).Should().HaveCount(4);
         }
 
         private async Task<StructurizrComponent> ProcessDeployment(string deployment)
         {
-            var ws = new StructurizrComponent("workspace.json", "prod", deployment, variables, registry);
+            var ws = new StructurizrComponent("workspace.json", "prod", deployment, variables,
+                hierarchyRegistry, resourceTypesRegistry, dockerImageConfig);
 
             await Pulumi.Deployment.TestAsync(testMocks, new TestOptions { IsPreview = false }, async () =>
             {
@@ -116,7 +146,7 @@ namespace LiveArch.Deployment.TestRunner
 
             var ra = new RoleAssignment("", new RoleAssignmentArgs
             {
-                PrincipalId = app.Identity.Apply(x=>x.PrincipalId)
+                PrincipalId = app.Identity.Apply(x => x.PrincipalId)
             });
         }
     }

@@ -11,7 +11,7 @@ namespace LiveArch.Deployment
         string Technology { get; }
         IDictionary<string, string> Properties { get; }
         ISet<Relationship> Relationships { get; }
-        IDeploymentNode? Parent { get; }
+        IReadOnlyCollection<IDeploymentNode> Parents { get; }
 
         bool IsDisabled { get; }
 
@@ -33,7 +33,7 @@ namespace LiveArch.Deployment
             bool.TryParse(substituteVariables(isDisabledString).ToString(), out var isDisabled) &&
             isDisabled;
 
-        public IDeploymentNode? Parent => node.Parent != null ? new ElementAdapter(node.Parent, substituteVariables) : null;
+        public IReadOnlyCollection<IDeploymentNode> Parents => node.Parent != null ? [new ElementAdapter(node.Parent, substituteVariables)] : Array.Empty<IDeploymentNode>();
         public IDictionary<string, string> Properties => node.Properties;
 
         public ModelItem Node => node;
@@ -102,7 +102,10 @@ namespace LiveArch.Deployment
             bool.TryParse(substituteVariables(isDisabledString).ToString(), out var isDisabled) &&
             isDisabled;
 
-        public IDeploymentNode? Parent => new ElementAdapter(relationshipInstance.Destination, substituteVariables);
+        public IReadOnlyCollection<IDeploymentNode> Parents => [
+            new ElementAdapter(relationshipInstance.Source, substituteVariables),
+            new ElementAdapter(relationshipInstance.Destination, substituteVariables),
+        ];
 
         public IDictionary<string, string> Properties => relationshipModel.Properties;
 
