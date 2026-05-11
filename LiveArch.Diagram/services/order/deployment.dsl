@@ -38,12 +38,55 @@ orderRg = deploymentNode "Order Resource Group" {
             vaultName    ${KEY_VAULT_NAME}
         }
     }
+    deploymentNode "Virtual Network" {
+        tags "Microsoft Azure - Virtual Networks"
+        technology "azure-native:network:getVirtualNetwork"
+        properties {
+            virtualNetworkName    ${VNET_NAME}
+        }
+        deploymentNode "App Service Plan" {
+            tags "Microsoft Azure - App Service Plans"
+            technology "azure-native:web:getAppServicePlan"
+            properties {
+                name    ${ENV}-app-service-plan
+            }
+            orderApiInstance = containerInstance orderApi {
+                properties {
+                    var                                   "order-api"
+                    name                                  ${ENV}-order-api
+                    identity.type                         "UserAssigned"
+                    siteConfig.AppSettings:WEBSITES_PORT  "8080"
+                    siteConfig.Cors.allowedOrigins        "https://web-${ENV}.azurewebsites.net,https://mobile-${ENV}.azurewebsites.net"
+                    siteConfig.Cors.allowedOrigins+=      "https://${ENV}-order-api.azurewebsites.net,https://${ENV}-delivery-api.azurewebsites.net"
+                }
+            }
+            orderWorkerInstance = containerInstance orderWorker {
+                properties {
+                    var "order-worker"
+                    name            ${ENV}-order-worker
+                    identity.type   "UserAssigned"
+                }
+            }
+        }
+    }
     prodMi = infrastructureNode "Managed Identity" {
         tags "Microsoft Azure - Managed Identities"
         technology "azure-native:managedidentity:UserAssignedIdentity"
         properties {
             var "order-service-mi"
             resourceName   ${ENV}-order-service-mi
+        }
+    }
+    orderApiInstance -> prodMi "identity" {
+        properties {
+            source  "id"
+            target  "identity.userAssignedIdentities"
+        }
+    }
+    orderWorkerInstance -> prodMi "identity" {
+        properties {
+            source  "id"
+            target  "identity.userAssignedIdentities"
         }
     }
     saList = infrastructureNode "Storage Accounts" {
@@ -112,49 +155,6 @@ orderRg = deploymentNode "Order Resource Group" {
             properties {
                 source "name"
                 target "vaultName"
-            }
-        }
-    }
-    deploymentNode "Virtual Network" {
-        tags "Microsoft Azure - Virtual Networks"
-        technology "azure-native:network:getVirtualNetwork"
-        properties {
-            virtualNetworkName    ${VNET_NAME}
-        }
-        deploymentNode "App Service Plan" {
-            tags "Microsoft Azure - App Service Plans"
-            technology "azure-native:web:getAppServicePlan"
-            properties {
-                name    ${ENV}-app-service-plan
-            }
-            containerInstance orderApi {
-                properties {
-                    var                                   "order-api"
-                    name                                  ${ENV}-order-api
-                    identity.type                         "UserAssigned"
-                    siteConfig.AppSettings:WEBSITES_PORT  "8080"
-                    siteConfig.Cors.allowedOrigins        "https://web-${ENV}.azurewebsites.net,https://mobile-${ENV}.azurewebsites.net"
-                    siteConfig.Cors.allowedOrigins+=      "https://${ENV}-order-api.azurewebsites.net,https://${ENV}-delivery-api.azurewebsites.net"
-                }
-                -> prodMi "identity" {
-                    properties {
-                        source  "id"
-                        target  "identity.userAssignedIdentities"
-                    }
-                }
-            }
-            containerInstance orderWorker {
-                properties {
-                    var "order-worker"
-                    name            ${ENV}-order-worker
-                    identity.type   "UserAssigned"
-                }
-                -> prodMi "identity" {
-                    properties {
-                        source  "id"
-                        target  "identity.userAssignedIdentities"
-                    }
-                }
             }
         }
     }

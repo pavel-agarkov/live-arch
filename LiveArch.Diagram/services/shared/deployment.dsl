@@ -28,16 +28,16 @@ sharedRg = deploymentNode "Shared Resource Group" {
         }
     }
 
-    deploymentNode "App Service Plan" {
-        tags "Microsoft Azure - App Service Plans"
-        technology "azure-native:appservice:Plan"
-        properties {
-            name      "${ENV}-app-service-plan"
-            kind      "linux"
-            sku.name  "B1"
-            sku.tier  "Basic"
-        }
-    }
+    # deploymentNode "App Service Plan" {
+    #     tags "Microsoft Azure - App Service Plans"
+    #     technology "azure-native:appservice:Plan"
+    #     properties {
+    #         name      "${ENV}-app-service-plan"
+    #         kind      "linux"
+    #         sku.name  "B1"
+    #         sku.tier  "Basic"
+    #     }
+    # }
 }
 
 sharedRgReference = deploymentNode "Shared Resource Group Reference" {
