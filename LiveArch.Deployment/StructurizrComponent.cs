@@ -1,4 +1,5 @@
-﻿using LiveArch.Deployment.Controls;
+﻿using LiveArch.Deployment.Adapters;
+using LiveArch.Deployment.Controls;
 using LiveArch.Deployment.Docker;
 using LiveArch.Deployment.ResourceHierarchy;
 using LiveArch.Deployment.ResourceTypes;
@@ -37,11 +38,11 @@ namespace LiveArch.Deployment
         }
 
         private sealed class WaitingNodeRegistration(
-            IDeploymentNode deployNode,
+            IDeploymentAdapter deployNode,
             DeploymentContext context,
             IEnumerable<ModelItem> pendingDependencies)
         {
-            public IDeploymentNode DeployNode { get; } = deployNode;
+            public IDeploymentAdapter DeployNode { get; } = deployNode;
             public DeploymentContext Context { get; } = context;
             public HashSet<ModelItem> PendingDependencies { get; } = [.. pendingDependencies];
         }
@@ -131,7 +132,7 @@ namespace LiveArch.Deployment
             return s => SubstituteVariables(s, context);
         }
 
-        private IEnumerable<RelationshipAdapter> GetRelationshipAdapters(IDeploymentNode deployNode)
+        private IEnumerable<RelationshipAdapter> GetRelationshipAdapters(IDeploymentAdapter deployNode)
         {
             return deployNode.Relationships.In(deploymentView);
         }
@@ -201,7 +202,7 @@ namespace LiveArch.Deployment
             await CreateNodeAsync(new ContainerBuildAdapter(containerInstance.Container, SubstituteVariables(context)), context, cancellationToken);
         }
 
-        private async Task<object?> CreateNodeAsync(IDeploymentNode deployNode, DeploymentContext context, CancellationToken cancellationToken)
+        private async Task<object?> CreateNodeAsync(IDeploymentAdapter deployNode, DeploymentContext context, CancellationToken cancellationToken)
         {
             if (TryGetExistingResourceByNode(deployNode.Node, context.Scope, out var existingResource))
             {
@@ -302,7 +303,7 @@ namespace LiveArch.Deployment
             return null;
         }
 
-        private bool TryWaitForDependencies(IDeploymentNode deployNode, DeploymentContext context)
+        private bool TryWaitForDependencies(IDeploymentAdapter deployNode, DeploymentContext context)
         {
             var missingDependencies = GetMissingDependencies(deployNode, context);
             if (missingDependencies.Count == 0)
@@ -314,7 +315,7 @@ namespace LiveArch.Deployment
             return true;
         }
 
-        private IReadOnlyCollection<ModelItem> GetMissingDependencies(IDeploymentNode deployNode, DeploymentContext context)
+        private IReadOnlyCollection<ModelItem> GetMissingDependencies(IDeploymentAdapter deployNode, DeploymentContext context)
         {
             var missingDependencies = new HashSet<ModelItem>();
 
@@ -368,7 +369,7 @@ namespace LiveArch.Deployment
                 .FirstOrDefault();
         }
 
-        private void RegisterWaitingNode(IDeploymentNode deployNode, DeploymentContext context, IReadOnlyCollection<ModelItem> missingDependencies)
+        private void RegisterWaitingNode(IDeploymentAdapter deployNode, DeploymentContext context, IReadOnlyCollection<ModelItem> missingDependencies)
         {
             var key = new ResourceKey(deployNode.Node, context.Scope.Id);
 
@@ -415,7 +416,7 @@ namespace LiveArch.Deployment
             }
         }
 
-        private async Task PreProcessNodeAsync(IDeploymentNode deployNode, DeploymentContext context, CancellationToken cancellationToken)
+        private async Task PreProcessNodeAsync(IDeploymentAdapter deployNode, DeploymentContext context, CancellationToken cancellationToken)
         {
             switch (deployNode)
             {
@@ -425,7 +426,7 @@ namespace LiveArch.Deployment
             }
         }
 
-        private async Task PostProcessNodeAsync(IDeploymentNode deployNode, object? resource, DeploymentContext context, CancellationToken cancellationToken)
+        private async Task PostProcessNodeAsync(IDeploymentAdapter deployNode, object? resource, DeploymentContext context, CancellationToken cancellationToken)
         {
             switch (deployNode)
             {
@@ -504,7 +505,7 @@ namespace LiveArch.Deployment
             return transformers;
         }
 
-        private async Task CreateRelationNodesAsync(IDeploymentNode deployNode, DeploymentContext context, CancellationToken cancellationToken)
+        private async Task CreateRelationNodesAsync(IDeploymentAdapter deployNode, DeploymentContext context, CancellationToken cancellationToken)
         {
             if (deployNode is not RelationshipAdapter)
             {
@@ -516,7 +517,7 @@ namespace LiveArch.Deployment
             }
         }
 
-        private void ApplyRelations(IDeploymentNode deployNode, object param, DeploymentContext context)
+        private void ApplyRelations(IDeploymentAdapter deployNode, object param, DeploymentContext context)
         {
             foreach (var relationship in GetRelationshipAdapters(deployNode))
             {
@@ -537,7 +538,7 @@ namespace LiveArch.Deployment
             }
         }
 
-        private void PropagateParentProperties(IDeploymentNode deployNode, object param, Dictionary<string, PropertyInfo> paramInputProps, DeploymentContext context)
+        private void PropagateParentProperties(IDeploymentAdapter deployNode, object param, Dictionary<string, PropertyInfo> paramInputProps, DeploymentContext context)
         {
             foreach (var parent in deployNode.Parents)
             {
