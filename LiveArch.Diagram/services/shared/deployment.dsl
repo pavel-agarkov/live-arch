@@ -3,6 +3,7 @@ sharedRg = deploymentNode "Shared Resource Group" {
     technology "azure-native:resources:ResourceGroup"
     properties {
         resourceGroupName     ${RESOURCE_GROUP_NAME}
+        location              ${LOCATION}
     }
     deploymentNode "Service Bus Namespace" {
         tags "Microsoft Azure - Azure Service Bus"
@@ -63,6 +64,25 @@ sharedRgReference = deploymentNode "Shared Resource Group Reference" {
                 var "delivery-events-topic"
                 topicName    "${ENV}-delivery-events-topic"
             }
+        }
+    }
+}
+
+sandbox = deploymentNode "Sandbox" {
+    technology "azure-native:resources:getResourceGroup"
+    properties {
+        resourceGroupName     sandbox
+    }
+    sa = infrastructureNode "Test Storage Account" {
+        tags "Microsoft Azure - Storage Accounts"
+        technology "azure-native:storage:StorageAccount"
+        properties {
+            var                         storage-account
+            accountName                 test-sa-tatra
+            allowBlobPublicAccess       false
+            minimumTlsVersion           TLS1_2
+            sku.name                    Standard_LRS
+            kind                        StorageV2
         }
     }
 }

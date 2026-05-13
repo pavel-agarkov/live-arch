@@ -19,6 +19,11 @@ deployment * cloud shared-ref-env "Shared resources for reference" {
     autolayout
 }
 
+deployment * cloud sandbox Sandbox resources {
+    include sandbox
+    autolayout
+}
+
 container messageBroker message-broker {
     include *
     autolayout

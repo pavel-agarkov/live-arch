@@ -24,6 +24,7 @@ namespace LiveArch.Deployment.TestRunner
         private readonly IReadOnlyDictionary<string, object> variables = new Dictionary<string, object>()
         {
             { "ENV", "prod" },
+            { "LOCATION", "westeurope" },
             { "KEY_VAULT_NAME", "main_prod_kv" },
             { "RESOURCE_GROUP_NAME", "main_prod_rg" },
             { "APP_CONFIG_NAME", "main_prod_app_config" },
@@ -202,6 +203,17 @@ namespace LiveArch.Deployment.TestRunner
                 DatabaseName = "",
                 ServerName = "",
                 ResourceGroupName = ""
+            });
+
+            var sa = new Pulumi.AzureNative.Storage.StorageAccount("", new Pulumi.AzureNative.Storage.StorageAccountArgs
+            {
+                AccountName = "",
+                ResourceGroupName = "",
+                Sku = new Pulumi.AzureNative.Storage.Inputs.SkuArgs
+                {
+                    Name = Pulumi.AzureNative.Storage.SkuName.Standard_LRS
+                },
+                Kind = Pulumi.AzureNative.Storage.Kind.StorageV2
             });
 
         }
