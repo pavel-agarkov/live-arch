@@ -5,7 +5,10 @@
       "commandName": "Project",
       "dotnetRunMessages": true,
       "environmentVariables": {
-        "DOTNET_ENVIRONMENT": "Development"
+        "DOTNET_ENVIRONMENT": "Development",
+        "workspace": "workspace.json",
+        "environment": "prod",
+        "deployment": "sandbox"
       }
     }
   }
