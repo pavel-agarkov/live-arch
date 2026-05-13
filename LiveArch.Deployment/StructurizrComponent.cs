@@ -1110,33 +1110,31 @@ namespace LiveArch.Deployment
                 return null!;
             }
 
+            targetType = Nullable.GetUnderlyingType(targetType) ?? targetType;
             var sourceType = sourceValue.GetType();
+
+            if (targetType == typeof(object) || targetType.IsAssignableFrom(sourceType))
+            {
+                return sourceValue;
+            }
 
             // source value is Output
             if (IsGenericOutput(sourceType))
             {
-                var innerTargetType = targetType.GetGenericArguments()[0]!;
-
                 // target is Input
                 if (IsGenericInput(targetType))
                 {
+                    var innerTargetType = targetType.GetGenericArguments()[0];
                     CheckGenericArguments(targetType, sourceType, innerTargetType);
                     return ConvertOutputToInput(innerTargetType, sourceValue);
                 }
 
                 if (IsGenericInputList(targetType))
                 {
+                    var innerTargetType = targetType.GetGenericArguments()[0];
                     CheckGenericArguments(targetType, sourceType, innerTargetType);
                     return ConvertOutputToInputList(innerTargetType, sourceValue);
                 }
-
-                throw new NotSupportedException($"Cannot convert {sourceType.FullName} to {targetType.FullName}");
-            }
-
-            // Если значение уже подходит — возвращаем как есть
-            if (targetType.IsAssignableFrom(sourceType))
-            {
-                return sourceValue;
             }
 
             // Input<T>
@@ -1169,9 +1167,14 @@ namespace LiveArch.Deployment
                 return WrapInputMap(elemType, dict, context);
             }
 
+            // InputUnion<T0,T1>
+            if (IsGenericInputUnion(targetType))
+            {
+                return ConvertToInputUnion(targetType, sourceValue, context);
+            }
+
             // Union<T0,T1>
-            if (targetType.IsGenericType &&
-                targetType.GetGenericTypeDefinition() == typeof(Union<,>))
+            if (IsGenericUnion(targetType))
             {
                 return ConvertToUnion(targetType, sourceValue, context);
             }
@@ -1191,6 +1194,50 @@ namespace LiveArch.Deployment
             if (targetType == typeof(bool)) return bool.Parse(sourceValue.ToString()!);
 
             throw new NotSupportedException($"Cannot convert '{sourceValue}' to {targetType}");
+        }
+
+        private object ConvertToInputUnion(Type targetType, object rawValue, DeploymentContext context)
+        {
+            if (TryWrapIntoTargetType(targetType, rawValue, out var wrapped))
+            {
+                return wrapped;
+            }
+
+            var unionArgs = targetType.GetGenericArguments();
+            for (var i = 0; i < unionArgs.Length; i++)
+            {
+                var unionArgType = unionArgs[i];
+                if (!TryConvertToType(unionArgType, rawValue, context, out var convertedValue) || convertedValue == null)
+                {
+                    continue;
+                }
+
+                if (TryWrapIntoTargetType(targetType, convertedValue, out wrapped))
+                {
+                    return wrapped;
+                }
+
+                var inputType = typeof(Input<>).MakeGenericType(unionArgType);
+                if (TryConvertToType(inputType, convertedValue, context, out var inputValue) &&
+                    inputValue != null &&
+                    TryWrapIntoTargetType(targetType, inputValue, out wrapped))
+                {
+                    return wrapped;
+                }
+
+                var unionType = typeof(Union<,>).MakeGenericType(unionArgs);
+                var fromValue = unionType.GetMethod($"FromT{i}", BindingFlags.Public | BindingFlags.Static);
+                if (fromValue != null)
+                {
+                    var unionValue = fromValue.Invoke(null, [convertedValue]);
+                    if (unionValue != null && TryWrapIntoTargetType(targetType, unionValue, out wrapped))
+                    {
+                        return wrapped;
+                    }
+                }
+            }
+
+            throw new NotSupportedException($"Cannot convert '{rawValue}' to {targetType}");
         }
 
         private static object ConvertOutputToInputList(Type innerTargetType, object output)
@@ -1237,9 +1284,41 @@ namespace LiveArch.Deployment
             return type.IsGenericType && type.GetGenericTypeDefinition() == typeof(InputList<>);
         }
 
+        private static bool IsGenericInputUnion(Type type)
+        {
+            return type.IsGenericType && type.GetGenericTypeDefinition() == typeof(InputUnion<,>);
+        }
+
+        private static bool IsGenericUnion(Type type)
+        {
+            return type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Union<,>);
+        }
+
         private static bool IsPulumiEnum(Type type)
         {
             return type.GetCustomAttribute<EnumTypeAttribute>() != null;
+        }
+
+        private static bool TryWrapIntoTargetType(Type targetType, object value, out object wrapped)
+        {
+            var valueType = value.GetType();
+
+            var implicitOperator = targetType.GetMethods(BindingFlags.Public | BindingFlags.Static)
+                .Where(method => method.Name == "op_Implicit" && method.ReturnType == targetType)
+                .FirstOrDefault(method =>
+                {
+                    var parameters = method.GetParameters();
+                    return parameters.Length == 1 && parameters[0].ParameterType.IsAssignableFrom(valueType);
+                });
+
+            if (implicitOperator != null)
+            {
+                wrapped = implicitOperator.Invoke(null, [value])!;
+                return true;
+            }
+
+            wrapped = null!;
+            return false;
         }
 
         private object ConvertPulumiEnum(Type enumType, object sourceValue, DeploymentContext context)

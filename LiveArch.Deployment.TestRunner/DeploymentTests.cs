@@ -5,15 +5,15 @@ using LiveArch.Deployment.Controls;
 using LiveArch.Deployment.Docker;
 using LiveArch.Deployment.ResourceHierarchy;
 using LiveArch.Deployment.ResourceTypes;
-using Pulumi.AzureNative.Authorization;
 using Pulumi.AzureNative.AppConfiguration;
+using Pulumi.AzureNative.Authorization;
 using Pulumi.AzureNative.Resources;
 using Pulumi.AzureNative.Sql;
+using Pulumi.AzureNative.Storage;
 using Pulumi.AzureNative.Web;
 using Pulumi.AzureNative.Web.Inputs;
 using Pulumi.DockerBuild;
 using Pulumi.Testing;
-using Structurizr;
 using ManagedServiceIdentityType = Pulumi.AzureNative.Web.ManagedServiceIdentityType;
 
 namespace LiveArch.Deployment.TestRunner
@@ -91,6 +91,16 @@ namespace LiveArch.Deployment.TestRunner
             ws.CreatedResources.GroupBy(x => x.Key.Node).Should().HaveCount(0);
 
             ws.ReferencedResources.GroupBy(x => x.Key.Node).Should().HaveCount(4);
+        }
+
+        [Fact]
+        public async Task ShouldCreateAllSandboxResources()
+        {
+            var ws = await ProcessDeployment("sandbox");
+
+            ws.CreatedResources.Should().HaveCount(1);
+
+            ws.ReferencedResources.Should().HaveCount(1);
         }
 
         [Theory]
@@ -213,7 +223,10 @@ namespace LiveArch.Deployment.TestRunner
                 {
                     Name = Pulumi.AzureNative.Storage.SkuName.Standard_LRS
                 },
-                Kind = Pulumi.AzureNative.Storage.Kind.StorageV2
+                Kind = Pulumi.AzureNative.Storage.Kind.StorageV2,
+                AllowBlobPublicAccess = false,
+                AccessTier = AccessTier.Cool,
+                MinimumTlsVersion = MinimumTlsVersion.TLS1_2
             });
 
         }
