@@ -20,7 +20,7 @@ namespace LiveArch.Deployment
 
         private readonly record struct PendingDependency(ModelItem Node);
 
-        private sealed class ResourceScope(int id, int level, ResourceScope? parentScope, object ownerResource)
+        public sealed class ResourceScope(int id, int level, ResourceScope? parentScope, object ownerResource)
         {
             public int Id { get; } = id;
             public int Level { get; } = level;
@@ -68,6 +68,7 @@ namespace LiveArch.Deployment
         private readonly InvokeOptions? invokeOptions = null;
         private readonly CustomResourceOptions? customResourceOptions = null;
 
+        public ResourceScope RootScope => rootContext.Scope;
         public IReadOnlyDictionary<ResourceKey, object> CreatedResources => FlattenResources(static scope => scope.CreatedResources);
         public IReadOnlyDictionary<ResourceKey, object> ReferencedResources => FlattenResources(static scope => scope.ReferencedResources);
 

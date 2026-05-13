@@ -6,12 +6,14 @@ using LiveArch.Deployment.Docker;
 using LiveArch.Deployment.ResourceHierarchy;
 using LiveArch.Deployment.ResourceTypes;
 using Pulumi.AzureNative.Authorization;
+using Pulumi.AzureNative.AppConfiguration;
 using Pulumi.AzureNative.Resources;
 using Pulumi.AzureNative.Sql;
 using Pulumi.AzureNative.Web;
 using Pulumi.AzureNative.Web.Inputs;
 using Pulumi.DockerBuild;
 using Pulumi.Testing;
+using Structurizr;
 using ManagedServiceIdentityType = Pulumi.AzureNative.Web.ManagedServiceIdentityType;
 
 namespace LiveArch.Deployment.TestRunner
@@ -90,6 +92,31 @@ namespace LiveArch.Deployment.TestRunner
             ws.ReferencedResources.GroupBy(x => x.Key.Node).Should().HaveCount(4);
         }
 
+        [Theory]
+        [InlineData("sa1", 1, 2)]
+        [InlineData("sa1, sa2, sa3", 3, 2)]
+        [InlineData("sa1,sa2,sa3,sa4", 4, 2)]
+        [InlineData("", 0, 2)]
+        public async Task ShouldCreateExpectedLoopScopesForConfiguredStorageAccounts(string storageAccounts, int expectedScopeCount, int expectedElementsPerScope)
+        {
+            testMocks.AddGetResourceMock<GetKeyValueArgs>(typeof(GetKeyValue), _ => new Dictionary<string, object>
+            {
+                ["value"] = storageAccounts,
+            });
+
+            var ws = await ProcessDeployment("order-env");
+            var loop = ws.CreatedResources
+                .Single(resource => resource.Value is ForEachLoop);
+            var parentScope = FindScopeById(ws.RootScope, loop.Key.ScopeId);
+
+            var loopScopes = parentScope.ChildScopes
+                .Where(scope => ReferenceEquals(scope.OwnerResource, loop.Value))
+                .ToList();
+
+            loopScopes.Should().HaveCount(expectedScopeCount);
+            loopScopes.Should().OnlyContain(scope => scope.CreatedResources.Count + scope.ReferencedResources.Count == expectedElementsPerScope);
+        }
+
         private async Task<StructurizrComponent> ProcessDeployment(string deployment)
         {
             var ws = new StructurizrComponent("workspace.json", "prod", deployment, variables,
@@ -101,6 +128,26 @@ namespace LiveArch.Deployment.TestRunner
             });
 
             return ws;
+        }
+
+        private static IEnumerable<StructurizrComponent.ResourceScope> GetDescendantScopes(StructurizrComponent.ResourceScope scope)
+        {
+            foreach (var childScope in scope.ChildScopes)
+            {
+                yield return childScope;
+
+                foreach (var nestedScope in GetDescendantScopes(childScope))
+                {
+                    yield return nestedScope;
+                }
+            }
+        }
+
+        private static StructurizrComponent.ResourceScope FindScopeById(StructurizrComponent.ResourceScope scope, int scopeId)
+        {
+            return scope.Id == scopeId
+                ? scope
+                : GetDescendantScopes(scope).Single(childScope => childScope.Id == scopeId);
         }
 
         public static void TestCases()
