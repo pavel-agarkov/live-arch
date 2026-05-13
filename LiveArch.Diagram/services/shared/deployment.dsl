@@ -77,7 +77,7 @@ sandbox = deploymentNode "Sandbox" {
         tags "Microsoft Azure - Storage Accounts"
         technology "azure-native:storage:StorageAccount"
         properties {
-            accountName                 test-sa-tatra
+            accountName                 testtatrasa
             allowBlobPublicAccess       false
             minimumTlsVersion           TLS1_2
             sku.name                    Standard_LRS
