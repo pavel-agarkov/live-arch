@@ -19,7 +19,7 @@ deployment * cloud shared-ref-env "Shared resources for reference" {
     autolayout
 }
 
-deployment * cloud sandbox Sandbox resources {
+deployment * cloud sandbox "Sandbox resources" {
     include sandbox
     autolayout
 }

@@ -73,11 +73,10 @@ sandbox = deploymentNode "Sandbox" {
     properties {
         resourceGroupName     sandbox
     }
-    sa = infrastructureNode "Test Storage Account" {
+    tsa = infrastructureNode "Test Storage Account" {
         tags "Microsoft Azure - Storage Accounts"
         technology "azure-native:storage:StorageAccount"
         properties {
-            var                         storage-account
             accountName                 test-sa-tatra
             allowBlobPublicAccess       false
             minimumTlsVersion           TLS1_2
