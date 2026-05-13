@@ -17,4 +17,14 @@
     <ProjectReference Include="..\LiveArch.Deployment\LiveArch.Deployment.csproj" />
     <ProjectReference Include="..\LiveArch.Diagram\LiveArch.Diagram.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="bin\Debug\net10.0\.pulumi\state\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="bin\Debug\net10.0\.pulumi\secret">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
 </Project>

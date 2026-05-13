@@ -82,6 +82,7 @@ sandbox = deploymentNode "Sandbox" {
             minimumTlsVersion           TLS1_2
             sku.name                    Standard_LRS
             kind                        StorageV2
+            accessTier                  Cool
         }
     }
 }

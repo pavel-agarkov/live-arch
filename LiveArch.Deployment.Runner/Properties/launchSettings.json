@@ -8,7 +8,8 @@
         "DOTNET_ENVIRONMENT": "Development",
         "workspace": "workspace.json",
         "environment": "prod",
-        "deployment": "sandbox"
+        "deployment": "sandbox",
+        "ENV": "prod"
       }
     }
   }

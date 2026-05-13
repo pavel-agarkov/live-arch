@@ -419,4 +419,5 @@ FodyWeavers.xsd
 *.msp
 
 **/.structurizr
-/LiveArch.Deployment.Runner/secret.txt
+**/secret
+**/.pulumi
