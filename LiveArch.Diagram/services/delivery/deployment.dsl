@@ -25,7 +25,7 @@ deliveryRg = deploymentNode "Delivery Resource Group" {
                 containerInstance deliveryDb mainProdRg {
                     properties {
                         var "delivery-db"
-                        name    ${ENV}-delivery-db
+                        databaseName    ${ENV}-delivery-db
                     }
                 }
             }

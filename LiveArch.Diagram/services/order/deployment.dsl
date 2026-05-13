@@ -25,7 +25,7 @@ orderRg = deploymentNode "Order Resource Group" {
                 containerInstance orderDb {
                     properties {
                         var "order-db"
-                        name    ${ENV}-order-db
+                        databaseName    ${ENV}-order-db
                     }
                 }
             }

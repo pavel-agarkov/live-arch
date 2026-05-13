@@ -7,6 +7,7 @@ using LiveArch.Deployment.ResourceHierarchy;
 using LiveArch.Deployment.ResourceTypes;
 using Pulumi.AzureNative.Authorization;
 using Pulumi.AzureNative.Resources;
+using Pulumi.AzureNative.Sql;
 using Pulumi.AzureNative.Web;
 using Pulumi.AzureNative.Web.Inputs;
 using Pulumi.DockerBuild;
@@ -54,9 +55,9 @@ namespace LiveArch.Deployment.TestRunner
         {
             var ws = await ProcessDeployment("order-env");
 
-            ws.CreatedResources.GroupBy(x => x.Key.Node).Should().HaveCount(11);
+            ws.CreatedResources.Should().HaveCount(13);
 
-            ws.ReferencedResources.GroupBy(x=>x.Key.Node).Should().HaveCount(13);
+            ws.ReferencedResources.Should().HaveCount(15);
         }
 
         [Fact]
@@ -64,9 +65,9 @@ namespace LiveArch.Deployment.TestRunner
         {
             var ws = await ProcessDeployment("delivery-env");
 
-            ws.CreatedResources.GroupBy(x => x.Key.Node).Should().HaveCount(8);
+            ws.CreatedResources.Should().HaveCount(8);
 
-            ws.ReferencedResources.GroupBy(x => x.Key.Node).Should().HaveCount(11);
+            ws.ReferencedResources.Should().HaveCount(11);
         }
 
         [Fact]
@@ -74,9 +75,9 @@ namespace LiveArch.Deployment.TestRunner
         {
             var ws = await ProcessDeployment("shared-env");
 
-            ws.CreatedResources.GroupBy(x => x.Key.Node).Should().HaveCount(4);
+            ws.CreatedResources.Should().HaveCount(4);
 
-            ws.ReferencedResources.GroupBy(x => x.Key.Node).Should().HaveCount(0);
+            ws.ReferencedResources.Should().HaveCount(0);
         }
 
         [Fact]
@@ -148,6 +149,14 @@ namespace LiveArch.Deployment.TestRunner
             {
                 PrincipalId = app.Identity.Apply(x => x.PrincipalId)
             });
+
+            var db = new Database("", new Pulumi.AzureNative.Sql.DatabaseArgs
+            {
+                DatabaseName = "",
+                ServerName = "",
+                ResourceGroupName = ""
+            });
+
         }
     }
 }
