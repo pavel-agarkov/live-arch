@@ -94,7 +94,7 @@ sandbox = deploymentNode "Sandbox" {
         -> testSa "Contribute" "azure-native:authorization:RoleAssignment" {
             properties {
                 principalType ServicePrincipal
-                roleDefinitionId "ba92f5b4-2d11-453d-a403-e96b0029c9fe"
+                roleDefinitionId "/providers/Microsoft.Authorization/roleDefinitions/ba92f5b4-2d11-453d-a403-e96b0029c9fe"
             }
         }
     }

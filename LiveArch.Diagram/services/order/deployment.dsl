@@ -121,7 +121,7 @@ orderRg = deploymentNode "Order Resource Group" {
             technology "azure-native:authorization:RoleAssignment"
             properties {
                 var order-service-${saName}-access-policy
-                roleDefinitionId    "ba92f5b4-2d11-453d-a403-e96b0029c9fe"
+                roleDefinitionId    "/providers/Microsoft.Authorization/roleDefinitions/ba92f5b4-2d11-453d-a403-e96b0029c9fe"
             }
             -> sa "scope" {
                 properties {
