@@ -73,7 +73,7 @@ sandbox = deploymentNode "Sandbox" {
     properties {
         resourceGroupName     sandbox
     }
-    tsa = infrastructureNode "Test Storage Account" {
+    testSa = infrastructureNode "Test Storage Account" {
         tags "Microsoft Azure - Storage Accounts"
         technology "azure-native:storage:StorageAccount"
         properties {
@@ -84,5 +84,13 @@ sandbox = deploymentNode "Sandbox" {
             kind                        StorageV2
             accessTier                  Cool
         }
+    }
+    testMi = infrastructureNode "Test Managed Identity" {
+        tags "Microsoft Azure - Managed Identities"
+        technology "azure-native:managedidentity:UserAssignedIdentity"
+        properties {
+            resourceName   test-tatra-mi
+        }
+        -> 
     }
 }
