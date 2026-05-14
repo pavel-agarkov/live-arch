@@ -100,7 +100,7 @@ namespace LiveArch.Deployment.TestRunner
         {
             var ws = await ProcessDeployment("sandbox");
 
-            ws.CreatedResources.Should().HaveCount(1);
+            ws.CreatedResources.Should().HaveCount(3);
 
             ws.ReferencedResources.Should().HaveCount(1);
         }
