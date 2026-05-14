@@ -1,6 +1,8 @@
 workspace EnterpriseArchitecture {
     description "An example of an enterprise architecture model using Structurizr DSL with Microsoft Azure components"
 
+    !include services/shared/constants.dsl
+
     model {
         !include services/shared/model.dsl
         !include services/order/model.dsl
