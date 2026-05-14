@@ -1,15 +1,40 @@
 ﻿{
   "$schema": "https://json.schemastore.org/launchsettings.json",
   "profiles": {
-    "LiveArch.Deployment.Runner": {
+    "Pulumi Preview": {
       "commandName": "Project",
       "dotnetRunMessages": true,
       "environmentVariables": {
         "DOTNET_ENVIRONMENT": "Development",
-        "workspace": "workspace.json",
-        "environment": "prod",
-        "deployment": "sandbox",
-        "ENV": "prod"
+        "WORKSPACE": "workspace.json",
+        "ENVIRONMENT": "prod",
+        "DEPLOYMENT": "sandbox",
+        "ENV": "prod",
+        "PULUMI_COMMAND": "preview"
+      }
+    },
+    "Pulumi Up": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "environmentVariables": {
+        "DOTNET_ENVIRONMENT": "Development",
+        "WORKSPACE": "workspace.json",
+        "ENVIRONMENT": "prod",
+        "DEPLOYMENT": "sandbox",
+        "ENV": "prod",
+        "PULUMI_COMMAND": "up"
+      }
+    },
+    "Pulumi Destroy": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "environmentVariables": {
+        "DOTNET_ENVIRONMENT": "Development",
+        "WORKSPACE": "workspace.json",
+        "ENVIRONMENT": "prod",
+        "DEPLOYMENT": "sandbox",
+        "ENV": "prod",
+        "PULUMI_COMMAND": "destroy"
       }
     }
   }

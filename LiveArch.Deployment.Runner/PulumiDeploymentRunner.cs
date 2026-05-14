@@ -60,18 +60,83 @@ namespace LiveArch.Deployment.Runner
 
             stackArgs.ProjectSettings!.Author = "Pavel Agarkov";
             stackArgs.ProjectSettings.License = "MIT";
+            stackArgs.ProjectSettings.Runtime = new ProjectRuntime(ProjectRuntimeName.Dotnet)
+            {
+                Options = new ProjectRuntimeOptions
+                {
+                    Binary = GetRunnerAssemblyPath()
+                }
+            };
+            stackArgs.ProjectSettings.Main = GetRunnerProjectDirectory();
             stackArgs.ProjectSettings.Backend = new ProjectBackend
             {
                 Url = "file://./state"
             };
 
             var stack = await LocalWorkspace.CreateOrSelectStackAsync(stackArgs, cancellationToken);
-            var result = await stack.UpAsync(new UpOptions
-            {
-                OnEvent = OnEngineEvent
-            }, cancellationToken);
 
-            return result.Summary.Result == UpdateState.Succeeded ? 0 : 1;
+            switch (options.PulumiCommand)
+            {
+                case "up":
+                    var result = await stack.UpAsync(new UpOptions
+                    {
+                        OnEvent = OnEngineEvent,
+                        OnStandardError = LogError
+                    }, cancellationToken);
+                    return result.Summary.Result == UpdateState.Succeeded ? 0 : 1;
+
+                case "preview":
+                    var previewResult = await stack.PreviewAsync(new PreviewOptions
+                    {
+                        OnEvent = OnEngineEvent,
+                        OnStandardError = LogError
+                    }, cancellationToken);
+                    return 0;
+
+                case "destroy":
+                    var destroyResult = await stack.DestroyAsync(new DestroyOptions
+                    {
+                        RunProgram = false,
+                        Debug = true,
+                        Color= "always",
+                        LogVerbosity = 4,
+                        OnEvent = OnEngineEvent,
+                        OnStandardError = LogError
+                    }, cancellationToken);
+                    return destroyResult.Summary.Result == UpdateState.Succeeded ? 0 : 1;
+
+                default:
+                    logger.LogError("Unsupported command: {Command}", options.PulumiCommand);
+                    return 1;
+            }
+
+        }
+
+        private void LogError(string message)
+        {
+            logger.LogError(message);
+        }
+
+        private static string GetRunnerAssemblyPath()
+        {
+            return typeof(PulumiDeploymentRunner).Assembly.Location;
+        }
+
+        private static string GetRunnerProjectDirectory()
+        {
+            var directory = new DirectoryInfo(AppContext.BaseDirectory);
+
+            while (directory != null)
+            {
+                if (directory.GetFiles("*.csproj").Length > 0)
+                {
+                    return directory.FullName;
+                }
+
+                directory = directory.Parent;
+            }
+
+            throw new DirectoryNotFoundException("Could not locate a .csproj file.");
         }
 
         private void OnEngineEvent(EngineEvent engineEvent)
@@ -86,7 +151,7 @@ namespace LiveArch.Deployment.Runner
                 var message = engineEvent.DiagnosticEvent.Message;
                 if (!string.IsNullOrWhiteSpace(message))
                 {
-                    logger.LogWarning(message);
+                    logger.LogInformation(message);
                 }
             }
         }
