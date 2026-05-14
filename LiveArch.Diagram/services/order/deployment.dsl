@@ -116,24 +116,11 @@ orderRg = deploymentNode "Order Resource Group" {
                 accountName    ${saName}
             }
         }
-        infrastructureNode "Storage Account Access Role Assignment" {
-            tags "Microsoft Azure - Entra Managed Identities"
-            technology "azure-native:authorization:RoleAssignment"
+        prodMi -> sa "Contribute" "azure-native:authorization:RoleAssignment" {
             properties {
-                var order-service-${saName}-access-policy
-                roleDefinitionId    "${storageBlobDataContributor}"
-            }
-            -> sa "scope" {
-                properties {
-                    source "id"
-                    target "scope"
-                }
-            }
-            -> prodMi "principal" {
-                properties {
-                    source "principalId"
-                    target "principalId"
-                }
+                var                 order-service-${saName}-contributor
+                roleDefinitionId    ${storageBlobDataContributor}
+                principalType       ServicePrincipal
             }
         }
     }
