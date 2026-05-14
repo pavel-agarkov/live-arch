@@ -5,7 +5,7 @@ namespace LiveArch.Deployment.Azure.ResourceHierarchy
 {
     public class AzureResourceHierarchy : IResourceHierarchy
     {
-        public ResourceHierarchyRegistry Registry => new()
+        public ResourceHierarchyRegistry StaticRegistry => new()
         {
             new ResourcePropagationRules<Pulumi.AzureNative.Resources.ResourceGroup>
             {
@@ -108,12 +108,11 @@ namespace LiveArch.Deployment.Azure.ResourceHierarchy
 
         public ResourceHierarchyRegistry GetDynamicRegistry(IReadOnlyCollection<Type> resourceTypes)
         {
-            return new ResourceHierarchyRegistry(
-                resourceTypes
-                    .Distinct()
-                    .Select(CreateScopePropagationRule)
-                    .Where(rule => rule is not null)
-                    .Select(rule => rule!.Value));
+            return new ResourceHierarchyRegistry(resourceTypes
+                .Distinct()
+                .Select(CreateScopePropagationRule)
+                .Where(rule => rule is not null)
+                .Select(rule => rule!.Value));
         }
 
         private static KeyValuePair<Type, IReadOnlyCollection<ResourcePropagationRule>>? CreateScopePropagationRule(Type resourceType)

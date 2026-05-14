@@ -2,7 +2,7 @@
 {
     public interface IResourceHierarchy
     {
-        ResourceHierarchyRegistry Registry { get; }
+        ResourceHierarchyRegistry StaticRegistry { get; }
 
         ResourceHierarchyRegistry GetDynamicRegistry(IReadOnlyCollection<Type> resourceTypes);
     }

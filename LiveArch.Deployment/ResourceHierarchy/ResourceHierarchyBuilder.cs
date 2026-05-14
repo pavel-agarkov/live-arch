@@ -10,13 +10,12 @@ namespace LiveArch.Deployment.ResourceHierarchy
         {
             var resourceTypes = resourceTypesRegistry.GetAllResourceTypes();
             Registry = registries
-                .SelectMany<IResourceHierarchy, ResourceHierarchyRegistry>(x => [x.Registry, x.GetDynamicRegistry(resourceTypes)])
-                .Aggregate((all, next) => new ResourceHierarchyRegistry(
-                    all.Concat(next)
-                        .GroupBy(kv => kv.Key)
-                        .ToDictionary(
-                            g => g.Key,
-                            g => (IReadOnlyCollection<ResourcePropagationRule>)[.. g.SelectMany(kv => kv.Value)])));
+                .SelectMany<IResourceHierarchy, ResourceHierarchyRegistry>(x => [x.StaticRegistry, x.GetDynamicRegistry(resourceTypes)])
+                .Aggregate((all, next) => new ResourceHierarchyRegistry(all.Concat(next)
+                .GroupBy(kv => kv.Key)
+                .ToDictionary(
+                    g => g.Key,
+                    g => (IReadOnlyCollection<ResourcePropagationRule>)[.. g.SelectMany(kv => kv.Value)])));
         }
     }
 }
