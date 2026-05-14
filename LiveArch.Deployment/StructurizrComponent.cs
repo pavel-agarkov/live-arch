@@ -94,6 +94,13 @@ namespace LiveArch.Deployment
             rootContext = CreateDeploymentContext(CreateScope(null, workspace), variables);
         }
 
+        /// <summary>
+        /// Processes the selected deployment view and creates all resources in dependency order.
+        /// </summary>
+        /// <param name="cancellationToken">Cancellation token for asynchronous resource creation.</param>
+        /// <remarks>
+        /// Throws when at least one node remains unresolved in the waiting queue after traversal completes.
+        /// </remarks>
         public async Task ProcessWorkspaceAsync(CancellationToken cancellationToken)
         {
             var rootDeploymentNodes = workspace.Model.DeploymentNodes.On(environment, deploymentView, SubstituteVariables(rootContext));
@@ -109,6 +116,12 @@ namespace LiveArch.Deployment
             }
         }
 
+        /// <summary>
+        /// Resolves variable placeholders in the provided value using the current deployment context.
+        /// </summary>
+        /// <param name="input">Raw value that can contain <c>${...}</c> placeholders.</param>
+        /// <param name="context">Current scope and variable set used for substitution.</param>
+        /// <returns>The resolved value or the original non-template object when the whole input matches a variable.</returns>
         private object SubstituteVariables(string input, DeploymentContext context)
         {
             var direct = context.Variables.FirstOrDefault(kv => input == $"${{{kv.Key}}}");
@@ -129,22 +142,43 @@ namespace LiveArch.Deployment
             });
         }
 
+        /// <summary>
+        /// Creates a reusable variable substitution delegate bound to the given deployment context.
+        /// </summary>
+        /// <param name="context">Context that provides variables and scope metadata.</param>
+        /// <returns>A delegate that resolves placeholders for string values.</returns>
         private Func<string, object> SubstituteVariables(DeploymentContext context)
         {
             return s => SubstituteVariables(s, context);
         }
 
+        /// <summary>
+        /// Returns relationships for the node that are visible in the active deployment view.
+        /// </summary>
+        /// <param name="deployNode">Source deployment adapter.</param>
+        /// <returns>Filtered relationship adapters for the current view.</returns>
         private IEnumerable<RelationshipAdapter> GetRelationshipAdapters(IDeploymentAdapter deployNode)
         {
             return deployNode.Relationships.In(deploymentView);
         }
 
+        /// <summary>
+        /// Checks whether the relationship maps a source output into a target input.
+        /// </summary>
+        /// <param name="relationship">Relationship to inspect.</param>
+        /// <returns><c>true</c> when both <c>source</c> and <c>target</c> properties are present.</returns>
         private static bool HasMappedDependency(RelationshipAdapter relationship)
         {
             return relationship.Properties.ContainsKey("source") &&
                 relationship.Properties.ContainsKey("target");
         }
 
+        /// <summary>
+        /// Checks whether the relationship explicitly declares a dependency through the <c>dependsOn</c> property.
+        /// </summary>
+        /// <param name="relationship">Relationship to inspect.</param>
+        /// <param name="context">Context used to resolve templated property values.</param>
+        /// <returns><c>true</c> when the relationship explicitly requires dependency ordering.</returns>
         private bool HasExplicitDependency(RelationshipAdapter relationship, DeploymentContext context)
         {
             if (!relationship.Properties.TryGetValue("dependsOn", out var dependsOnValue))
@@ -156,18 +190,36 @@ namespace LiveArch.Deployment
                 dependsOn;
         }
 
+        /// <summary>
+        /// Determines whether a regular node must wait for the relationship destination to exist.
+        /// </summary>
+        /// <param name="relationship">Relationship associated with the node.</param>
+        /// <param name="context">Current deployment context.</param>
+        /// <returns><c>true</c> when the relationship affects node creation order.</returns>
         private bool RequiresNodeDependency(RelationshipAdapter relationship, DeploymentContext context)
         {
             return HasMappedDependency(relationship) ||
                 HasExplicitDependency(relationship, context);
         }
 
+        /// <summary>
+        /// Determines whether a relationship resource itself must wait for prerequisite resources.
+        /// </summary>
+        /// <param name="relationship">Relationship resource candidate.</param>
+        /// <param name="context">Current deployment context.</param>
+        /// <returns><c>true</c> when the relationship requires ordered creation.</returns>
         private bool RequiresRelationshipDependency(RelationshipAdapter relationship, DeploymentContext context)
         {
             return !string.IsNullOrEmpty(relationship.Technology) ||
                 RequiresNodeDependency(relationship, context);
         }
 
+        /// <summary>
+        /// Wraps a Structurizr deployment node and creates it when it is enabled.
+        /// </summary>
+        /// <param name="deployNode">Deployment node from the workspace model.</param>
+        /// <param name="context">Current deployment scope and variables.</param>
+        /// <param name="cancellationToken">Cancellation token for asynchronous work.</param>
         private async Task ProcessDeploymentNodeAsync(DeploymentNode deployNode, DeploymentContext context, CancellationToken cancellationToken)
         {
             var deploymentNode = new DeploymentNodeAdapter(deployNode, SubstituteVariables(context));
@@ -177,6 +229,16 @@ namespace LiveArch.Deployment
             }
         }
 
+        /// <summary>
+        /// Creates all child resources for a deployment node in the expected order.
+        /// </summary>
+        /// <param name="deployNode">Parent deployment node whose children are being processed.</param>
+        /// <param name="infraNodes">Infrastructure nodes already filtered for the current context.</param>
+        /// <param name="context">Current deployment scope and variables.</param>
+        /// <param name="cancellationToken">Cancellation token for asynchronous work.</param>
+        /// <remarks>
+        /// Infrastructure nodes are created before container instances and nested deployment nodes.
+        /// </remarks>
         private async Task CreateChildResources(DeploymentNode deployNode, IReadOnlyCollection<InfrastructureNodeAdapter> infraNodes, DeploymentContext context, CancellationToken cancellationToken)
         {
             foreach (var infraNode in infraNodes)
@@ -195,6 +257,12 @@ namespace LiveArch.Deployment
             }
         }
 
+        /// <summary>
+        /// Creates a container instance resource when the instance is enabled.
+        /// </summary>
+        /// <param name="containerInstance">Container instance from the deployment model.</param>
+        /// <param name="context">Current deployment scope and variables.</param>
+        /// <param name="cancellationToken">Cancellation token for asynchronous work.</param>
         private async Task ProcessContainerInstanceAsync(ContainerInstance containerInstance, DeploymentContext context, CancellationToken cancellationToken)
         {
             var container = new ContainerInstanceAdapter(containerInstance, SubstituteVariables(context));
@@ -204,11 +272,27 @@ namespace LiveArch.Deployment
             }
         }
 
+        /// <summary>
+        /// Ensures the image required by a container instance is created before the instance itself.
+        /// </summary>
+        /// <param name="containerInstance">Container instance whose image must be prepared.</param>
+        /// <param name="context">Current deployment scope and variables.</param>
+        /// <param name="cancellationToken">Cancellation token for asynchronous work.</param>
         private async Task BuildContainerInstance(ContainerInstance containerInstance, DeploymentContext context, CancellationToken cancellationToken)
         {
             await CreateNodeAsync(new ContainerBuildAdapter(containerInstance.Container, SubstituteVariables(context)), context, cancellationToken);
         }
 
+        /// <summary>
+        /// Creates or resolves a resource for the supplied deployment adapter.
+        /// </summary>
+        /// <param name="deployNode">Deployment adapter describing the target model item.</param>
+        /// <param name="context">Current deployment scope and variable bag.</param>
+        /// <param name="cancellationToken">Cancellation token for asynchronous work.</param>
+        /// <returns>The created or existing resource, or <c>null</c> when creation is deferred.</returns>
+        /// <remarks>
+        /// This method handles dependency waiting, invoke-based resources, custom resources, relation resources, and loop-aware relation replication.
+        /// </remarks>
         private async Task<object?> CreateNodeAsync(IDeploymentAdapter deployNode, DeploymentContext context, CancellationToken cancellationToken)
         {
             if (TryGetExistingResourceByNode(deployNode.Node, context.Scope, out var existingResource))
@@ -312,6 +396,12 @@ namespace LiveArch.Deployment
             return null;
         }
 
+        /// <summary>
+        /// Puts the node into the waiting queue when one or more required dependencies are still missing.
+        /// </summary>
+        /// <param name="deployNode">Node that may need to wait.</param>
+        /// <param name="context">Current deployment scope and variables.</param>
+        /// <returns><c>true</c> when the node was deferred; otherwise <c>false</c>.</returns>
         private bool TryWaitForDependencies(IDeploymentAdapter deployNode, DeploymentContext context)
         {
             var missingDependencies = GetMissingDependencies(deployNode, context);
@@ -324,6 +414,12 @@ namespace LiveArch.Deployment
             return true;
         }
 
+        /// <summary>
+        /// Collects dependencies that must exist before the node can be created in the current scope.
+        /// </summary>
+        /// <param name="deployNode">Node whose prerequisites are being evaluated.</param>
+        /// <param name="context">Current deployment scope and variables.</param>
+        /// <returns>A distinct set of missing model items.</returns>
         private IReadOnlyCollection<ModelItem> GetMissingDependencies(IDeploymentAdapter deployNode, DeploymentContext context)
         {
             var missingDependencies = new HashSet<ModelItem>();
@@ -373,6 +469,12 @@ namespace LiveArch.Deployment
             return missingDependencies;
         }
 
+        /// <summary>
+        /// Finds the active <c>foreach:source</c> infrastructure node for the specified loop node.
+        /// </summary>
+        /// <param name="deploymentNode">Deployment node that may represent a foreach loop.</param>
+        /// <param name="context">Current deployment context used for variable substitution.</param>
+        /// <returns>The active source adapter, or <c>null</c> when none exists.</returns>
         private InfrastructureNodeAdapter? GetSourceNode(DeploymentNode deploymentNode, DeploymentContext context)
         {
             return deploymentNode.InfrastructureNodes
@@ -382,6 +484,12 @@ namespace LiveArch.Deployment
                 .FirstOrDefault();
         }
 
+        /// <summary>
+        /// Stores a deferred node together with the dependencies that still need to be created.
+        /// </summary>
+        /// <param name="deployNode">Deferred node.</param>
+        /// <param name="context">Scope in which the node must eventually be created.</param>
+        /// <param name="missingDependencies">Dependencies still missing for the node.</param>
         private void RegisterWaitingNode(IDeploymentAdapter deployNode, DeploymentContext context, IReadOnlyCollection<ModelItem> missingDependencies)
         {
             var key = new ResourceKey(deployNode.Node, context.Scope.Id);
@@ -390,11 +498,23 @@ namespace LiveArch.Deployment
             waitingNodes[key] = waitingNode;
         }
 
+        /// <summary>
+        /// Removes a deferred node registration from the waiting queue.
+        /// </summary>
+        /// <param name="key">Key that uniquely identifies the deferred node in a scope.</param>
         private void RemoveWaitingNode(ResourceKey key)
         {
             waitingNodes.Remove(key);
         }
 
+        /// <summary>
+        /// Removes stale waiting registrations for the same model item from ancestor scopes.
+        /// </summary>
+        /// <param name="node">Model item whose ancestor waiters should be cleared.</param>
+        /// <param name="scope">Current scope that already owns the realized item.</param>
+        /// <remarks>
+        /// This is primarily used for loop-scoped relationship resources that should not remain pending in outer scopes.
+        /// </remarks>
         private void RemoveAncestorWaitingNodes(ModelItem node, ResourceScope scope)
         {
             for (var currentScope = scope.ParentScope; currentScope != null; currentScope = currentScope.ParentScope)
@@ -403,6 +523,11 @@ namespace LiveArch.Deployment
             }
         }
 
+        /// <summary>
+        /// Rechecks deferred nodes after a new resource has been created.
+        /// </summary>
+        /// <param name="createdNode">Model item that has just been materialized.</param>
+        /// <param name="cancellationToken">Cancellation token for resumed asynchronous work.</param>
         private async Task TryResumeWaitingNodesAsync(ModelItem createdNode, CancellationToken cancellationToken)
         {
             var waitersToResume = new List<WaitingNodeRegistration>();
@@ -437,6 +562,12 @@ namespace LiveArch.Deployment
             }
         }
 
+        /// <summary>
+        /// Performs preparation steps that must happen before the node resource is instantiated.
+        /// </summary>
+        /// <param name="deployNode">Node being created.</param>
+        /// <param name="context">Current deployment context.</param>
+        /// <param name="cancellationToken">Cancellation token for asynchronous work.</param>
         private async Task PreProcessNodeAsync(IDeploymentAdapter deployNode, DeploymentContext context, CancellationToken cancellationToken)
         {
             switch (deployNode)
@@ -447,6 +578,13 @@ namespace LiveArch.Deployment
             }
         }
 
+        /// <summary>
+        /// Performs follow-up actions after a node resource has been created.
+        /// </summary>
+        /// <param name="deployNode">Node that was just created.</param>
+        /// <param name="resource">Created Pulumi resource or invoke result.</param>
+        /// <param name="context">Current deployment context.</param>
+        /// <param name="cancellationToken">Cancellation token for asynchronous work.</param>
         private async Task PostProcessNodeAsync(IDeploymentAdapter deployNode, object? resource, DeploymentContext context, CancellationToken cancellationToken)
         {
             switch (deployNode)
@@ -457,6 +595,13 @@ namespace LiveArch.Deployment
             }
         }
 
+        /// <summary>
+        /// Continues processing for deployment-node resources, including loop expansion and child creation.
+        /// </summary>
+        /// <param name="deploymentNode">Deployment node that owns the created resource.</param>
+        /// <param name="resource">Created resource instance.</param>
+        /// <param name="context">Current deployment context.</param>
+        /// <param name="cancellationToken">Cancellation token for asynchronous work.</param>
         private async Task PostProcessDeploymentNodeAsync(DeploymentNode deploymentNode, object? resource, DeploymentContext context, CancellationToken cancellationToken)
         {
             if (resource is ForEachLoop loop)
@@ -469,6 +614,16 @@ namespace LiveArch.Deployment
                 GetInfrastructureNodes(deploymentNode, context), context, cancellationToken);
         }
 
+        /// <summary>
+        /// Expands a foreach loop by creating a child scope for each source item.
+        /// </summary>
+        /// <param name="deploymentNode">Deployment node that represents the loop definition.</param>
+        /// <param name="loop">Created loop control resource.</param>
+        /// <param name="context">Parent deployment context.</param>
+        /// <param name="cancellationToken">Cancellation token for asynchronous work.</param>
+        /// <remarks>
+        /// Each iteration inherits the parent variables and additionally exposes the loop item under the loop name.
+        /// </remarks>
         private async Task ProcessForEachLoopAsync(DeploymentNode deploymentNode, ForEachLoop loop, DeploymentContext context, CancellationToken cancellationToken)
         {
             var sourceNode = GetSourceNode(deploymentNode, context);
@@ -488,6 +643,15 @@ namespace LiveArch.Deployment
             });
         }
 
+        /// <summary>
+        /// Creates a child deployment context with a fresh scope and optionally extended variables.
+        /// </summary>
+        /// <param name="parentScope">Parent scope for the new context.</param>
+        /// <param name="ownerResource">Resource that owns the child scope.</param>
+        /// <param name="parentVariables">Variables inherited from the parent context.</param>
+        /// <param name="configureVariables">Optional callback used to add or override variables.</param>
+        /// <param name="loopDeploymentNode">Loop node associated with the child scope, when applicable.</param>
+        /// <returns>A new deployment context for nested resource creation.</returns>
         private DeploymentContext CreateChildContext(ResourceScope parentScope, object ownerResource, IReadOnlyDictionary<string, object> parentVariables, Action<Dictionary<string, object>>? configureVariables = null, DeploymentNode? loopDeploymentNode = null)
         {
             var scope = CreateScope(parentScope, ownerResource);
@@ -496,6 +660,13 @@ namespace LiveArch.Deployment
             return CreateDeploymentContext(scope, variables, loopDeploymentNode);
         }
 
+        /// <summary>
+        /// Enumerates active infrastructure nodes for a deployment node.
+        /// </summary>
+        /// <param name="deploymentNode">Deployment node that contains infrastructure children.</param>
+        /// <param name="context">Context used for variable substitution and disable checks.</param>
+        /// <param name="predicate">Optional filter applied before adapters are created.</param>
+        /// <returns>Active infrastructure adapters for the current context.</returns>
         private IReadOnlyCollection<InfrastructureNodeAdapter> GetInfrastructureNodes(DeploymentNode deploymentNode, DeploymentContext context, Func<InfrastructureNode, bool>? predicate = null)
         {
             var infraNodes = deploymentNode.InfrastructureNodes.AsEnumerable();
@@ -512,6 +683,11 @@ namespace LiveArch.Deployment
             return [.. infrastructureNodes];
         }
 
+        /// <summary>
+        /// Builds value transformers declared on relationship properties.
+        /// </summary>
+        /// <param name="properties">Relationship properties that may declare transformer arguments.</param>
+        /// <returns>The instantiated transformer pipeline.</returns>
         private IReadOnlyCollection<ITransformer> GetTransformers(Dictionary<string, string> properties)
         {
             var transformers = new List<ITransformer>();
@@ -526,6 +702,15 @@ namespace LiveArch.Deployment
             return transformers;
         }
 
+        /// <summary>
+        /// Creates relationship resources owned by the supplied node in the current scope.
+        /// </summary>
+        /// <param name="deployNode">Owner node whose outgoing relationship resources should be created.</param>
+        /// <param name="context">Current deployment context.</param>
+        /// <param name="cancellationToken">Cancellation token for asynchronous work.</param>
+        /// <remarks>
+        /// Loop-replicated incoming relationships are intentionally excluded here and handled separately.
+        /// </remarks>
         private async Task CreateRelationNodesAsync(IDeploymentAdapter deployNode, DeploymentContext context, CancellationToken cancellationToken)
         {
             if (deployNode is not RelationshipAdapter)
@@ -539,6 +724,15 @@ namespace LiveArch.Deployment
             }
         }
 
+        /// <summary>
+        /// Recreates incoming relationship resources for elements materialized inside a foreach iteration.
+        /// </summary>
+        /// <param name="deployNode">Node created inside the current loop scope.</param>
+        /// <param name="context">Current loop-aware deployment context.</param>
+        /// <param name="cancellationToken">Cancellation token for asynchronous work.</param>
+        /// <remarks>
+        /// This method supports scenarios where the relationship source is outside the loop and the destination is inside the loop.
+        /// </remarks>
         private async Task CreateIncomingLoopRelationNodesAsync(IDeploymentAdapter deployNode, DeploymentContext context, CancellationToken cancellationToken)
         {
             if (context.LoopDeploymentNode == null || deployNode is RelationshipAdapter)
@@ -553,6 +747,12 @@ namespace LiveArch.Deployment
             }
         }
 
+        /// <summary>
+        /// Finds incoming relationship resources that should be replayed inside the current loop scope.
+        /// </summary>
+        /// <param name="deployNode">Node created in the loop scope.</param>
+        /// <param name="context">Current deployment context that carries loop metadata.</param>
+        /// <returns>Incoming relationship adapters that should be created in the current iteration.</returns>
         private IEnumerable<RelationshipAdapter> GetIncomingLoopRelationshipAdapters(IDeploymentAdapter deployNode, DeploymentContext context)
         {
             if (context.LoopDeploymentNode == null || deployNode.Node is not Element element)
@@ -569,6 +769,12 @@ namespace LiveArch.Deployment
                 .In(deploymentView);
         }
 
+        /// <summary>
+        /// Checks whether the element belongs to the subtree rooted at the specified deployment node.
+        /// </summary>
+        /// <param name="element">Element to test.</param>
+        /// <param name="ancestor">Potential ancestor deployment node.</param>
+        /// <returns><c>true</c> when the element is inside the ancestor subtree.</returns>
         private static bool IsDescendantOf(Element element, DeploymentNode ancestor)
         {
             for (Element? current = element; current != null; current = current.Parent)
@@ -582,6 +788,11 @@ namespace LiveArch.Deployment
             return false;
         }
 
+        /// <summary>
+        /// Decides whether a relationship resource should be skipped in the current outer scope.
+        /// </summary>
+        /// <param name="relationship">Relationship resource candidate.</param>
+        /// <returns><c>true</c> when the relationship must instead be created inside a loop iteration scope.</returns>
         private static bool ShouldCreateRelationInCurrentScope(RelationshipAdapter relationship)
         {
             var relation = (Relationship)relationship.Node;
@@ -594,6 +805,11 @@ namespace LiveArch.Deployment
             return loopAncestor != null && !IsDescendantOf(source, loopAncestor);
         }
 
+        /// <summary>
+        /// Returns the nearest foreach loop ancestor for the element, if any.
+        /// </summary>
+        /// <param name="element">Element whose ancestry should be inspected.</param>
+        /// <returns>The nearest loop deployment node or <c>null</c>.</returns>
         private static DeploymentNode? GetLoopAncestor(Element element)
         {
             for (Element? current = element; current != null; current = current.Parent)
@@ -607,6 +823,12 @@ namespace LiveArch.Deployment
             return null;
         }
 
+        /// <summary>
+        /// Applies relationship-driven input mappings and container image references to a resource argument object.
+        /// </summary>
+        /// <param name="deployNode">Node whose outgoing relationships supply input values.</param>
+        /// <param name="param">Target argument object being populated.</param>
+        /// <param name="context">Current deployment context.</param>
         private void ApplyRelations(IDeploymentAdapter deployNode, object param, DeploymentContext context)
         {
             foreach (var relationship in GetRelationshipAdapters(deployNode))
@@ -629,6 +851,13 @@ namespace LiveArch.Deployment
             }
         }
 
+        /// <summary>
+        /// Propagates hierarchy-derived values from parent resources into a child argument object.
+        /// </summary>
+        /// <param name="deployNode">Parent node whose resource outputs may be propagated.</param>
+        /// <param name="param">Target argument object receiving propagated values.</param>
+        /// <param name="paramInputProps">Cached writable input properties for the target argument object.</param>
+        /// <param name="context">Current deployment context.</param>
         private void PropagateParentProperties(IDeploymentAdapter deployNode, object param, Dictionary<string, PropertyInfo> paramInputProps, DeploymentContext context)
         {
             foreach (var parent in deployNode.Parents)
@@ -657,6 +886,16 @@ namespace LiveArch.Deployment
             }
         }
 
+        /// <summary>
+        /// Resolves a resource for the specified model item within the current context.
+        /// </summary>
+        /// <param name="node">Model item whose resource is required.</param>
+        /// <param name="context">Current deployment context.</param>
+        /// <param name="resource">Resolved resource instance when available.</param>
+        /// <returns><c>true</c> when the resource exists or can be safely ignored; otherwise an exception is thrown.</returns>
+        /// <remarks>
+        /// Disabled elements and static structure elements are treated as non-fatal misses.
+        /// </remarks>
         private bool TryGetResourceByNode(ModelItem node, DeploymentContext context, out object? resource)
         {
             if (!TryGetExistingResourceByNode(node, context.Scope, out resource))
@@ -677,6 +916,13 @@ namespace LiveArch.Deployment
             return true;
         }
 
+        /// <summary>
+        /// Resolves a resource by walking the current scope and its ancestors.
+        /// </summary>
+        /// <param name="node">Model item to resolve.</param>
+        /// <param name="scope">Scope where lookup starts.</param>
+        /// <param name="resource">Resolved resource when found.</param>
+        /// <returns><c>true</c> when the resource is visible from the supplied scope.</returns>
         private bool TryGetExistingResourceByNode(ModelItem node, ResourceScope scope, out object? resource)
         {
             for (var currentScope = scope; currentScope != null; currentScope = currentScope.ParentScope)
@@ -692,6 +938,12 @@ namespace LiveArch.Deployment
             return false;
         }
 
+        /// <summary>
+        /// Creates a new resource scope and attaches it to the optional parent scope.
+        /// </summary>
+        /// <param name="parentScope">Parent scope, or <c>null</c> for the root.</param>
+        /// <param name="ownerResource">Resource that owns the new scope.</param>
+        /// <returns>The newly created scope.</returns>
         private ResourceScope CreateScope(ResourceScope? parentScope, object ownerResource)
         {
             var createdScope = new ResourceScope(scopeId++, (parentScope?.Level ?? 0) + 1, parentScope, ownerResource);
@@ -699,6 +951,13 @@ namespace LiveArch.Deployment
             return createdScope;
         }
 
+        /// <summary>
+        /// Creates a deployment context for the supplied scope and variable set.
+        /// </summary>
+        /// <param name="scope">Resource scope represented by the context.</param>
+        /// <param name="variables">Variables available inside the context.</param>
+        /// <param name="loopDeploymentNode">Loop node associated with the context, when applicable.</param>
+        /// <returns>A deployment context augmented with scope metadata.</returns>
         private static DeploymentContext CreateDeploymentContext(ResourceScope scope, IReadOnlyDictionary<string, object> variables, DeploymentNode? loopDeploymentNode = null)
         {
             var contextVariables = new Dictionary<string, object>(variables)
@@ -709,12 +968,24 @@ namespace LiveArch.Deployment
             return new DeploymentContext(scope, contextVariables, loopDeploymentNode);
         }
 
+        /// <summary>
+        /// Stores a resource in the current scope as either created or referenced.
+        /// </summary>
+        /// <param name="node">Model item represented by the resource.</param>
+        /// <param name="scope">Scope that should own the registration.</param>
+        /// <param name="resource">Pulumi resource or invoke result.</param>
+        /// <param name="isExistingResource">Whether the resource is referenced rather than newly created.</param>
         private void AddResource(ModelItem node, ResourceScope scope, object resource, bool isExistingResource)
         {
             var resources = isExistingResource ? scope.ReferencedResources : scope.CreatedResources;
             resources.Add(node, resource);
         }
 
+        /// <summary>
+        /// Flattens resources from the scope tree into a dictionary keyed by model item and scope id.
+        /// </summary>
+        /// <param name="getResources">Selector that chooses created or referenced resources from a scope.</param>
+        /// <returns>Flattened resource dictionary.</returns>
         private IReadOnlyDictionary<ResourceKey, object> FlattenResources(Func<ResourceScope, Dictionary<ModelItem, object>> getResources)
         {
             var resources = new Dictionary<ResourceKey, object>();
@@ -722,6 +993,12 @@ namespace LiveArch.Deployment
             return resources;
         }
 
+        /// <summary>
+        /// Recursively collects resources from a scope subtree into a flat result dictionary.
+        /// </summary>
+        /// <param name="currentScope">Current scope being traversed.</param>
+        /// <param name="getResources">Selector that chooses created or referenced resources from a scope.</param>
+        /// <param name="resources">Accumulator that receives flattened entries.</param>
         private static void FlattenResources(ResourceScope currentScope, Func<ResourceScope, Dictionary<ModelItem, object>> getResources, Dictionary<ResourceKey, object> resources)
         {
             foreach (var resource in getResources(currentScope))
@@ -735,6 +1012,11 @@ namespace LiveArch.Deployment
             }
         }
 
+        /// <summary>
+        /// Builds and caches a lookup of Pulumi input property names to CLR properties.
+        /// </summary>
+        /// <param name="type">Argument type to inspect.</param>
+        /// <returns>Case-insensitive mapping of Pulumi input names to CLR properties.</returns>
         private Dictionary<string, PropertyInfo> GetInputProps(Type type)
         {
             if (allInputProps.TryGetValue(type, out var props))
@@ -775,6 +1057,11 @@ namespace LiveArch.Deployment
 
         }
 
+        /// <summary>
+        /// Builds and caches a lookup of Pulumi output member names to CLR members.
+        /// </summary>
+        /// <param name="type">Resource or output type to inspect.</param>
+        /// <returns>Case-insensitive mapping of output names to readable members.</returns>
         private Dictionary<string, MemberInfo> GetOutputMembers(Type type)
         {
             if (_outputMembersCache.TryGetValue(type, out var cached))
@@ -814,6 +1101,11 @@ namespace LiveArch.Deployment
             return dict;
         }
 
+        /// <summary>
+        /// Converts a CLR member name to the camelCase shape commonly used by Pulumi outputs.
+        /// </summary>
+        /// <param name="name">CLR member name.</param>
+        /// <returns>The camelCase representation.</returns>
         private static string ToCamelCase(string name)
         {
             if (string.IsNullOrEmpty(name) || char.IsLower(name[0]))
@@ -821,8 +1113,15 @@ namespace LiveArch.Deployment
             return char.ToLowerInvariant(name[0]) + name.Substring(1);
         }
 
-        // source – уже созданный Pulumi ресурс или результат Get* (OutputType)
-        // path – "name", "policy.objectId", "permissions.secrets"
+        /// <summary>
+        /// Reads a nested output value from a resource or invoke result using a dot-separated path.
+        /// </summary>
+        /// <param name="source">Resource or output object to inspect.</param>
+        /// <param name="path">Output path such as <c>name</c> or <c>identity.principalId</c>.</param>
+        /// <returns>The resolved value, nested output, or <c>null</c> when the path cannot be resolved.</returns>
+        /// <remarks>
+        /// When the current segment is an <c>Output&lt;T&gt;</c>, the method preserves the output wrapper for downstream conversion.
+        /// </remarks>
         private object? GetOutputValue(object source, string path)
         {
             var parts = path.Split('.', 2);
@@ -875,6 +1174,16 @@ namespace LiveArch.Deployment
             return GetOutputValue(value, tail);
         }
 
+        /// <summary>
+        /// Projects a nested value from an <c>Output&lt;T&gt;</c> into another output.
+        /// </summary>
+        /// <param name="outputObj">Source output object.</param>
+        /// <param name="innerType">Inner type carried by the output.</param>
+        /// <param name="tailPath">Remaining nested path to evaluate on the inner value.</param>
+        /// <returns>The projected output value.</returns>
+        /// <remarks>
+        /// The current implementation is a placeholder and should be completed if nested output projection becomes necessary.
+        /// </remarks>
         private object ProjectNestedOutput(object outputObj, Type innerType, string tailPath)
         {
             // Output<TInner>.Apply(x => GetOutputValue(x, tailPath))
@@ -896,6 +1205,15 @@ namespace LiveArch.Deployment
         private static bool IsOutput(Type t)
             => t.IsGenericType && t.GetGenericTypeDefinition() == typeof(Output<>);
 
+        /// <summary>
+        /// Reads a value from the source resource, optionally transforms it, and writes it into the target arguments.
+        /// </summary>
+        /// <param name="source">Resource or invoke result that provides the source value.</param>
+        /// <param name="target">Argument object receiving the value.</param>
+        /// <param name="sourcePath">Dot-separated output path on the source.</param>
+        /// <param name="targetPath">Dot-separated input path on the target.</param>
+        /// <param name="context">Current deployment context.</param>
+        /// <param name="transformers">Optional transformer pipeline applied before assignment.</param>
         private void ApplyDependency(object source, object target, string sourcePath, string targetPath, DeploymentContext context, IReadOnlyCollection<ITransformer> transformers)
         {
             var value = GetOutputValue(source, sourcePath);
@@ -929,6 +1247,17 @@ namespace LiveArch.Deployment
             return type.GetProperty(name, BindingFlags.Instance | BindingFlags.Public);
         }
 
+        /// <summary>
+        /// Assigns a value into a possibly nested Pulumi input path.
+        /// </summary>
+        /// <param name="target">Target argument object.</param>
+        /// <param name="path">Input path that may include nesting or collection operations.</param>
+        /// <param name="value">Raw value to assign.</param>
+        /// <param name="inputProps">Cached input property map for the target type.</param>
+        /// <param name="context">Current deployment context.</param>
+        /// <remarks>
+        /// Supports plain assignment, keyed collection assignment via <c>:</c>, and list append via <c>+=</c>.
+        /// </remarks>
         private void SetProperty(object target, string path, object value, Dictionary<string, PropertyInfo> inputProps, DeploymentContext context)
         {
             var parts = path.Split('.', 2);
@@ -975,6 +1304,14 @@ namespace LiveArch.Deployment
             SetProperty(childInputWrappers[current], tail, value, nestedProps, context);
         }
 
+        /// <summary>
+        /// Appends values to an <c>InputList&lt;T&gt;</c> property using the <c>+=</c> syntax.
+        /// </summary>
+        /// <param name="target">Target argument object.</param>
+        /// <param name="inputProps">Cached input property map for the target type.</param>
+        /// <param name="path">Collection append expression.</param>
+        /// <param name="value">Value to append.</param>
+        /// <param name="context">Current deployment context.</param>
         private void AddItemsToCollection(object target, Dictionary<string, PropertyInfo> inputProps, string path, object value, DeploymentContext context)
         {
             var parts = path.Split("+=", 2);
@@ -1002,6 +1339,13 @@ namespace LiveArch.Deployment
                 $"Append operation supports only properties of type 'InputList<T>'. '{collectionPropName}' has type '{collectionType.Name}'");
         }
 
+        /// <summary>
+        /// Converts and appends one or more values into an <c>InputList&lt;T&gt;</c> property.
+        /// </summary>
+        /// <param name="target">Target argument object.</param>
+        /// <param name="listProp">List property being modified.</param>
+        /// <param name="value">Raw value or collection to append.</param>
+        /// <param name="context">Current deployment context.</param>
         private void AddValuesToList(object target, PropertyInfo listProp, object value, DeploymentContext context)
         {
             var listType = listProp.PropertyType;
@@ -1026,6 +1370,14 @@ namespace LiveArch.Deployment
             addRangeMethod!.Invoke(list, [inputList]);
         }
 
+        /// <summary>
+        /// Assigns a keyed value into an <c>InputList&lt;T&gt;</c> or <c>InputMap&lt;T&gt;</c> using the <c>name:key</c> syntax.
+        /// </summary>
+        /// <param name="target">Target argument object.</param>
+        /// <param name="inputProps">Cached input property map for the target type.</param>
+        /// <param name="path">Keyed assignment expression.</param>
+        /// <param name="value">Value to assign.</param>
+        /// <param name="context">Current deployment context.</param>
         private void AddKeyToCollection(object target, Dictionary<string, PropertyInfo> inputProps, string path, object value, DeploymentContext context)
         {
             var parts = path.Split(':', 2);
@@ -1064,6 +1416,14 @@ namespace LiveArch.Deployment
                 $"{collectionPropName} is neither InputList<T> nor InputMap<T>");
         }
 
+        /// <summary>
+        /// Adds a named entry into an <c>InputList&lt;T&gt;</c> by populating the item key and value fields.
+        /// </summary>
+        /// <param name="target">Target argument object.</param>
+        /// <param name="listProp">List property being modified.</param>
+        /// <param name="key">Logical item key or name.</param>
+        /// <param name="value">Value assigned to the item.</param>
+        /// <param name="context">Current deployment context.</param>
         private void AddKeyToList(object target, PropertyInfo listProp, string key, object value, DeploymentContext context)
         {
             var listType = listProp.PropertyType;
@@ -1117,6 +1477,14 @@ namespace LiveArch.Deployment
             addMethod.Invoke(list, [inputArray]);
         }
 
+        /// <summary>
+        /// Adds a keyed entry into an <c>InputMap&lt;T&gt;</c> property.
+        /// </summary>
+        /// <param name="target">Target argument object.</param>
+        /// <param name="mapProp">Map property being modified.</param>
+        /// <param name="key">Dictionary key.</param>
+        /// <param name="value">Value assigned to the key.</param>
+        /// <param name="context">Current deployment context.</param>
         private void AddKeyToMap(object target, PropertyInfo mapProp, string key, object value, DeploymentContext context)
         {
             var mapType = mapProp.PropertyType;
@@ -1143,6 +1511,13 @@ namespace LiveArch.Deployment
             addMethod.Invoke(map, [key, convertedValue]);
         }
 
+        /// <summary>
+        /// Creates an instance for a nested input property and also exposes its mutable inner object when needed.
+        /// </summary>
+        /// <param name="type">Nested property type to instantiate.</param>
+        /// <param name="context">Current deployment context.</param>
+        /// <param name="unwrapped">Mutable inner object used for recursive property assignment.</param>
+        /// <returns>A value ready to be assigned into the parent property.</returns>
         private object CreateNestedInstance(Type type, DeploymentContext context, out object? unwrapped)
         {
             // Input<T>
@@ -1188,6 +1563,16 @@ namespace LiveArch.Deployment
             return type;
         }
 
+        /// <summary>
+        /// Converts an arbitrary source value into the target CLR or Pulumi input type.
+        /// </summary>
+        /// <param name="targetType">Destination type expected by the argument model.</param>
+        /// <param name="sourceValue">Raw source value.</param>
+        /// <param name="context">Current deployment context used for string substitution.</param>
+        /// <returns>The converted value ready for assignment.</returns>
+        /// <remarks>
+        /// Supports primitives, enums, inputs, input collections, unions, dictionaries, lists, and selected output-to-input conversions.
+        /// </remarks>
         private object ConvertValue(Type targetType, object sourceValue, DeploymentContext context)
         {
             if (sourceValue is string str)
@@ -1269,16 +1654,13 @@ namespace LiveArch.Deployment
                 return ConvertToUnion(targetType, sourceValue, context);
             }
 
-
             // Enum
             if (IsPulumiEnum(targetType))
             {
                 return ConvertPulumiEnum(targetType, sourceValue, context);
             }
 
-            //
             // Primitives
-            //
             if (targetType == typeof(string)) return sourceValue.ToString()!;
             if (targetType == typeof(int)) return int.Parse(sourceValue.ToString()!);
             if (targetType == typeof(bool)) return bool.Parse(sourceValue.ToString()!);
@@ -1286,6 +1668,13 @@ namespace LiveArch.Deployment
             throw new NotSupportedException($"Cannot convert '{sourceValue}' to {targetType}");
         }
 
+        /// <summary>
+        /// Converts a raw value into an <c>InputUnion&lt;...&gt;</c> by trying each supported union branch.
+        /// </summary>
+        /// <param name="targetType">Target input union type.</param>
+        /// <param name="rawValue">Raw value to convert.</param>
+        /// <param name="context">Current deployment context.</param>
+        /// <returns>A wrapped input union value.</returns>
         private object ConvertToInputUnion(Type targetType, object rawValue, DeploymentContext context)
         {
             if (TryWrapIntoTargetType(targetType, rawValue, out var wrapped))
@@ -1411,6 +1800,13 @@ namespace LiveArch.Deployment
             return false;
         }
 
+        /// <summary>
+        /// Converts a string-like value into a Pulumi string-backed enum instance.
+        /// </summary>
+        /// <param name="enumType">Pulumi enum type.</param>
+        /// <param name="sourceValue">Raw value to match.</param>
+        /// <param name="context">Current deployment context.</param>
+        /// <returns>The matching enum instance.</returns>
         private object ConvertPulumiEnum(Type enumType, object sourceValue, DeploymentContext context)
         {
             var str = (string)ConvertValue(typeof(string), sourceValue, context);
@@ -1477,6 +1873,13 @@ namespace LiveArch.Deployment
             return create.Invoke(null, [value])!;
         }
 
+        /// <summary>
+        /// Wraps a CLR list into an <c>InputList&lt;T&gt;</c>, converting elements when necessary.
+        /// </summary>
+        /// <param name="elemType">Element type expected by the input list.</param>
+        /// <param name="listObj">List or enumerable to wrap.</param>
+        /// <param name="context">Current deployment context.</param>
+        /// <returns>An <c>InputList&lt;T&gt;</c> instance.</returns>
         private object WrapInputList(Type elemType, object listObj, DeploymentContext context)
         {
             var listType = typeof(List<>).MakeGenericType(elemType);
@@ -1510,6 +1913,13 @@ namespace LiveArch.Deployment
             return op.Invoke(null, [listObj])!;
         }
 
+        /// <summary>
+        /// Wraps a CLR dictionary into an <c>InputMap&lt;T&gt;</c>, converting values when necessary.
+        /// </summary>
+        /// <param name="valueType">Value type expected by the input map.</param>
+        /// <param name="dictObj">Dictionary to wrap.</param>
+        /// <param name="context">Current deployment context.</param>
+        /// <returns>An <c>InputMap&lt;T&gt;</c> instance.</returns>
         private object WrapInputMap(Type valueType, object dictObj, DeploymentContext context)
         {
             var dictType = typeof(Dictionary<,>).MakeGenericType(typeof(string), valueType);
@@ -1544,6 +1954,13 @@ namespace LiveArch.Deployment
             return op.Invoke(null, [dictObj])!;
         }
 
+        /// <summary>
+        /// Converts a raw value into a two-branch <c>Union&lt;T0, T1&gt;</c>.
+        /// </summary>
+        /// <param name="unionType">Target union type.</param>
+        /// <param name="rawValue">Raw value to convert.</param>
+        /// <param name="context">Current deployment context.</param>
+        /// <returns>A union value containing the first matching branch.</returns>
         private object ConvertToUnion(Type unionType, object rawValue, DeploymentContext context)
         {
             var args = unionType.GetGenericArguments();
@@ -1572,6 +1989,14 @@ namespace LiveArch.Deployment
                 $"Cannot convert '{rawValue}' to Union<{t0.Name},{t1.Name}>");
         }
 
+        /// <summary>
+        /// Attempts to convert a value into the specified target type without throwing on failure.
+        /// </summary>
+        /// <param name="targetType">Desired destination type.</param>
+        /// <param name="rawValue">Raw value to convert.</param>
+        /// <param name="context">Current deployment context.</param>
+        /// <param name="result">Converted value when successful.</param>
+        /// <returns><c>true</c> when conversion succeeds.</returns>
         private bool TryConvertToType(Type targetType, object rawValue, DeploymentContext context, out object? result)
         {
             try
@@ -1586,6 +2011,13 @@ namespace LiveArch.Deployment
             }
         }
 
+        /// <summary>
+        /// Converts a raw value into a strongly typed CLR list.
+        /// </summary>
+        /// <param name="elemType">Element type expected in the resulting list.</param>
+        /// <param name="raw">Raw scalar, string, or enumerable source value.</param>
+        /// <param name="context">Current deployment context.</param>
+        /// <returns>A typed <c>List&lt;T&gt;</c> instance.</returns>
         private object ConvertToList(Type elemType, object raw, DeploymentContext context)
         {
             var list = (IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(elemType))!;
@@ -1612,6 +2044,13 @@ namespace LiveArch.Deployment
             return list;
         }
 
+        /// <summary>
+        /// Converts a raw dictionary into a typed <c>Dictionary&lt;string, T&gt;</c>.
+        /// </summary>
+        /// <param name="elemType">Value type expected in the resulting dictionary.</param>
+        /// <param name="sourceValue">Raw source dictionary.</param>
+        /// <param name="context">Current deployment context.</param>
+        /// <returns>A typed dictionary ready for wrapping into Pulumi inputs.</returns>
         private object ConvertToDictionary(Type elemType, object sourceValue, DeploymentContext context)
         {
             var dict = (IDictionary)Activator.CreateInstance(
