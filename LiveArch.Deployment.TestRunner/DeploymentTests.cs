@@ -7,6 +7,8 @@ using LiveArch.Deployment.ResourceHierarchy;
 using LiveArch.Deployment.ResourceTypes;
 using Pulumi.AzureNative.AppConfiguration;
 using Pulumi.AzureNative.Authorization;
+using Pulumi.AzureNative.DataBoxEdge;
+using Pulumi.AzureNative.ManagedIdentity;
 using Pulumi.AzureNative.Resources;
 using Pulumi.AzureNative.Sql;
 using Pulumi.AzureNative.Storage;
@@ -40,7 +42,6 @@ namespace LiveArch.Deployment.TestRunner
 
         public DeploymentTests()
         {
-            hierarchyRegistry = new ResourceHierarchyBuilder([new AzureResourceHierarchy()]).Registry;
             resourceTypesRegistry = new ResourceTypesRegistry(new[]
             {
                 new ResourceTypesAssemblyMarker(typeof(Image)),
@@ -51,6 +52,7 @@ namespace LiveArch.Deployment.TestRunner
             dockerImageConfig = new DockerImageReferenceConfigurator([
                 new AzureDockerImageReferenceConfigurator()
                 ]);
+            hierarchyRegistry = new ResourceHierarchyBuilder([new AzureResourceHierarchy()], resourceTypesRegistry).Registry;
         }
 
         [Fact]
@@ -228,6 +230,27 @@ namespace LiveArch.Deployment.TestRunner
                 AccessTier = AccessTier.Cool,
                 MinimumTlsVersion = MinimumTlsVersion.TLS1_2
             });
+
+
+            // 🔐 Managed Identity
+            var identity = new UserAssignedIdentity("storage-identity",
+                new UserAssignedIdentityArgs
+                {
+                    ResourceGroupName = "resourceGroup.Name",
+                    Location = "resourceGroup.Location"
+                });
+
+
+            // 🔑 Назначаем роль identity на storage account
+            var roleAssignment = new RoleAssignment("storage-access",
+                new RoleAssignmentArgs
+                {
+                    PrincipalId = identity.PrincipalId,
+                    PrincipalType = Pulumi.AzureNative.Authorization.PrincipalType.ServicePrincipal,
+                    RoleDefinitionId = "ba92f5b4-2d11-453d-a403-e96b0029c9fe",
+                    Scope = sa.Id
+                });
+
 
         }
     }

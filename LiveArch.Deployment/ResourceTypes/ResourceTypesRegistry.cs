@@ -90,5 +90,13 @@ namespace LiveArch.Deployment.ResourceTypes
 
             return null;
         }
+
+        public IReadOnlyCollection<Type> GetAllResourceTypes()
+        {
+            return [
+                .. resourceTypes.Values.Distinct(),
+                .. invokeMethods.Values.Select(m => m.ReturnType.GenericTypeArguments.FirstOrDefault()!).Where(t => t != null).Distinct(),
+            ];
+        }
     }
 }
