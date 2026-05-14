@@ -31,10 +31,11 @@ namespace LiveArch.Deployment
             public List<ResourceScope> ChildScopes { get; } = [];
         }
 
-        private sealed class DeploymentContext(ResourceScope scope, IReadOnlyDictionary<string, object> variables)
+        private sealed class DeploymentContext(ResourceScope scope, IReadOnlyDictionary<string, object> variables, DeploymentNode? loopDeploymentNode = null)
         {
             public ResourceScope Scope { get; } = scope;
             public IReadOnlyDictionary<string, object> Variables { get; } = variables;
+            public DeploymentNode? LoopDeploymentNode { get; } = loopDeploymentNode;
         }
 
         private sealed class WaitingNodeRegistration(
@@ -155,11 +156,16 @@ namespace LiveArch.Deployment
                 dependsOn;
         }
 
-        private bool RequiresDependency(RelationshipAdapter relationship, DeploymentContext context)
+        private bool RequiresNodeDependency(RelationshipAdapter relationship, DeploymentContext context)
+        {
+            return HasMappedDependency(relationship) ||
+                HasExplicitDependency(relationship, context);
+        }
+
+        private bool RequiresRelationshipDependency(RelationshipAdapter relationship, DeploymentContext context)
         {
             return !string.IsNullOrEmpty(relationship.Technology) ||
-                HasMappedDependency(relationship) ||
-                HasExplicitDependency(relationship, context);
+                RequiresNodeDependency(relationship, context);
         }
 
         private async Task ProcessDeploymentNodeAsync(DeploymentNode deployNode, DeploymentContext context, CancellationToken cancellationToken)
@@ -249,6 +255,7 @@ namespace LiveArch.Deployment
                         AddResource(deployNode.Node, context.Scope, resource!, isExistingResource: true);
 
                         await CreateRelationNodesAsync(deployNode, context, cancellationToken);
+                        await CreateIncomingLoopRelationNodesAsync(deployNode, context, cancellationToken);
                         await PostProcessNodeAsync(deployNode, resource, context, cancellationToken);
                         await TryResumeWaitingNodesAsync(deployNode.Node, cancellationToken);
 
@@ -295,6 +302,7 @@ namespace LiveArch.Deployment
                     AddResource(deployNode.Node, context.Scope, newRes!, isExistingResource: false);
 
                     await CreateRelationNodesAsync(deployNode, context, cancellationToken);
+                    await CreateIncomingLoopRelationNodesAsync(deployNode, context, cancellationToken);
                     await PostProcessNodeAsync(deployNode, newRes, context, cancellationToken);
                     await TryResumeWaitingNodesAsync(deployNode.Node, cancellationToken);
 
@@ -322,7 +330,11 @@ namespace LiveArch.Deployment
 
             foreach (var relationship in GetRelationshipAdapters(deployNode))
             {
-                if (!RequiresDependency(relationship, context))
+                var requiresDependency = deployNode is RelationshipAdapter
+                    ? RequiresRelationshipDependency(relationship, context)
+                    : RequiresNodeDependency(relationship, context);
+
+                if (!requiresDependency)
                 {
                     continue;
                 }
@@ -381,6 +393,14 @@ namespace LiveArch.Deployment
         private void RemoveWaitingNode(ResourceKey key)
         {
             waitingNodes.Remove(key);
+        }
+
+        private void RemoveAncestorWaitingNodes(ModelItem node, ResourceScope scope)
+        {
+            for (var currentScope = scope.ParentScope; currentScope != null; currentScope = currentScope.ParentScope)
+            {
+                waitingNodes.Remove(new ResourceKey(node, currentScope.Id));
+            }
         }
 
         private async Task TryResumeWaitingNodesAsync(ModelItem createdNode, CancellationToken cancellationToken)
@@ -461,19 +481,19 @@ namespace LiveArch.Deployment
             {
                 foreach (var item in items)
                 {
-                    var loopContext = CreateChildContext(context.Scope, loop, context.Variables, variables => variables[loop.Name] = item);
+                    var loopContext = CreateChildContext(context.Scope, loop, context.Variables, variables => variables[loop.Name] = item, deploymentNode);
                     await CreateChildResources(deploymentNode,
                         GetInfrastructureNodes(deploymentNode, loopContext, x => x.Technology != ForEachSource.Technology), loopContext, cancellationToken);
                 }
             });
         }
 
-        private DeploymentContext CreateChildContext(ResourceScope parentScope, object ownerResource, IReadOnlyDictionary<string, object> parentVariables, Action<Dictionary<string, object>>? configureVariables = null)
+        private DeploymentContext CreateChildContext(ResourceScope parentScope, object ownerResource, IReadOnlyDictionary<string, object> parentVariables, Action<Dictionary<string, object>>? configureVariables = null, DeploymentNode? loopDeploymentNode = null)
         {
             var scope = CreateScope(parentScope, ownerResource);
             var variables = new Dictionary<string, object>(parentVariables);
             configureVariables?.Invoke(variables);
-            return CreateDeploymentContext(scope, variables);
+            return CreateDeploymentContext(scope, variables, loopDeploymentNode);
         }
 
         private IReadOnlyCollection<InfrastructureNodeAdapter> GetInfrastructureNodes(DeploymentNode deploymentNode, DeploymentContext context, Func<InfrastructureNode, bool>? predicate = null)
@@ -511,11 +531,80 @@ namespace LiveArch.Deployment
             if (deployNode is not RelationshipAdapter)
             {
                 foreach (var relNode in GetRelationshipAdapters(deployNode)
-                    .Where(relationship => !string.IsNullOrEmpty(relationship.Technology)))
+                    .Where(relationship => !string.IsNullOrEmpty(relationship.Technology))
+                    .Where(relationship => ShouldCreateRelationInCurrentScope(relationship) == false))
                 {
                     await CreateNodeAsync(relNode, context, cancellationToken);
                 }
             }
+        }
+
+        private async Task CreateIncomingLoopRelationNodesAsync(IDeploymentAdapter deployNode, DeploymentContext context, CancellationToken cancellationToken)
+        {
+            if (context.LoopDeploymentNode == null || deployNode is RelationshipAdapter)
+            {
+                return;
+            }
+
+            foreach (var relNode in GetIncomingLoopRelationshipAdapters(deployNode, context))
+            {
+                await CreateNodeAsync(relNode, context, cancellationToken);
+                RemoveAncestorWaitingNodes(relNode.Node, context.Scope);
+            }
+        }
+
+        private IEnumerable<RelationshipAdapter> GetIncomingLoopRelationshipAdapters(IDeploymentAdapter deployNode, DeploymentContext context)
+        {
+            if (context.LoopDeploymentNode == null || deployNode.Node is not Element element)
+            {
+                return Array.Empty<RelationshipAdapter>();
+            }
+
+            return workspace.Model.Relationships
+                .Where(relationship =>
+                    ReferenceEquals(relationship.Destination, element) &&
+                    !IsDescendantOf(relationship.Source, context.LoopDeploymentNode))
+                .Select(relationship => new RelationshipAdapter(relationship, SubstituteVariables(context)))
+                .Where(relationship => !relationship.IsDisabled && !string.IsNullOrEmpty(relationship.Technology))
+                .In(deploymentView);
+        }
+
+        private static bool IsDescendantOf(Element element, DeploymentNode ancestor)
+        {
+            for (Element? current = element; current != null; current = current.Parent)
+            {
+                if (ReferenceEquals(current, ancestor))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool ShouldCreateRelationInCurrentScope(RelationshipAdapter relationship)
+        {
+            var relation = (Relationship)relationship.Node;
+            if (relation.Source is not Element source || relation.Destination is not Element destination)
+            {
+                return false;
+            }
+
+            var loopAncestor = GetLoopAncestor(destination);
+            return loopAncestor != null && !IsDescendantOf(source, loopAncestor);
+        }
+
+        private static DeploymentNode? GetLoopAncestor(Element element)
+        {
+            for (Element? current = element; current != null; current = current.Parent)
+            {
+                if (current is DeploymentNode deploymentNode && deploymentNode.Technology == ForEachLoop.Technology)
+                {
+                    return deploymentNode;
+                }
+            }
+
+            return null;
         }
 
         private void ApplyRelations(IDeploymentAdapter deployNode, object param, DeploymentContext context)
@@ -523,8 +612,9 @@ namespace LiveArch.Deployment
             foreach (var relationship in GetRelationshipAdapters(deployNode))
             {
                 var relation = (Relationship)relationship.Node;
-                if (TryGetResourceByNode(relation.Destination, context, out var source) &&
-                    relationship.Properties.TryGetValue("source", out var sourcePath) && relationship.Properties.TryGetValue("target", out var targetPath))
+                if (relationship.Properties.TryGetValue("source", out var sourcePath) &&
+                    relationship.Properties.TryGetValue("target", out var targetPath) &&
+                    TryGetResourceByNode(relation.Destination, context, out var source))
                 {
                     ApplyDependency(source!, param, sourcePath, targetPath, context, GetTransformers(new Dictionary<string, string>(relationship.Properties)));
                 }
@@ -609,14 +699,14 @@ namespace LiveArch.Deployment
             return createdScope;
         }
 
-        private static DeploymentContext CreateDeploymentContext(ResourceScope scope, IReadOnlyDictionary<string, object> variables)
+        private static DeploymentContext CreateDeploymentContext(ResourceScope scope, IReadOnlyDictionary<string, object> variables, DeploymentNode? loopDeploymentNode = null)
         {
             var contextVariables = new Dictionary<string, object>(variables)
             {
                 ["level"] = scope.Level
             };
 
-            return new DeploymentContext(scope, contextVariables);
+            return new DeploymentContext(scope, contextVariables, loopDeploymentNode);
         }
 
         private void AddResource(ModelItem node, ResourceScope scope, object resource, bool isExistingResource)

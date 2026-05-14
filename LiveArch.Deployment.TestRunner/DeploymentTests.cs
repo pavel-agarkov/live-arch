@@ -130,6 +130,22 @@ namespace LiveArch.Deployment.TestRunner
             loopScopes.Should().OnlyContain(scope => scope.CreatedResources.Count + scope.ReferencedResources.Count == expectedElementsPerScope);
         }
 
+        [Theory]
+        [InlineData("sa1", 1)]
+        [InlineData("sa1, sa2, sa3", 3)]
+        [InlineData("", 0)]
+        public async Task ShouldRepeatIncomingRelationshipResourcesInsideLoopScopes(string storageAccounts, int expectedRoleAssignments)
+        {
+            testMocks.AddGetResourceMock<GetKeyValueArgs>(typeof(GetKeyValue), _ => new Dictionary<string, object>
+            {
+                ["value"] = storageAccounts,
+            });
+
+            var ws = await ProcessDeployment("order-env");
+
+            ws.CreatedResources.Values.OfType<RoleAssignment>().Should().HaveCount(expectedRoleAssignments);
+        }
+
         private async Task<StructurizrComponent> ProcessDeployment(string deployment)
         {
             var ws = new StructurizrComponent("workspace.json", "prod", deployment, variables,
