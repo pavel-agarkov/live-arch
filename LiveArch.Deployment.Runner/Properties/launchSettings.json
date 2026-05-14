@@ -1,7 +1,7 @@
 ﻿{
   "$schema": "https://json.schemastore.org/launchsettings.json",
   "profiles": {
-    "Pulumi Preview": {
+    "Sandbox Preview": {
       "commandName": "Project",
       "dotnetRunMessages": true,
       "environmentVariables": {
@@ -13,7 +13,7 @@
         "PULUMI_COMMAND": "preview"
       }
     },
-    "Pulumi Up": {
+    "Sandbox Up": {
       "commandName": "Project",
       "dotnetRunMessages": true,
       "environmentVariables": {
@@ -25,7 +25,7 @@
         "PULUMI_COMMAND": "up"
       }
     },
-    "Pulumi Destroy": {
+    "Sandbox Destroy": {
       "commandName": "Project",
       "dotnetRunMessages": true,
       "environmentVariables": {

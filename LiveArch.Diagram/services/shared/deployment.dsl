@@ -91,7 +91,7 @@ sandbox = deploymentNode "Sandbox" {
         properties {
             resourceName   test-tatra-mi
         }
-        -> testSa "✏️ Contribute" "azure-native:authorization:RoleAssignment" {
+        -> testSa "Contribute" "azure-native:authorization:RoleAssignment" {
             properties {
                 principalType ServicePrincipal
                 roleDefinitionId "ba92f5b4-2d11-453d-a403-e96b0029c9fe"
