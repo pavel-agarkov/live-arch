@@ -47,18 +47,41 @@ h3 {
 
 # Intro
 
--   
--   
-- 
--   
-- 
+- this is a personal engineering story
+- I am sharing a way I tried to solve real problems
+- I am not trying to sell any specific technology
+- I am not claiming this is the only right approach
+- I hope parts of it may still be useful to others
 
 <!--
-  presenter comments
+Today I want to share my experience of solving a set of problems that were standing in front of me.
+
+This talk is not a sales pitch for Structurizr, Pulumi, or for my own solution.
+I am also not trying to claim that everyone should copy this approach exactly as it is.
+
+What I want to do is much simpler.
+I want to show:
+- what problems I was trying to solve
+- why the usual approaches were not enough for me
+- what kind of solution I ended up building
+- and which parts of that experience might still be useful for others
+
+So the right way to listen to this talk is not: "should we adopt this exact stack tomorrow?"
+The better question is: "is there anything in this approach that can help reduce the gap between architecture and delivery in our own context?"
+
+That is the frame for the rest of the talk.
 -->
 
 ---
-src: ./sections/1.section.md
+src: ./sections/1.problem.md
+---
+
+---
+src: ./sections/2.why.md
+---
+
+---
+src: ./sections/3.goals.md
 ---
 
 ---
