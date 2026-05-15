@@ -24,23 +24,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
       - uses: actions/setup-node@v4
         with:
           node-version: 'lts/*'
-          cache: pnpm
-          cache-dependency-path: slides/pnpm-lock.yaml
+
+      - name: Setup @antfu/ni
+        run: npm i -g @antfu/ni
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: nci
 
       - name: Build
-        env:
-          SLIDEV_BASE: /${{ github.event.repository.name }}/
-        run: pnpm run build -- --base "$SLIDEV_BASE"
+        run: nr build
 
       - name: Copy images
         run: cp -r images dist/images
@@ -50,7 +45,7 @@ jobs:
 
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: slides/dist
+          path: dist
 
   deploy:
     environment:

@@ -1,9 +1,9 @@
 {
-  "name": "tech-scam",
+  "name": "live-arch",
   "type": "module",
   "private": true,
   "scripts": {
-    "build": "slidev build --out dist",
+    "build": "slidev build --base /live-arch/ --out dist",
     "dev": "slidev --open",
     "export": "slidev export"
   },
