@@ -17,6 +17,9 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: slides
 
     steps:
       - uses: actions/checkout@v4
@@ -24,15 +27,19 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 'lts/*'
+          cache: pnpm
+          cache-dependency-path: slides/pnpm-lock.yaml
 
-      - name: Setup @antfu/ni
-        run: npm i -g @antfu/ni
+      - name: Enable Corepack
+        run: corepack enable
 
       - name: Install dependencies
-        run: nci
+        run: pnpm install --frozen-lockfile
 
       - name: Build
-        run: nr build
+        env:
+          SLIDEV_BASE: /${{ github.event.repository.name }}/
+        run: pnpm run build -- --base "$SLIDEV_BASE"
 
       - name: Copy images
         run: cp -r images dist/images
@@ -42,7 +49,7 @@ jobs:
 
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: dist
+          path: slides/dist
 
   deploy:
     environment:
