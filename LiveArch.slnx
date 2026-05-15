@@ -13,6 +13,7 @@
     <Project Path="LiveArch.Deployment/LiveArch.Deployment.csproj" />
   </Folder>
   <Folder Name="/Solution Items/">
+    <File Path=".github/workflows/deploy.yml" />
     <File Path=".gitignore" />
     <File Path="LICENSE" />
     <File Path="README.md" />
