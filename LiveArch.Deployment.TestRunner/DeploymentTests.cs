@@ -179,7 +179,7 @@ namespace LiveArch.Deployment.TestRunner
                 : GetDescendantScopes(scope).Single(childScope => childScope.Id == scopeId);
         }
 
-        public static void TestCases()
+        public static async Task TestCases()
         {
             var app = new WebApp("demo-app", new WebAppArgs
             {
@@ -267,6 +267,24 @@ namespace LiveArch.Deployment.TestRunner
                     Scope = sa.Id
                 });
 
+            var sbNs = await Pulumi.AzureNative.ServiceBus.GetNamespace.InvokeAsync(new Pulumi.AzureNative.ServiceBus.GetNamespaceArgs
+            {
+                NamespaceName = "",
+                ResourceGroupName = ""
+             });
+             var sbTopic = new Pulumi.AzureNative.ServiceBus.Topic("sb-topic", new Pulumi.AzureNative.ServiceBus.TopicArgs
+             {
+                 TopicName = "",
+                 NamespaceName = sbNs.ServiceBusEndpoint,
+                 ResourceGroupName = ""
+             });
+             var sbSub = new Pulumi.AzureNative.ServiceBus.Subscription("sb-subscription", new Pulumi.AzureNative.ServiceBus.SubscriptionArgs
+             {
+                 SubscriptionName = "",
+                 TopicName = sbTopic.Name,
+                 NamespaceName = sbNs.Name,
+                 ResourceGroupName = ""
+              });
 
         }
     }
