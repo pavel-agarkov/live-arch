@@ -1,0 +1,26 @@
+graph LR
+  linkStyle default fill:#ffffff
+
+  subgraph diagram ["Container View: Delivery Microservice"]
+    style diagram fill:#ffffff,stroke:#ffffff
+
+    1["<div style='font-weight: bold'>Message Broker</div><div style='font-size: 70%; margin-top: 0px'>[Software System]</div>"]
+    style 1 fill:#ffffff,stroke:#444444,color:#444444
+
+    subgraph 19 ["Delivery Microservice"]
+      style 19 fill:#ffffff,stroke:#444444,color:#444444
+
+      20["<div style='font-weight: bold'>Delivery Database</div><div style='font-size: 70%; margin-top: 0px'>[Container: azure-native:sql:Database]</div>"]
+      style 20 fill:#ffffff,stroke:#444444,color:#444444
+      21["<div style='font-weight: bold'>Delivery API</div><div style='font-size: 70%; margin-top: 0px'>[Container: azure-native:web:WebApp]</div>"]
+      style 21 fill:#ffffff,stroke:#444444,color:#444444
+      27["<div style='font-weight: bold'>Delivery Worker</div><div style='font-size: 70%; margin-top: 0px'>[Container: azure-native:web:WebApp]</div>"]
+      style 27 fill:#ffffff,stroke:#444444,color:#444444
+    end
+
+    21-. "<div>uses</div><div style='font-size: 70%'></div>" .->20
+    21-. "<div>publish Delivery Events</div><div style='font-size: 70%'></div>" .->1
+    27-. "<div>uses</div><div style='font-size: 70%'></div>" .->20
+    27-. "<div>consume Order Placed Message</div><div style='font-size: 70%'>[azurela:servicebus:ReadableSubscription]</div>" .->1
+
+  end

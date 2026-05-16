@@ -1,0 +1,21 @@
+graph LR
+  linkStyle default fill:#ffffff
+
+  subgraph diagram ["Deployment View: ${ENV}"]
+    style diagram fill:#ffffff,stroke:#ffffff
+
+    subgraph 36 ["Shared Resource Group Reference"]
+      style 36 fill:#ffffff,stroke:#444444,color:#444444
+
+      subgraph 37 ["Service Bus Namespace"]
+        style 37 fill:#ffffff,stroke:#444444,color:#444444
+
+        38["<div style='font-weight: bold'>Order Events</div><div style='font-size: 70%; margin-top: 0px'>[Container: azure-native:servicebus:getTopic]</div>"]
+        style 38 fill:#ffffff,stroke:#444444,color:#444444
+        39["<div style='font-weight: bold'>Delivery Events</div><div style='font-size: 70%; margin-top: 0px'>[Container: azure-native:servicebus:getTopic]</div>"]
+        style 39 fill:#ffffff,stroke:#444444,color:#444444
+      end
+
+    end
+
+  end

@@ -1,0 +1,72 @@
+graph LR
+  linkStyle default fill:#ffffff
+
+  subgraph diagram ["Deployment View: ${ENV}"]
+    style diagram fill:#ffffff,stroke:#ffffff
+
+    subgraph 36 ["Shared Resource Group Reference"]
+      style 36 fill:#ffffff,stroke:#444444,color:#444444
+
+      subgraph 37 ["Service Bus Namespace"]
+        style 37 fill:#ffffff,stroke:#444444,color:#444444
+
+        38["<div style='font-weight: bold'>Order Events</div><div style='font-size: 70%; margin-top: 0px'>[Container: azure-native:servicebus:getTopic]</div>"]
+        style 38 fill:#ffffff,stroke:#444444,color:#444444
+        39["<div style='font-weight: bold'>Delivery Events</div><div style='font-size: 70%; margin-top: 0px'>[Container: azure-native:servicebus:getTopic]</div>"]
+        style 39 fill:#ffffff,stroke:#444444,color:#444444
+      end
+
+    end
+
+    subgraph 70 ["Delivery Resource Group"]
+      style 70 fill:#ffffff,stroke:#444444,color:#444444
+
+      subgraph 71 ["SQL Server Registration"]
+        style 71 fill:#ffffff,stroke:#444444,color:#444444
+
+        subgraph 72 ["SQL Server"]
+          style 72 fill:#ffffff,stroke:#444444,color:#444444
+
+          subgraph 73 ["Elastic Pool"]
+            style 73 fill:#ffffff,stroke:#444444,color:#444444
+
+            74["<div style='font-weight: bold'>Delivery Database</div><div style='font-size: 70%; margin-top: 0px'>[Container: azure-native:sql:Database]</div>"]
+            style 74 fill:#ffffff,stroke:#444444,color:#444444
+          end
+
+        end
+
+      end
+
+      75["<div style='font-weight: bold'>Key Vault</div><div style='font-size: 70%; margin-top: 0px'>[Infrastructure Node: azure-native:keyvault:getVault]</div>"]
+      style 75 fill:#ffffff,stroke:#444444,color:#444444
+      76["<div style='font-weight: bold'>Managed Identity</div><div style='font-size: 70%; margin-top: 0px'>[Infrastructure Node: azure-native:managedidentity:UserAssignedIdentity]</div>"]
+      style 76 fill:#ffffff,stroke:#444444,color:#444444
+      77["<div style='font-weight: bold'>Key Vault Access Policy</div><div style='font-size: 70%; margin-top: 0px'>[Infrastructure Node: azure-native:keyvault:AccessPolicy]</div>"]
+      style 77 fill:#ffffff,stroke:#444444,color:#444444
+      subgraph 80 ["Virtual Network"]
+        style 80 fill:#ffffff,stroke:#444444,color:#444444
+
+        subgraph 81 ["App Service Plan"]
+          style 81 fill:#ffffff,stroke:#444444,color:#444444
+
+          82["<div style='font-weight: bold'>Delivery API</div><div style='font-size: 70%; margin-top: 0px'>[Container: azure-native:web:WebApp]</div>"]
+          style 82 fill:#ffffff,stroke:#444444,color:#444444
+          86["<div style='font-weight: bold'>Delivery Worker</div><div style='font-size: 70%; margin-top: 0px'>[Container: azure-native:web:WebApp]</div>"]
+          style 86 fill:#ffffff,stroke:#444444,color:#444444
+        end
+
+      end
+
+    end
+
+    77-. "<div>principal</div><div style='font-size: 70%'></div>" .->76
+    77-. "<div>vault</div><div style='font-size: 70%'></div>" .->75
+    82-. "<div>publish Delivery Events</div><div style='font-size: 70%'></div>" .->39
+    82-. "<div>uses</div><div style='font-size: 70%'></div>" .->74
+    82-. "<div>identity</div><div style='font-size: 70%'></div>" .->76
+    86-. "<div>consume Order Placed Message</div><div style='font-size: 70%'>[azurela:servicebus:ReadableSubscription]</div>" .->38
+    86-. "<div>uses</div><div style='font-size: 70%'></div>" .->74
+    86-. "<div>identity</div><div style='font-size: 70%'></div>" .->76
+
+  end

@@ -1,0 +1,26 @@
+graph LR
+  linkStyle default fill:#ffffff
+
+  subgraph diagram ["Container View: Message Broker"]
+    style diagram fill:#ffffff,stroke:#ffffff
+
+    6["<div style='font-weight: bold'>Order Microservice</div><div style='font-size: 70%; margin-top: 0px'>[Software System]</div>"]
+    style 6 fill:#ffffff,stroke:#444444,color:#444444
+    19["<div style='font-weight: bold'>Delivery Microservice</div><div style='font-size: 70%; margin-top: 0px'>[Software System]</div>"]
+    style 19 fill:#ffffff,stroke:#444444,color:#444444
+
+    subgraph 1 ["Message Broker"]
+      style 1 fill:#ffffff,stroke:#444444,color:#444444
+
+      2["<div style='font-weight: bold'>Order Events</div><div style='font-size: 70%; margin-top: 0px'>[Container: azure-native:servicebus:getTopic]</div>"]
+      style 2 fill:#ffffff,stroke:#444444,color:#444444
+      4["<div style='font-weight: bold'>Delivery Events</div><div style='font-size: 70%; margin-top: 0px'>[Container: azure-native:servicebus:getTopic]</div>"]
+      style 4 fill:#ffffff,stroke:#444444,color:#444444
+    end
+
+    6-. "<div>publish Order Placed Message</div><div style='font-size: 70%'></div>" .->2
+    6-. "<div>consume Delivery Completed<br />Message</div><div style='font-size: 70%'>[azurela:servicebus:ReadableSubscription]</div>" .->4
+    19-. "<div>publish Delivery Events</div><div style='font-size: 70%'></div>" .->4
+    19-. "<div>consume Order Placed Message</div><div style='font-size: 70%'>[azurela:servicebus:ReadableSubscription]</div>" .->2
+
+  end

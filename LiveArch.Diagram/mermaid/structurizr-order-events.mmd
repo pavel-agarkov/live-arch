@@ -1,0 +1,19 @@
+graph LR
+  linkStyle default fill:#ffffff
+
+  subgraph diagram ["Component View: Message Broker - Order Events"]
+    style diagram fill:#ffffff,stroke:#ffffff
+
+    subgraph 1 ["Message Broker"]
+      style 1 fill:#ffffff,stroke:#444444,color:#444444
+
+      subgraph 2 ["Order Events"]
+        style 2 fill:#ffffff,stroke:#444444,color:#444444
+
+        3["<div style='font-weight: bold'>Order Placed Message</div><div style='font-size: 70%; margin-top: 0px'>[Component: message]</div>"]
+        style 3 fill:#ffffff,stroke:#444444,color:#444444
+      end
+
+    end
+
+  end
