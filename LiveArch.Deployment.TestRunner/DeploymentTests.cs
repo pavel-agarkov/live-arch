@@ -201,6 +201,14 @@ namespace LiveArch.Deployment.TestRunner
                         //new NameValuePairArgs { Name = "DOCKER_REGISTRY_SERVER_USERNAME", Value = username },
                         //new NameValuePairArgs { Name = "DOCKER_REGISTRY_SERVER_PASSWORD", Value = password },
                     },
+                    ConnectionStrings = {
+                        new ConnStringInfoArgs
+                        {
+                            Name = "my-db-conn-string",
+                            ConnectionString = "Server=tcp:myserver.database.windows.net,1433;Initial Catalog=mydb;Persist Security Info=False;User ID=myuser;Password=mypassword;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;",
+                            Type = ConnectionStringType.SQLAzure
+                        }
+                    },
                     Cors = new CorsSettingsArgs
                     {
                         //AllowedOrigins = 
@@ -232,6 +240,7 @@ namespace LiveArch.Deployment.TestRunner
                 ServerName = "",
                 ResourceGroupName = ""
             });
+
 
             var sa = new Pulumi.AzureNative.Storage.StorageAccount("", new Pulumi.AzureNative.Storage.StorageAccountArgs
             {

@@ -1445,8 +1445,8 @@ namespace LiveArch.Deployment
                 ?? throw new InvalidOperationException($"{itemType.Name} must contain Name or Key property");
 
             // Ищем Value
-            var valueProp = itemType.GetProperty("Value")
-                ?? throw new InvalidOperationException($"{itemType.Name} must contain Value property");
+            var valueProp = itemType.GetProperty("Value")?? itemType.GetProperty("ConnectionString")
+                ?? throw new InvalidOperationException($"{itemType.Name} must contain Value or ConnectionString property");
 
             // Конвертируем значение
             var convertedValue = ConvertValue(valueProp.PropertyType, value, context);
