@@ -33,7 +33,7 @@ group "Delivery" {
                 properties {
                     source  "name"
                     target  "siteConfig.connectionStrings:DefaultConnection"
-                    format  "Server=tcp:servername.database.windows.net,1433;Initial Catalog={0};"
+                    format  "Server=tcp:${SQL_SERVER_NAME}.database.windows.net,1433;Initial Catalog={0};"
                 }
             }
             -> orderEventsTopic "subscribe to Order Placed Message" "azurela:servicebus:ReadableSubscription" {

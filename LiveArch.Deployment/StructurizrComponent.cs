@@ -688,15 +688,19 @@ namespace LiveArch.Deployment
         /// </summary>
         /// <param name="properties">Relationship properties that may declare transformer arguments.</param>
         /// <returns>The instantiated transformer pipeline.</returns>
-        private IReadOnlyCollection<ITransformer> GetTransformers(Dictionary<string, string> properties)
+        private IReadOnlyCollection<ITransformer> GetTransformers(Dictionary<string, string> properties, DeploymentContext context)
         {
             var transformers = new List<ITransformer>();
             foreach ((var name, var get) in TransformerRegistry.Registry)
             {
                 if (properties.TryGetValue(name, out var param))
                 {
-                    var transformer = get(param);
-                    transformers.Add(transformer);
+                    var paramValue = SubstituteVariables(param, context);
+                    if (paramValue is string paramStr)
+                    {
+                        var transformer = get(paramStr);
+                        transformers.Add(transformer);
+                    }
                 }
             }
             return transformers;
@@ -838,7 +842,7 @@ namespace LiveArch.Deployment
                     relationship.Properties.TryGetValue("target", out var targetPath) &&
                     TryGetResourceByNode(relation.Destination, context, out var source))
                 {
-                    ApplyDependency(source!, param, sourcePath, targetPath, context, GetTransformers(new Dictionary<string, string>(relationship.Properties)));
+                    ApplyDependency(source!, param, sourcePath, targetPath, context, GetTransformers(new Dictionary<string, string>(relationship.Properties), context));
                 }
             }
 
@@ -1445,7 +1449,7 @@ namespace LiveArch.Deployment
                 ?? throw new InvalidOperationException($"{itemType.Name} must contain Name or Key property");
 
             // Ищем Value
-            var valueProp = itemType.GetProperty("Value")?? itemType.GetProperty("ConnectionString")
+            var valueProp = itemType.GetProperty("Value") ?? itemType.GetProperty("ConnectionString")
                 ?? throw new InvalidOperationException($"{itemType.Name} must contain Value or ConnectionString property");
 
             // Конвертируем значение
@@ -1609,6 +1613,15 @@ namespace LiveArch.Deployment
                     var innerTargetType = targetType.GetGenericArguments()[0];
                     CheckGenericArguments(targetType, sourceType, innerTargetType);
                     return ConvertOutputToInputList(innerTargetType, sourceValue);
+                }
+
+                // target is primitive or enum – пытаемся распаковать Output<T> → T и конвертировать
+                if (targetType == typeof(string) || targetType == typeof(int) || targetType == typeof(bool))
+                {
+                    if (sourceValue is IOutput output)
+                    {
+                        return output.UntypedApply(v => ConvertValue(targetType, v!, context));
+                    }
                 }
             }
 
