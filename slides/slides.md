@@ -85,6 +85,10 @@ src: ./sections/3.goals.md
 ---
 
 ---
+src: ./sections/4.structurizr.md
+---
+
+---
 
 # Thank You!
 
