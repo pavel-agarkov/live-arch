@@ -1,4 +1,4 @@
-graph LR
+graph TB
   linkStyle default fill:#ffffff
 
   subgraph diagram ["System Landscape View"]
@@ -14,14 +14,18 @@ graph LR
     subgraph group2 ["Ordering"]
       style group2 fill:#ffffff,stroke:#cccccc,color:#cccccc,stroke-dasharray:5
 
-      6["<div style='font-weight: bold'>Order Microservice</div><div style='font-size: 70%; margin-top: 0px'>[Software System]</div>"]
-      style 6 fill:#ffffff,stroke:#444444,color:#444444
+      5["<div style='font-weight: bold'>Order Microservice</div><div style='font-size: 70%; margin-top: 0px'>[Software System]</div>"]
+      style 5 fill:#ffffff,stroke:#444444,color:#444444
     end
 
-    1["<div style='font-weight: bold'>Message Broker</div><div style='font-size: 70%; margin-top: 0px'>[Software System]</div>"]
+    1["<div style='font-weight: bold'>Order Messaging System</div><div style='font-size: 70%; margin-top: 0px'>[Software System]</div>"]
     style 1 fill:#ffffff,stroke:#444444,color:#444444
+    3["<div style='font-weight: bold'>Delivery Messaging System</div><div style='font-size: 70%; margin-top: 0px'>[Software System]</div>"]
+    style 3 fill:#ffffff,stroke:#444444,color:#444444
 
-    6-. "<div>publish Order Placed Message</div><div style='font-size: 70%'></div>" .->1
-    19-. "<div>publish Delivery Events</div><div style='font-size: 70%'></div>" .->1
+    5-. "<div>publish Order Placed Message</div><div style='font-size: 70%'></div>" .->1
+    5-. "<div>subscribe to Delivery<br />Completed Message</div><div style='font-size: 70%'>[azurela:servicebus:ReadableSubscription]</div>" .->3
+    19-. "<div>publish Delivery Events</div><div style='font-size: 70%'></div>" .->3
+    19-. "<div>subscribe to Order Placed<br />Message</div><div style='font-size: 70%'>[azurela:servicebus:ReadableSubscription]</div>" .->1
 
   end

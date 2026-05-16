@@ -4,16 +4,16 @@ graph LR
   subgraph diagram ["Deployment View: ${ENV}"]
     style diagram fill:#ffffff,stroke:#ffffff
 
-    subgraph 32 ["Shared Resource Group"]
-      style 32 fill:#ffffff,stroke:#444444,color:#444444
+    subgraph 33 ["Shared Resource Group"]
+      style 33 fill:#ffffff,stroke:#444444,color:#444444
 
-      subgraph 33 ["Service Bus Namespace"]
-        style 33 fill:#ffffff,stroke:#444444,color:#444444
-
-        34["<div style='font-weight: bold'>Order Events Topic</div><div style='font-size: 70%; margin-top: 0px'>[Infrastructure Node: azure-native:servicebus:Topic]</div>"]
+      subgraph 34 ["Service Bus Namespace"]
         style 34 fill:#ffffff,stroke:#444444,color:#444444
-        35["<div style='font-weight: bold'>Delivery Events Topic</div><div style='font-size: 70%; margin-top: 0px'>[Infrastructure Node: azure-native:servicebus:Topic]</div>"]
+
+        35["<div style='font-weight: bold'>Order Events Topic</div><div style='font-size: 70%; margin-top: 0px'>[Infrastructure Node: azure-native:servicebus:Topic]</div>"]
         style 35 fill:#ffffff,stroke:#444444,color:#444444
+        36["<div style='font-weight: bold'>Delivery Events Topic</div><div style='font-size: 70%; margin-top: 0px'>[Infrastructure Node: azure-native:servicebus:Topic]</div>"]
+        style 36 fill:#ffffff,stroke:#444444,color:#444444
       end
 
     end

@@ -34,7 +34,7 @@ group "Ordering" {
                     dependsOn true
                 }
             }
-            -> deliveryEventsTopic "consume Delivery Completed Message" "azurela:servicebus:ReadableSubscription" {
+            -> deliveryEventsTopic "subscribe to Delivery Completed Message" "azurela:servicebus:ReadableSubscription" {
                 properties {
                     var "order-worker-subscription-to-delivery-events-topic"
                     subscriptionName   "${ENV}-order-worker-subscription-to-delivery-events-topic"

@@ -30,7 +30,7 @@ group "Delivery" {
                 push "true"
             }
             -> deliveryDb "uses"
-            -> orderEventsTopic "consume Order Placed Message" "azurela:servicebus:ReadableSubscription" {
+            -> orderEventsTopic "subscribe to Order Placed Message" "azurela:servicebus:ReadableSubscription" {
                 properties {
                     var "delivery-worker-subscription-to-order-events-topic"
                     subscriptionName   "${ENV}-delivery-worker-subscription-to-order-events-topic"

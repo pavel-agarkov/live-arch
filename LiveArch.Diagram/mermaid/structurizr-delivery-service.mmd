@@ -1,11 +1,13 @@
-graph LR
+graph TB
   linkStyle default fill:#ffffff
 
   subgraph diagram ["Container View: Delivery Microservice"]
     style diagram fill:#ffffff,stroke:#ffffff
 
-    1["<div style='font-weight: bold'>Message Broker</div><div style='font-size: 70%; margin-top: 0px'>[Software System]</div>"]
+    1["<div style='font-weight: bold'>Order Messaging System</div><div style='font-size: 70%; margin-top: 0px'>[Software System]</div>"]
     style 1 fill:#ffffff,stroke:#444444,color:#444444
+    3["<div style='font-weight: bold'>Delivery Messaging System</div><div style='font-size: 70%; margin-top: 0px'>[Software System]</div>"]
+    style 3 fill:#ffffff,stroke:#444444,color:#444444
 
     subgraph 19 ["Delivery Microservice"]
       style 19 fill:#ffffff,stroke:#444444,color:#444444
@@ -19,8 +21,8 @@ graph LR
     end
 
     21-. "<div>uses</div><div style='font-size: 70%'></div>" .->20
-    21-. "<div>publish Delivery Events</div><div style='font-size: 70%'></div>" .->1
+    21-. "<div>publish Delivery Events</div><div style='font-size: 70%'></div>" .->3
     27-. "<div>uses</div><div style='font-size: 70%'></div>" .->20
-    27-. "<div>consume Order Placed Message</div><div style='font-size: 70%'>[azurela:servicebus:ReadableSubscription]</div>" .->1
+    27-. "<div>subscribe to Order Placed<br />Message</div><div style='font-size: 70%'>[azurela:servicebus:ReadableSubscription]</div>" .->1
 
   end

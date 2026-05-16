@@ -4,15 +4,15 @@ graph LR
   subgraph diagram ["Deployment View: ${ENV}"]
     style diagram fill:#ffffff,stroke:#ffffff
 
-    subgraph 40 ["Sandbox"]
-      style 40 fill:#ffffff,stroke:#444444,color:#444444
-
-      41["<div style='font-weight: bold'>Test Storage Account</div><div style='font-size: 70%; margin-top: 0px'>[Infrastructure Node: azure-native:storage:StorageAccount]</div>"]
+    subgraph 41 ["Sandbox"]
       style 41 fill:#ffffff,stroke:#444444,color:#444444
-      42["<div style='font-weight: bold'>Test Managed Identity</div><div style='font-size: 70%; margin-top: 0px'>[Infrastructure Node: azure-native:managedidentity:UserAssignedIdentity]</div>"]
+
+      42["<div style='font-weight: bold'>Test Storage Account</div><div style='font-size: 70%; margin-top: 0px'>[Infrastructure Node: azure-native:storage:StorageAccount]</div>"]
       style 42 fill:#ffffff,stroke:#444444,color:#444444
+      43["<div style='font-weight: bold'>Test Managed Identity</div><div style='font-size: 70%; margin-top: 0px'>[Infrastructure Node: azure-native:managedidentity:UserAssignedIdentity]</div>"]
+      style 43 fill:#ffffff,stroke:#444444,color:#444444
     end
 
-    42-. "<div>Contribute</div><div style='font-size: 70%'>[azure-native:authorization:RoleAssignment]</div>" .->41
+    43-. "<div>Contribute</div><div style='font-size: 70%'>[azure-native:authorization:RoleAssignment]</div>" .->42
 
   end

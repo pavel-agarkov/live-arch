@@ -4,23 +4,25 @@ graph LR
   subgraph diagram ["Container View: Order Microservice"]
     style diagram fill:#ffffff,stroke:#ffffff
 
-    1["<div style='font-weight: bold'>Message Broker</div><div style='font-size: 70%; margin-top: 0px'>[Software System]</div>"]
+    1["<div style='font-weight: bold'>Order Messaging System</div><div style='font-size: 70%; margin-top: 0px'>[Software System]</div>"]
     style 1 fill:#ffffff,stroke:#444444,color:#444444
+    3["<div style='font-weight: bold'>Delivery Messaging System</div><div style='font-size: 70%; margin-top: 0px'>[Software System]</div>"]
+    style 3 fill:#ffffff,stroke:#444444,color:#444444
 
-    subgraph 6 ["Order Microservice"]
+    subgraph 5 ["Order Microservice"]
+      style 5 fill:#ffffff,stroke:#444444,color:#444444
+
+      13["<div style='font-weight: bold'>Order Worker</div><div style='font-size: 70%; margin-top: 0px'>[Container: azure-native:web:WebApp]</div>"]
+      style 13 fill:#ffffff,stroke:#444444,color:#444444
+      6["<div style='font-weight: bold'>Order Database</div><div style='font-size: 70%; margin-top: 0px'>[Container: azure-native:sql:Database]</div>"]
       style 6 fill:#ffffff,stroke:#444444,color:#444444
-
-      14["<div style='font-weight: bold'>Order Worker</div><div style='font-size: 70%; margin-top: 0px'>[Container: azure-native:web:WebApp]</div>"]
-      style 14 fill:#ffffff,stroke:#444444,color:#444444
-      7["<div style='font-weight: bold'>Order Database</div><div style='font-size: 70%; margin-top: 0px'>[Container: azure-native:sql:Database]</div>"]
+      7["<div style='font-weight: bold'>Order API</div><div style='font-size: 70%; margin-top: 0px'>[Container: azure-native:web:WebApp]</div>"]
       style 7 fill:#ffffff,stroke:#444444,color:#444444
-      8["<div style='font-weight: bold'>Order API</div><div style='font-size: 70%; margin-top: 0px'>[Container: azure-native:web:WebApp]</div>"]
-      style 8 fill:#ffffff,stroke:#444444,color:#444444
     end
 
-    8-. "<div>publish Order Placed Message</div><div style='font-size: 70%'></div>" .->1
-    14-. "<div>uses</div><div style='font-size: 70%'></div>" .->7
-    14-. "<div>consume Delivery Completed<br />Message</div><div style='font-size: 70%'>[azurela:servicebus:ReadableSubscription]</div>" .->1
-    8-. "<div>uses</div><div style='font-size: 70%'></div>" .->7
+    7-. "<div>publish Order Placed Message</div><div style='font-size: 70%'></div>" .->1
+    13-. "<div>uses</div><div style='font-size: 70%'></div>" .->6
+    13-. "<div>subscribe to Delivery<br />Completed Message</div><div style='font-size: 70%'>[azurela:servicebus:ReadableSubscription]</div>" .->3
+    7-. "<div>uses</div><div style='font-size: 70%'></div>" .->6
 
   end

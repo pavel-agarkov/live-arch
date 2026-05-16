@@ -4,82 +4,82 @@ graph TB
   subgraph diagram ["Deployment View: ${ENV}"]
     style diagram fill:#ffffff,stroke:#ffffff
 
-    subgraph 36 ["Shared Resource Group Reference"]
-      style 36 fill:#ffffff,stroke:#444444,color:#444444
+    subgraph 37 ["Shared Resource Group Reference"]
+      style 37 fill:#ffffff,stroke:#444444,color:#444444
 
-      subgraph 37 ["Service Bus Namespace"]
-        style 37 fill:#ffffff,stroke:#444444,color:#444444
-
-        38["<div style='font-weight: bold'>Order Events</div><div style='font-size: 70%; margin-top: 0px'>[Container: azure-native:servicebus:getTopic]</div>"]
+      subgraph 38 ["Service Bus Namespace"]
         style 38 fill:#ffffff,stroke:#444444,color:#444444
-        39["<div style='font-weight: bold'>Delivery Events</div><div style='font-size: 70%; margin-top: 0px'>[Container: azure-native:servicebus:getTopic]</div>"]
+
+        39["<div style='font-weight: bold'>Order Events</div><div style='font-size: 70%; margin-top: 0px'>[Container: azure-native:servicebus:getTopic]</div>"]
         style 39 fill:#ffffff,stroke:#444444,color:#444444
+        40["<div style='font-weight: bold'>Delivery Events</div><div style='font-size: 70%; margin-top: 0px'>[Container: azure-native:servicebus:getTopic]</div>"]
+        style 40 fill:#ffffff,stroke:#444444,color:#444444
       end
 
     end
 
-    subgraph 44 ["Order Resource Group"]
-      style 44 fill:#ffffff,stroke:#444444,color:#444444
+    subgraph 45 ["Order Resource Group"]
+      style 45 fill:#ffffff,stroke:#444444,color:#444444
 
-      subgraph 45 ["SQL Server Registration"]
-        style 45 fill:#ffffff,stroke:#444444,color:#444444
+      subgraph 46 ["SQL Server Registration"]
+        style 46 fill:#ffffff,stroke:#444444,color:#444444
 
-        subgraph 46 ["SQL Server"]
-          style 46 fill:#ffffff,stroke:#444444,color:#444444
+        subgraph 47 ["SQL Server"]
+          style 47 fill:#ffffff,stroke:#444444,color:#444444
 
-          subgraph 47 ["Elastic Pool"]
-            style 47 fill:#ffffff,stroke:#444444,color:#444444
-
-            48["<div style='font-weight: bold'>Order Database</div><div style='font-size: 70%; margin-top: 0px'>[Container: azure-native:sql:Database]</div>"]
+          subgraph 48 ["Elastic Pool"]
             style 48 fill:#ffffff,stroke:#444444,color:#444444
+
+            49["<div style='font-weight: bold'>Order Database</div><div style='font-size: 70%; margin-top: 0px'>[Container: azure-native:sql:Database]</div>"]
+            style 49 fill:#ffffff,stroke:#444444,color:#444444
           end
 
         end
 
       end
 
-      49["<div style='font-weight: bold'>Key Vault</div><div style='font-size: 70%; margin-top: 0px'>[Infrastructure Node: azure-native:keyvault:getVault]</div>"]
-      style 49 fill:#ffffff,stroke:#444444,color:#444444
-      subgraph 50 ["Virtual Network"]
-        style 50 fill:#ffffff,stroke:#444444,color:#444444
+      50["<div style='font-weight: bold'>Key Vault</div><div style='font-size: 70%; margin-top: 0px'>[Infrastructure Node: azure-native:keyvault:getVault]</div>"]
+      style 50 fill:#ffffff,stroke:#444444,color:#444444
+      subgraph 51 ["Virtual Network"]
+        style 51 fill:#ffffff,stroke:#444444,color:#444444
 
-        subgraph 51 ["App Service Plan"]
-          style 51 fill:#ffffff,stroke:#444444,color:#444444
-
-          52["<div style='font-weight: bold'>Order API</div><div style='font-size: 70%; margin-top: 0px'>[Container: azure-native:web:WebApp]</div>"]
+        subgraph 52 ["App Service Plan"]
           style 52 fill:#ffffff,stroke:#444444,color:#444444
-          55["<div style='font-weight: bold'>Order Worker</div><div style='font-size: 70%; margin-top: 0px'>[Container: azure-native:web:WebApp]</div>"]
-          style 55 fill:#ffffff,stroke:#444444,color:#444444
+
+          53["<div style='font-weight: bold'>Order API</div><div style='font-size: 70%; margin-top: 0px'>[Container: azure-native:web:WebApp]</div>"]
+          style 53 fill:#ffffff,stroke:#444444,color:#444444
+          56["<div style='font-weight: bold'>Order Worker</div><div style='font-size: 70%; margin-top: 0px'>[Container: azure-native:web:WebApp]</div>"]
+          style 56 fill:#ffffff,stroke:#444444,color:#444444
         end
 
       end
 
-      58["<div style='font-weight: bold'>Managed Identity</div><div style='font-size: 70%; margin-top: 0px'>[Infrastructure Node: azure-native:managedidentity:UserAssignedIdentity]</div>"]
-      style 58 fill:#ffffff,stroke:#444444,color:#444444
-      61["<div style='font-weight: bold'>Storage Accounts</div><div style='font-size: 70%; margin-top: 0px'>[Infrastructure Node: azure-native:appconfiguration:getKeyValue]</div>"]
-      style 61 fill:#ffffff,stroke:#444444,color:#444444
-      subgraph 62 ["Foreach Storage Account in Config"]
-        style 62 fill:#ffffff,stroke:#444444,color:#444444
-
-        63["<div style='font-weight: bold'>Source</div><div style='font-size: 70%; margin-top: 0px'>[Infrastructure Node: foreach:source]</div>"]
+      59["<div style='font-weight: bold'>Managed Identity</div><div style='font-size: 70%; margin-top: 0px'>[Infrastructure Node: azure-native:managedidentity:UserAssignedIdentity]</div>"]
+      style 59 fill:#ffffff,stroke:#444444,color:#444444
+      62["<div style='font-weight: bold'>Storage Accounts</div><div style='font-size: 70%; margin-top: 0px'>[Infrastructure Node: azure-native:appconfiguration:getKeyValue]</div>"]
+      style 62 fill:#ffffff,stroke:#444444,color:#444444
+      subgraph 63 ["Foreach Storage Account in Config"]
         style 63 fill:#ffffff,stroke:#444444,color:#444444
-        65["<div style='font-weight: bold'>Storage Account</div><div style='font-size: 70%; margin-top: 0px'>[Infrastructure Node: azure-native:storage:getStorageAccount]</div>"]
-        style 65 fill:#ffffff,stroke:#444444,color:#444444
+
+        64["<div style='font-weight: bold'>Source</div><div style='font-size: 70%; margin-top: 0px'>[Infrastructure Node: foreach:source]</div>"]
+        style 64 fill:#ffffff,stroke:#444444,color:#444444
+        66["<div style='font-weight: bold'>Storage Account</div><div style='font-size: 70%; margin-top: 0px'>[Infrastructure Node: azure-native:storage:getStorageAccount]</div>"]
+        style 66 fill:#ffffff,stroke:#444444,color:#444444
       end
 
-      67["<div style='font-weight: bold'>Key Vault Access Policy</div><div style='font-size: 70%; margin-top: 0px'>[Infrastructure Node: azure-native:keyvault:AccessPolicy]</div>"]
-      style 67 fill:#ffffff,stroke:#444444,color:#444444
+      68["<div style='font-weight: bold'>Key Vault Access Policy</div><div style='font-size: 70%; margin-top: 0px'>[Infrastructure Node: azure-native:keyvault:AccessPolicy]</div>"]
+      style 68 fill:#ffffff,stroke:#444444,color:#444444
     end
 
-    52-. "<div>publish Order Placed Message</div><div style='font-size: 70%'></div>" .->38
-    52-. "<div>uses</div><div style='font-size: 70%'></div>" .->48
-    55-. "<div>consume Delivery Completed<br />Message</div><div style='font-size: 70%'>[azurela:servicebus:ReadableSubscription]</div>" .->39
-    55-. "<div>uses</div><div style='font-size: 70%'></div>" .->48
-    52-. "<div>identity</div><div style='font-size: 70%'></div>" .->58
-    55-. "<div>identity</div><div style='font-size: 70%'></div>" .->58
-    63-. "<div>take</div><div style='font-size: 70%'></div>" .->61
-    58-. "<div>Contribute</div><div style='font-size: 70%'>[azure-native:authorization:RoleAssignment]</div>" .->65
-    67-. "<div>principal</div><div style='font-size: 70%'></div>" .->58
-    67-. "<div>vault</div><div style='font-size: 70%'></div>" .->49
+    53-. "<div>publish Order Placed Message</div><div style='font-size: 70%'></div>" .->39
+    53-. "<div>uses</div><div style='font-size: 70%'></div>" .->49
+    56-. "<div>subscribe to Delivery<br />Completed Message</div><div style='font-size: 70%'>[azurela:servicebus:ReadableSubscription]</div>" .->40
+    56-. "<div>uses</div><div style='font-size: 70%'></div>" .->49
+    53-. "<div>identity</div><div style='font-size: 70%'></div>" .->59
+    56-. "<div>identity</div><div style='font-size: 70%'></div>" .->59
+    64-. "<div>take</div><div style='font-size: 70%'></div>" .->62
+    59-. "<div>Contribute</div><div style='font-size: 70%'>[azure-native:authorization:RoleAssignment]</div>" .->66
+    68-. "<div>principal</div><div style='font-size: 70%'></div>" .->59
+    68-. "<div>vault</div><div style='font-size: 70%'></div>" .->50
 
   end

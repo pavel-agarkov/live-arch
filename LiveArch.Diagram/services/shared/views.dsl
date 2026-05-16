@@ -1,6 +1,6 @@
 systemLandscape enterprise {
     include *
-    autoLayout
+    autoLayout tb
 }
 
 deployment * cloud env {
@@ -24,20 +24,25 @@ deployment * cloud sandbox "Sandbox resources" {
     autolayout
 }
 
-container messageBroker message-broker {
+container orderMsgSys order-message-system {
     include *
     autolayout
 }
 
-component orderEventsTopic order-events {
+container deliveryMsgSys delivery-message-system {
     include *
     autolayout
 }
 
-component deliveryEventsTopic delivery-events {
-    include *
-    autolayout
-}
+# component orderEventsTopic order-events {
+#     include *
+#     autolayout
+# }
+
+# component deliveryEventsTopic delivery-events {
+#     include *
+#     autolayout
+# }
 
 
 theme ../../microsoft-azure-2025.11/theme.json

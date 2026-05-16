@@ -1,15 +1,15 @@
 container deliveryService delivery-service {
     include *
-    autolayout
+    autolayout tb
 }
-component deliveryWorker delivery-worker {
-     include *
-     autolayout
-}
+# component deliveryWorker delivery-worker {
+#      include *
+#      autolayout
+# }
 
 deployment * cloud delivery-env {
     include deliveryRg 
     include orderEventsTopicReference
     include deliveryEventsTopicReference
-    autolayout
+    autolayout tb
 }

@@ -45,25 +45,11 @@ deliveryRg = deploymentNode "Delivery Resource Group" {
             var "delivery-service-mi"
             resourceName   ${ENV}-delivery-service-mi
         }
-    }
-    infrastructureNode "Key Vault Access Policy" {
-        tags "Microsoft Azure - Entra Managed Identities"
-        technology "azure-native:keyvault:AccessPolicy"
-        properties {
-            var "delivery-service-kv-access-policy"
-            policy.tenantId    ${TENANT_ID}
-            policy.permissions.secrets  "get, list"
-        }
-        -> deliveryMi "principal" {
+        -> deliveryKeyVault reads "azure-native:keyvault:AccessPolicy" {
             properties {
-                source "principalId"
-                target "policy.objectId"
-            }
-        }
-        -> deliveryKeyVault "vault" {
-            properties {
-                source "name"
-                target "vaultName"
+                var "delivery-service-kv-access-policy"
+                policy.tenantId    ${TENANT_ID}
+                policy.permissions.secrets  "get, list"
             }
         }
     }

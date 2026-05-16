@@ -1,0 +1,22 @@
+graph LR
+  linkStyle default fill:#ffffff
+
+  subgraph diagram ["Container View: Delivery Messaging System"]
+    style diagram fill:#ffffff,stroke:#ffffff
+
+    5["<div style='font-weight: bold'>Order Microservice</div><div style='font-size: 70%; margin-top: 0px'>[Software System]</div>"]
+    style 5 fill:#ffffff,stroke:#444444,color:#444444
+    19["<div style='font-weight: bold'>Delivery Microservice</div><div style='font-size: 70%; margin-top: 0px'>[Software System]</div>"]
+    style 19 fill:#ffffff,stroke:#444444,color:#444444
+
+    subgraph 3 ["Delivery Messaging System"]
+      style 3 fill:#ffffff,stroke:#444444,color:#444444
+
+      4["<div style='font-weight: bold'>Delivery Events</div><div style='font-size: 70%; margin-top: 0px'>[Container: azure-native:servicebus:getTopic]</div>"]
+      style 4 fill:#ffffff,stroke:#444444,color:#444444
+    end
+
+    5-. "<div>subscribe to Delivery<br />Completed Message</div><div style='font-size: 70%'>[azurela:servicebus:ReadableSubscription]</div>" .->4
+    19-. "<div>publish Delivery Events</div><div style='font-size: 70%'></div>" .->4
+
+  end

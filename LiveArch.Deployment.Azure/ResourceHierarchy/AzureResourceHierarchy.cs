@@ -88,22 +88,21 @@ namespace LiveArch.Deployment.Azure.ResourceHierarchy
 
             new ResourcePropagationRules<Pulumi.AzureNative.ManagedIdentity.UserAssignedIdentity>
             {
-                { ns => ns.PrincipalId, [ "principalId" ] }
+                { ns => ns.PrincipalId, [ "principalId", "policy.objectId" ] }
             },
             new ResourcePropagationRules<Pulumi.AzureNative.ManagedIdentity.GetUserAssignedIdentityResult>
             {
-                { ns => ns.PrincipalId, [ "principalId" ] }
+                { ns => ns.PrincipalId, [ "principalId", "policy.objectId" ] }
             },
 
-            //new ResourcePropagationRules<Pulumi.AzureNative.Storage.StorageAccount>
-            //{
-            //    { ns => ns.Id, [ "scope" ] }
-            //},
-            //new ResourcePropagationRules<Pulumi.AzureNative.Storage.GetStorageAccountResult>
-            //{
-            //    { ns => ns.Id, [ "scope" ] }
-            //}
-
+            new ResourcePropagationRules<Pulumi.AzureNative.KeyVault.Vault>
+            {
+                { ns => ns.Name, [ "vaultName" ] }
+            },
+            new ResourcePropagationRules<Pulumi.AzureNative.KeyVault.GetVaultResult>
+            {
+                { ns => ns.Name, [ "vaultName" ] }
+            }
         };
 
         public ResourceHierarchyRegistry GetDynamicRegistry(IReadOnlyCollection<Type> resourceTypes)
