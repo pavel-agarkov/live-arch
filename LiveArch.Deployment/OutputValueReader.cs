@@ -5,10 +5,24 @@ using Type = System.Type;
 
 namespace LiveArch.Deployment
 {
+    /// <summary>
+    /// Resolves dot-separated output paths from Pulumi resources, invoke results, and output payload objects.
+    /// </summary>
+    /// <remarks>
+    /// The reader understands both resource members annotated with <see cref="OutputAttribute"/> and
+    /// output payload members exposed through <see cref="OutputTypeAttribute"/>. Nested output traversal is
+    /// projected through <c>Apply</c> so callers can continue working with Pulumi outputs.
+    /// </remarks>
     public sealed class OutputValueReader
     {
         private readonly Dictionary<Type, Dictionary<string, MemberInfo>> outputMembersCache = new();
 
+        /// <summary>
+        /// Resolves a value from a source object using a dot-separated output path.
+        /// </summary>
+        /// <param name="source">Resource, invoke result, or output payload object.</param>
+        /// <param name="path">Output path such as <c>identity.principalId</c>.</param>
+        /// <returns>The resolved value, a projected <c>Output&lt;T&gt;</c>, or <c>null</c> when the path does not exist.</returns>
         public object? GetValue(object source, string path)
         {
             ArgumentNullException.ThrowIfNull(source);
@@ -17,6 +31,9 @@ namespace LiveArch.Deployment
             return GetValueCore(source, path);
         }
 
+        /// <summary>
+        /// Resolves a path segment by segment, switching to output projection when an <c>Output&lt;T&gt;</c> is encountered.
+        /// </summary>
         private object? GetValueCore(object source, string path)
         {
             var parts = path.Split('.', 2);
@@ -48,6 +65,13 @@ namespace LiveArch.Deployment
             return GetValueCore(value, tail);
         }
 
+        /// <summary>
+        /// Projects a nested member path from an <c>Output&lt;T&gt;</c> into another output using <c>Apply</c>.
+        /// </summary>
+        /// <param name="outputObj">Source output object.</param>
+        /// <param name="innerType">Inner payload type carried by the output.</param>
+        /// <param name="tailPath">Remaining path to evaluate inside the payload.</param>
+        /// <returns>A projected output for the requested nested member.</returns>
         private object ProjectNestedOutput(object outputObj, Type innerType, string tailPath)
         {
             var parts = tailPath.Split('.', 2);
@@ -76,12 +100,18 @@ namespace LiveArch.Deployment
                 : ProjectNestedOutput(projected, memberType, tail);
         }
 
+        /// <summary>
+        /// Attempts to locate a readable output member by its logical output name.
+        /// </summary>
         private bool TryGetOutputMember(Type type, string name, out MemberInfo? member)
         {
             member = GetOutputMembers(type).GetValueOrDefault(name);
             return member != null;
         }
 
+        /// <summary>
+        /// Builds and caches a case-insensitive map of logical output names to CLR members.
+        /// </summary>
         private Dictionary<string, MemberInfo> GetOutputMembers(Type type)
         {
             if (outputMembersCache.TryGetValue(type, out var cached))
@@ -117,6 +147,9 @@ namespace LiveArch.Deployment
             return members;
         }
 
+        /// <summary>
+        /// Reads the value of a reflected field or property from the supplied source instance.
+        /// </summary>
         private static object? ReadMemberValue(MemberInfo member, object source)
         {
             return member switch
@@ -127,6 +160,9 @@ namespace LiveArch.Deployment
             };
         }
 
+        /// <summary>
+        /// Returns the CLR type represented by a reflected field or property.
+        /// </summary>
         private static Type GetMemberType(MemberInfo member)
         {
             return member switch
@@ -137,6 +173,9 @@ namespace LiveArch.Deployment
             };
         }
 
+        /// <summary>
+        /// Converts a CLR member name to the camelCase shape commonly used by Pulumi output payloads.
+        /// </summary>
         private static string ToCamelCase(string name)
         {
             if (string.IsNullOrEmpty(name) || char.IsLower(name[0]))
