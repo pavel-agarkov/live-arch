@@ -7,6 +7,7 @@ using LiveArch.Deployment.Converters;
 using LiveArch.Deployment.Docker;
 using LiveArch.Deployment.ResourceHierarchy;
 using LiveArch.Deployment.ResourceTypes;
+using LiveArch.Deployment.Transformers;
 using Microsoft.Extensions.DependencyInjection;
 using Pulumi.AzureNative.AppConfiguration;
 using Pulumi.AzureNative.Authorization;
@@ -43,6 +44,7 @@ namespace LiveArch.Deployment.TestRunner
         private readonly DockerImageReferenceConfigurator dockerImageConfig;
         private readonly ResourceHierarchyRegistry hierarchyRegistry;
         private readonly IConversionEngine conversionEngine;
+        private readonly ITransformerRegistry transformerRegistry;
 
         public DeploymentTests()
         {
@@ -59,9 +61,12 @@ namespace LiveArch.Deployment.TestRunner
             hierarchyRegistry = new ResourceHierarchyBuilder([new AzureResourceHierarchy()], resourceTypesRegistry).Registry;
 
             var services = new ServiceCollection();
+            services.AddDefaultTransformers();
             services.AddDefaultValueConverters();
             services.AddAzureValueConverters();
-            conversionEngine = services.BuildServiceProvider().GetRequiredService<IConversionEngine>();
+            var serviceProvider = services.BuildServiceProvider();
+            conversionEngine = serviceProvider.GetRequiredService<IConversionEngine>();
+            transformerRegistry = serviceProvider.GetRequiredService<ITransformerRegistry>();
         }
 
         [Fact]
@@ -161,7 +166,7 @@ namespace LiveArch.Deployment.TestRunner
         private async Task<StructurizrComponent> ProcessDeployment(string deployment)
         {
             var ws = new StructurizrComponent("workspace.json", "prod", deployment, variables,
-                hierarchyRegistry, resourceTypesRegistry, dockerImageConfig, conversionEngine);
+                hierarchyRegistry, resourceTypesRegistry, dockerImageConfig, conversionEngine, transformerRegistry);
 
             await Pulumi.Deployment.TestAsync(testMocks, new TestOptions { IsPreview = false }, async () =>
             {

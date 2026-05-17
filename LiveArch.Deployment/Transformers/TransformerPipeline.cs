@@ -1,8 +1,18 @@
 namespace LiveArch.Deployment.Transformers
 {
-    public static class TransformerPipeline
+    /// <summary>
+    /// Parses inline transformer pipelines and applies transformer chains to values.
+    /// </summary>
+    public sealed class TransformerPipeline(ITransformerRegistry transformerRegistry)
     {
-        public static bool TryParse(string value, out string sourceValue, out IReadOnlyCollection<ITransformer> transformers)
+        /// <summary>
+        /// Parses an inline pipeline expression such as <c>value | split , | format x{0}</c>.
+        /// </summary>
+        /// <param name="value">Raw pipeline expression.</param>
+        /// <param name="sourceValue">The source value segment that precedes the first transformer.</param>
+        /// <param name="transformers">Created transformer chain when parsing succeeds.</param>
+        /// <returns><c>true</c> when the expression starts with a registered transformer; otherwise <c>false</c>.</returns>
+        public bool TryParse(string value, out string sourceValue, out IReadOnlyCollection<ITransformer> transformers)
         {
             sourceValue = value;
             transformers = Array.Empty<ITransformer>();
@@ -34,6 +44,12 @@ namespace LiveArch.Deployment.Transformers
             return true;
         }
 
+        /// <summary>
+        /// Applies each transformer in order to the supplied value.
+        /// </summary>
+        /// <param name="value">Initial value.</param>
+        /// <param name="transformers">Transformer chain to execute.</param>
+        /// <returns>The final transformed value.</returns>
         public static object Apply(object value, IReadOnlyCollection<ITransformer> transformers)
         {
             var current = value;
@@ -45,7 +61,13 @@ namespace LiveArch.Deployment.Transformers
             return current;
         }
 
-        private static bool TryCreateTransformer(string value, out ITransformer transformer)
+        /// <summary>
+        /// Parses a single transformer specification and tries to create the corresponding transformer.
+        /// </summary>
+        /// <param name="value">Single transformer specification.</param>
+        /// <param name="transformer">Created transformer when the specification name is registered.</param>
+        /// <returns><c>true</c> when the transformer name is known; otherwise <c>false</c>.</returns>
+        private bool TryCreateTransformer(string value, out ITransformer transformer)
         {
             var specification = value.Trim();
             if (string.IsNullOrWhiteSpace(specification))
@@ -57,13 +79,11 @@ namespace LiveArch.Deployment.Transformers
             var transformerName = parts[0];
             var transformerParameter = parts.Length > 1 ? parts[1] : string.Empty;
 
-            if (!TransformerRegistry.Registry.TryGetValue(transformerName, out var factory))
+            if (!transformerRegistry.TryCreate(transformerName, transformerParameter, out transformer))
             {
-                transformer = null!;
                 return false;
             }
 
-            transformer = factory(transformerParameter);
             return true;
         }
     }

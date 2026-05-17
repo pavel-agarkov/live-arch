@@ -18,9 +18,9 @@ namespace LiveArch.Deployment.Transformers
             }
         }
 
-        public MultiplyTransformer(string multiplier, bool devider) : this(multiplier)
+        public MultiplyTransformer(string multiplier, bool divider) : this(multiplier)
         {
-            if (devider)
+            if (divider)
             {
                 if (this.multiplier == 0)
                 {

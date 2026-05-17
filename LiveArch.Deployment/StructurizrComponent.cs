@@ -83,6 +83,8 @@ namespace LiveArch.Deployment
         private Dictionary<ResourceKey, WaitingNodeRegistration> waitingNodes = new();
         private readonly OutputValueReader outputValueReader = new();
         private readonly InputValueBinder inputValueBinder;
+        private readonly ITransformerRegistry transformerRegistry;
+        private readonly TransformerPipeline transformerPipeline;
         private readonly InvokeOptions? invokeOptions = null;
         private readonly CustomResourceOptions? customResourceOptions = null;
 
@@ -101,6 +103,7 @@ namespace LiveArch.Deployment
         /// <param name="resourceTypesRegistry">Registry that maps technology strings to Pulumi resource types or invokes.</param>
         /// <param name="dockerImageReferenceConfigurator">Helper used to map built images into container resource inputs.</param>
         /// <param name="conversionEngine">Conversion engine responsible for typed and named value conversion.</param>
+        /// <param name="transformerRegistry">Registry that resolves built-in and custom transformer factories by DSL name.</param>
         public StructurizrComponent(
             string workspacePath,
             string environment,
@@ -109,7 +112,8 @@ namespace LiveArch.Deployment
             ResourceHierarchyRegistry hierarchyRegistry,
             ResourceTypesRegistry resourceTypesRegistry,
             DockerImageReferenceConfigurator dockerImageReferenceConfigurator,
-            IConversionEngine conversionEngine)
+            IConversionEngine conversionEngine,
+            ITransformerRegistry transformerRegistry)
         {
             var json = new FileInfo(workspacePath);
             workspace = WorkspaceUtils.LoadWorkspaceFromJson(json);
@@ -118,6 +122,8 @@ namespace LiveArch.Deployment
             this.resourceTypesRegistry = resourceTypesRegistry;
             this.dockerImageReferenceConfigurator = dockerImageReferenceConfigurator;
             this.conversionEngine = conversionEngine;
+            this.transformerRegistry = transformerRegistry;
+            this.transformerPipeline = new TransformerPipeline(this.transformerRegistry);
             this.inputValueBinder = new InputValueBinder(this);
             this.deploymentView = workspace.Views.DeploymentViews.FirstOrDefault(v => v.Key == deployment)
                 ?? throw new InvalidOperationException($"Deployment '{deployment}' was not found in the current workspace.");
@@ -732,16 +738,12 @@ namespace LiveArch.Deployment
         private IReadOnlyCollection<ITransformer> GetTransformers(Dictionary<string, string> properties, DeploymentContext context)
         {
             var transformers = new List<ITransformer>();
-            foreach ((var name, var get) in TransformerRegistry.Registry)
+            foreach (var (name, param) in properties)
             {
-                if (properties.TryGetValue(name, out var param))
+                var paramValue = SubstituteVariables(param, context);
+                if (paramValue is string paramStr && transformerRegistry.TryCreate(name, paramStr, out var transformer))
                 {
-                    var paramValue = SubstituteVariables(param, context);
-                    if (paramValue is string paramStr)
-                    {
-                        var transformer = get(paramStr);
-                        transformers.Add(transformer);
-                    }
+                    transformers.Add(transformer);
                 }
             }
             return transformers;
@@ -1113,7 +1115,7 @@ namespace LiveArch.Deployment
                 return value;
             }
 
-            if (!TransformerPipeline.TryParse(stringValue, out var sourceValue, out var transformers))
+            if (!transformerPipeline.TryParse(stringValue, out var sourceValue, out var transformers))
             {
                 return value;
             }

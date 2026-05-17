@@ -12,7 +12,8 @@ namespace LiveArch.Deployment.TestRunner
         [Fact]
         public void ShouldParseInlineTransformerPipeline()
         {
-            var parsed = TransformerPipeline.TryParse("get, list | split ,", out var sourceValue, out var transformers);
+            var pipeline = CreateServices().BuildServiceProvider().GetRequiredService<TransformerPipeline>();
+            var parsed = pipeline.TryParse("get, list | split ,", out var sourceValue, out var transformers);
 
             parsed.Should().BeTrue();
             sourceValue.Should().Be("get, list");
@@ -23,7 +24,8 @@ namespace LiveArch.Deployment.TestRunner
         [Fact]
         public void ShouldTreatPipeAsPlainValueWhenFirstTransformerIsUnknown()
         {
-            var parsed = TransformerPipeline.TryParse("literal | still literal", out var sourceValue, out var transformers);
+            var pipeline = CreateServices().BuildServiceProvider().GetRequiredService<TransformerPipeline>();
+            var parsed = pipeline.TryParse("literal | still literal", out var sourceValue, out var transformers);
 
             parsed.Should().BeFalse();
             sourceValue.Should().Be("literal | still literal");
@@ -33,17 +35,58 @@ namespace LiveArch.Deployment.TestRunner
         [Fact]
         public async Task ShouldConvertSplitResultToInputListThroughImplicitOperator()
         {
-            var services = new ServiceCollection();
-            services.AddDefaultValueConverters();
-            services.AddAzureValueConverters();
+            var services = CreateServices();
             var engine = services.BuildServiceProvider().GetRequiredService<IConversionEngine>();
+            var pipeline = services.BuildServiceProvider().GetRequiredService<TransformerPipeline>();
 
-            TransformerPipeline.TryParse("get, list | split ,", out var sourceValue, out var transformers).Should().BeTrue();
+            pipeline.TryParse("get, list | split ,", out var sourceValue, out var transformers).Should().BeTrue();
             var transformed = TransformerPipeline.Apply(sourceValue, transformers);
             var result = engine.ConvertValue(typeof(InputList<string>), transformed, ConversionContext.Empty);
 
             var resolved = await ResolveInputAsync((Input<ImmutableArray<string>>)result);
             resolved.Should().Equal("get", "list");
+        }
+
+        [Fact]
+        public void ShouldResolveCustomTransformerFromDependencyInjection()
+        {
+            var services = CreateServices();
+            services.AddNamedTransformer<PrefixTransformerFactory>();
+            var pipeline = services.BuildServiceProvider().GetRequiredService<TransformerPipeline>();
+
+            var parsed = pipeline.TryParse("value | prefix item-", out var sourceValue, out var transformers);
+
+            parsed.Should().BeTrue();
+            var transformed = TransformerPipeline.Apply(sourceValue, transformers);
+            transformed.Should().Be("item-value");
+        }
+
+        [Fact]
+        public void ShouldUseBuiltInTransformersWhenOnlyCustomTransformerIsRegistered()
+        {
+            var services = new ServiceCollection();
+            services.AddNamedTransformer<PrefixTransformerFactory>();
+            var pipeline = services.BuildServiceProvider().GetRequiredService<TransformerPipeline>();
+
+            var parsed = pipeline.TryParse("a,b | split ,", out var sourceValue, out var transformers);
+
+            parsed.Should().BeTrue();
+            var transformed = TransformerPipeline.Apply(sourceValue, transformers);
+            transformed.Should().BeEquivalentTo(new[] { "a", "b" });
+        }
+
+        [Fact]
+        public void ShouldAllowCustomTransformerToOverrideBuiltInTransformerName()
+        {
+            var services = new ServiceCollection();
+            services.AddNamedTransformer("split", _ => new FormatTransformer("override-{0}"));
+            var pipeline = services.BuildServiceProvider().GetRequiredService<TransformerPipeline>();
+
+            var parsed = pipeline.TryParse("value | split ,", out var sourceValue, out var transformers);
+
+            parsed.Should().BeTrue();
+            var transformed = TransformerPipeline.Apply(sourceValue, transformers);
+            transformed.Should().Be("override-value");
         }
 
         [Fact]
@@ -87,7 +130,7 @@ namespace LiveArch.Deployment.TestRunner
         [Fact]
         public void DivideTransformer_ShouldThrowForZeroDivisor()
         {
-            var act = () => new MultiplyTransformer("0", devider: true);
+            var act = () => new MultiplyTransformer("0", divider: true);
 
             act.Should().Throw<InvalidOperationException>();
         }
@@ -100,6 +143,15 @@ namespace LiveArch.Deployment.TestRunner
             var act = () => transformer.Transform("value");
 
             act.Should().Throw<InvalidOperationException>();
+        }
+
+        private static ServiceCollection CreateServices()
+        {
+            var services = new ServiceCollection();
+            services.AddDefaultTransformers();
+            services.AddDefaultValueConverters();
+            services.AddAzureValueConverters();
+            return services;
         }
 
         private static async Task<T> ResolveInputAsync<T>(Input<T> input)
@@ -117,6 +169,16 @@ namespace LiveArch.Deployment.TestRunner
             });
 
             return await tcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        }
+
+        private sealed class PrefixTransformerFactory : INamedTransformerFactory
+        {
+            public string Name => "prefix";
+
+            public ITransformer Create(string parameter)
+            {
+                return new FormatTransformer($"{parameter}{{0}}");
+            }
         }
     }
 }

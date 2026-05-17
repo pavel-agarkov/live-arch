@@ -3,6 +3,7 @@ using LiveArch.Deployment.Converters;
 using LiveArch.Deployment.Docker;
 using LiveArch.Deployment.ResourceHierarchy;
 using LiveArch.Deployment.ResourceTypes;
+using LiveArch.Deployment.Transformers;
 using Microsoft.Extensions.Logging;
 using Pulumi.Automation;
 using Pulumi.Automation.Events;
@@ -17,6 +18,7 @@ namespace LiveArch.Deployment.Runner
         private readonly ResourceTypesRegistry resourceTypesRegistry;
         private readonly DockerImageReferenceConfigurator dockerImageReferenceConfigurator;
         private readonly IConversionEngine conversionEngine;
+        private readonly ITransformerRegistry transformerRegistry;
         private readonly ILogger<PulumiDeploymentRunner> logger;
 
         public PulumiDeploymentRunner(
@@ -26,6 +28,7 @@ namespace LiveArch.Deployment.Runner
             ResourceTypesRegistry resourceTypesRegistry,
             DockerImageReferenceConfigurator dockerImageReferenceConfigurator,
             IConversionEngine conversionEngine,
+            ITransformerRegistry transformerRegistry,
             ILogger<PulumiDeploymentRunner> logger)
         {
             this.options = options;
@@ -34,6 +37,7 @@ namespace LiveArch.Deployment.Runner
             this.resourceTypesRegistry = resourceTypesRegistry;
             this.dockerImageReferenceConfigurator = dockerImageReferenceConfigurator;
             this.conversionEngine = conversionEngine;
+            this.transformerRegistry = transformerRegistry;
             this.logger = logger;
         }
 
@@ -49,7 +53,8 @@ namespace LiveArch.Deployment.Runner
                     resourceHierarchyBuilder.Registry,
                     resourceTypesRegistry,
                     dockerImageReferenceConfigurator,
-                    conversionEngine);
+                    conversionEngine,
+                    transformerRegistry);
 
                 await deployment.ProcessWorkspaceAsync(cancellationToken);
             }))

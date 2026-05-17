@@ -7,6 +7,7 @@ using LiveArch.Deployment.Converters;
 using LiveArch.Deployment.Docker;
 using LiveArch.Deployment.ResourceHierarchy;
 using LiveArch.Deployment.ResourceTypes;
+using LiveArch.Deployment.Transformers;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Pulumi.AzureNative.Resources;
@@ -29,6 +30,7 @@ namespace LiveArch.Deployment.Runner
                     .AddResourceTypes<ForEachLoop>()
                     .AddResourceTypes<ReadableSubscription>()
                     .AddDockerImageReferenceConfigurator<AzureDockerImageReferenceConfigurator>()
+                    .AddDefaultTransformers()
                     .AddDefaultValueConverters()
                     .AddAzureValueConverters();
 
