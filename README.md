@@ -19,6 +19,8 @@ This allows a single model to express:
 - resource dependencies
 - value propagation between resources
 - repeated infrastructure patterns through loops
+- inline transformation pipelines for mapped values
+- extensible conversion and transformation behavior through DI
 
 ## Core Concept
 
@@ -64,6 +66,44 @@ The scope system is important because it allows the engine to distinguish betwee
 - globally visible resources
 - resources created inside a loop iteration
 - relationship-resources that must be repeated per iteration
+
+## Extensibility Model
+
+The deployment engine is designed to be extended through dependency injection.
+
+Two extension points are especially important:
+
+- named value converters
+- named transformers
+
+### Converters
+
+Converters are responsible for turning raw DSL values, resource outputs, dictionaries, lists,
+and Pulumi outputs into the exact input type required by a target resource property.
+
+The engine supports both:
+
+- automatic typed converters
+- named converters selected explicitly from DSL metadata
+
+Named converters are useful when a target input shape cannot be inferred from the target type alone.
+
+For example, a keyed `InputList<T>` item may need a specialized converter that knows how to build the payload object and populate its `Value` property.
+
+### Transformers
+
+Transformers are applied before the final target-type conversion step.
+
+They are used when a mapped source value must first be reshaped, parsed, split, formatted, filtered, or scaled before it is written into the target property.
+
+Transformers are resolved by name from an injected `ITransformerRegistry`.
+
+Built-in transformers are always available by default, and custom registrations can:
+
+- add entirely new transformer names
+- override an existing built-in transformer name such as `split`
+
+This means a consumer can register a single custom transformer and keep all built-in behavior without re-registering the full built-in set.
 
 ## DSL Style
 
@@ -153,15 +193,42 @@ This means:
 - assign it to `identity.userAssignedIdentities` on the source resource arguments
 
 Property mapping can also use custom transformers registered in the deployment engine.
-Each transformer reads the mapped source value, converts it to the expected input type,
-applies custom logic, and then writes the transformed result into the target property.
+Each transformer reads the mapped source value, applies custom logic,
+and then passes the transformed result into the normal conversion pipeline that binds the final target input type.
 
 This is useful for cases such as:
 
 - formatting values
 - regex-based extraction
 - numeric scaling or multiplication
+- splitting text into collections
 - adapting one resource output into another resource's expected input shape
+
+Transformers can be declared either as standalone relationship properties:
+
+```text
+workerComponent -> cacheSizeConfig "cache size" {
+    properties {
+        source "value"
+        target "cacheSizeInBytes"
+        multiply "1048576"
+    }
+}
+```
+
+or as an inline pipeline embedded directly inside a property value:
+
+```text
+deliveryMi -> deliveryKeyVault reads "azure-native:keyvault:AccessPolicy" {
+    properties {
+        var "delivery-service-kv-access-policy"
+        policy.permissions.secrets "get, list | split ,"
+    }
+}
+```
+
+Inline pipelines are parsed left to right.
+The segment before the first pipe is treated as the source value, and each following segment is resolved as a named transformer.
 
 Realistic examples:
 
@@ -222,6 +289,26 @@ Practical meaning:
 
 This is useful when one resource exposes a short Azure resource name,
 while another resource or application setting expects a fully formed URL.
+
+#### Example 3: Split a comma-separated permission list through an inline pipeline
+
+```text
+deliveryMi -> deliveryKeyVault reads "azure-native:keyvault:AccessPolicy" {
+    properties {
+        var "delivery-service-kv-access-policy"
+        policy.permissions.secrets "get, list | split ,"
+    }
+}
+```
+
+Practical meaning:
+
+- the access policy expects a list-like secrets permission input
+- the DSL keeps the source value readable as `get, list`
+- the inline `split` transformer converts it into individual permission items
+- the normal conversion pipeline then binds the result to the target Pulumi input type
+
+This keeps simple data-shaping logic close to the DSL value that needs it.
 
 ### Create a relationship-resource
 
@@ -338,23 +425,107 @@ properties {
 }
 ```
 
-Comma-separated list input:
+Explicit split into a list:
 
 ```text
 properties {
-    siteConfig.Cors.allowedOrigins "https://web.example.com,https://api.example.com"
+    siteConfig.Cors.allowedOrigins "https://web.example.com,https://api.example.com | split ,"
 }
 ```
 
-When a property is assigned to a list-like Pulumi input, comma-separated string values are automatically split into individual items.
+If a target expects a list-like Pulumi input, the `split` transformer should be declared explicitly.
 
-The same applies to loop sources such as:
+Loop sources commonly use the same idea through a `foreach:source` relationship:
 
 ```text
-"sa1, sa2, sa3"
+saList = infrastructureNode "Storage Accounts" {
+    tags "Microsoft Azure - App Configuration"
+    technology "azure-native:appconfiguration:getKeyValue"
+    properties {
+        configStoreName ${APP_CONFIG_NAME}
+        keyValueName "storageAccounts"
+    }
+}
+
+saName = deploymentNode "Foreach Storage Account in Config" {
+    technology "foreach:loop"
+    infrastructureNode "Source" {
+        technology "foreach:source"
+        -> saList "take" {
+            properties {
+                source "value"
+                target "source"
+                split ","
+            }
+        }
+    }
+}
 ```
 
-which can become a typed list during conversion.
+This lets the loop source be converted into a typed collection before iteration begins.
+
+Inline pipelines are useful when the transformation should live directly inside a single property value:
+
+```text
+deliveryMi -> deliveryKeyVault reads "azure-native:keyvault:AccessPolicy" {
+    properties {
+        var "delivery-service-kv-access-policy"
+        policy.permissions.secrets "get, list | split ,"
+    }
+}
+```
+
+This is useful when the split behavior must be made explicit or replaced by a custom transformer implementation.
+
+## Customizing Transformers and Converters
+
+The recommended way to customize behavior is through dependency injection in the hosting application.
+
+### Register built-in transformers
+
+```csharp
+services.AddDefaultTransformers();
+```
+
+### Add a new custom transformer
+
+```csharp
+services.AddNamedTransformer("prefix", parameter => new MyPrefixTransformer(parameter));
+```
+
+### Override a built-in transformer implementation
+
+```csharp
+services.AddNamedTransformer("split", parameter => new MyCustomSplitTransformer(parameter));
+```
+
+In this case:
+
+- the custom `split` overrides the built-in one
+- other built-in transformers remain available automatically
+
+### Register converters
+
+```csharp
+services
+    .AddDefaultValueConverters()
+    .AddAzureValueConverters();
+```
+
+Custom converters can be registered either as:
+
+- typed converters, which participate automatically based on source and target types
+- named converters, which are selected explicitly through DSL metadata such as `converter`
+
+Example:
+
+```text
+properties {
+    converter "default-keyed-list-value"
+}
+```
+
+This allows a host application to adapt the deployment engine without modifying the core processor.
 
 ## When to Use This Approach
 
