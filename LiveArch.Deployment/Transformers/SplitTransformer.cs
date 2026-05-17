@@ -6,12 +6,12 @@ namespace LiveArch.Deployment.Transformers
     {
         private readonly string separator;
 
+        public Type OutputType => typeof(string[]);
+
         public SplitTransformer(string separator)
         {
             this.separator = separator;
         }
-
-        public Type InputType => typeof(string);
 
         public object Transform(object input)
         {

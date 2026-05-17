@@ -314,7 +314,8 @@
             "id" : "65",
             "properties" : {
               "source" : "value",
-              "target" : "source"
+              "target" : "source",
+              "split" : ","
             },
             "sourceId" : "64",
             "tags" : "Relationship"
@@ -395,7 +396,7 @@
         "properties" : {
           "structurizr.dsl.identifier" : "9e90e1af-2efb-44cc-8f2b-809e69733dfd",
           "var" : "order-service-kv-access-policy",
-          "policy.permissions.secrets" : "get, list",
+                    "policy.permissions.secrets" : "get, list | split ,",
           "policy.tenantId" : "${TENANT_ID}"
         },
         "relationships" : [ {
@@ -604,7 +605,7 @@
           "id" : "78",
           "properties" : {
             "var" : "delivery-service-kv-access-policy",
-            "policy.permissions.secrets" : "get, list",
+                    "policy.permissions.secrets" : "get, list | split ,",
             "policy.tenantId" : "${TENANT_ID}"
           },
           "sourceId" : "77",

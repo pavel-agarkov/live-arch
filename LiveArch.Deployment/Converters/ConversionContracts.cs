@@ -14,15 +14,14 @@ namespace LiveArch.Deployment.Converters
     public readonly record struct ConversionRequest(
         Type TargetType,
         object SourceValue,
-        ConversionContext Context,
-        bool AllowStringInterpolation = true)
+        ConversionContext Context)
     {
         public Type SourceType => SourceValue.GetType();
     }
 
     public interface IConversionEngine
     {
-        object ConvertValue(Type targetType, object sourceValue, ConversionContext context, string? converterName = null, bool allowStringInterpolation = true);
+        object ConvertValue(Type targetType, object sourceValue, ConversionContext context, string? converterName = null);
     }
 
     public interface IValueConverter

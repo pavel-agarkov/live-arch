@@ -6,12 +6,12 @@ namespace LiveArch.Deployment.Transformers
     {
         private readonly string format;
 
+        public Type OutputType => typeof(string);
+
         public FormatTransformer(string format)
         {
             this.format = format;
         }
-
-        public Type InputType => typeof(string);
 
         public object Transform(object input)
         {

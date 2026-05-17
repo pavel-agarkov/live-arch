@@ -2,6 +2,7 @@ using Pulumi;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
 using System.Reflection;
 using Type = System.Type;
@@ -179,8 +180,8 @@ namespace LiveArch.Deployment.Converters
             if (IsGenericInputList(targetType))
             {
                 var elementType = targetType.GetGenericArguments()[0];
-                var listType = typeof(List<>).MakeGenericType(elementType);
-                return new OutputProjectionDescriptor(listType, projectedOutput =>
+                var immutableArrayType = typeof(ImmutableArray<>).MakeGenericType(elementType);
+                return new OutputProjectionDescriptor(immutableArrayType, projectedOutput =>
                 {
                     if (!TryWrapIntoTargetType(targetType, projectedOutput, out var wrapped))
                     {
@@ -194,8 +195,8 @@ namespace LiveArch.Deployment.Converters
             if (IsGenericInputMap(targetType))
             {
                 var valueType = targetType.GetGenericArguments()[0];
-                var dictionaryType = typeof(Dictionary<,>).MakeGenericType(typeof(string), valueType);
-                return new OutputProjectionDescriptor(dictionaryType, projectedOutput =>
+                var immutableDictionaryType = typeof(ImmutableDictionary<,>).MakeGenericType(typeof(string), valueType);
+                return new OutputProjectionDescriptor(immutableDictionaryType, projectedOutput =>
                 {
                     if (!TryWrapIntoTargetType(targetType, projectedOutput, out var wrapped))
                     {

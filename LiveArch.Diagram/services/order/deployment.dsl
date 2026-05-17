@@ -105,6 +105,7 @@ orderRg = deploymentNode "Order Resource Group" {
                 properties {
                     source  "value"
                     target  "source"
+                    split   ","
                 }
             }
         }
@@ -130,7 +131,7 @@ orderRg = deploymentNode "Order Resource Group" {
         properties {
             var "order-service-kv-access-policy"
             policy.tenantId    ${TENANT_ID}
-            policy.permissions.secrets  "get, list"
+            policy.permissions.secrets  "get, list | split ,"
         }
         -> prodMi "principal" {
             properties {

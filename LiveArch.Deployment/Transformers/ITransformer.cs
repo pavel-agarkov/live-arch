@@ -4,10 +4,7 @@ namespace LiveArch.Deployment.Transformers
 {
     public interface ITransformer
     {
-        /// <summary>
-        /// Supported input type
-        /// </summary>
-        Type InputType { get; }
+        Type OutputType { get; }
 
         object Transform(object input);
     }

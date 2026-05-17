@@ -13,14 +13,14 @@ namespace LiveArch.Deployment.TestRunner
     public class ConversionEngineTests
     {
         [Fact]
-        public void ShouldResolveStringVariablesBeforePrimitiveConversion()
+        public void ShouldNotResolveStringVariablesInsideConversionEngine()
         {
             var engine = CreateEngine();
             var context = new ConversionContext(value => value == "${FLAG}" ? "true" : value);
 
-            var result = engine.ConvertValue(typeof(bool), "${FLAG}", context);
+            var act = () => engine.ConvertValue(typeof(bool), "${FLAG}", context);
 
-            result.Should().Be(true);
+            act.Should().Throw<FormatException>();
         }
 
         [Fact]
@@ -46,22 +46,37 @@ namespace LiveArch.Deployment.TestRunner
         }
 
         [Fact]
-        public async Task ShouldConvertCommaSeparatedStringToInputListOfStrings()
+        public async Task ShouldConvertStringArrayToInputListOfStrings()
         {
             var engine = CreateEngine();
 
-            var result = engine.ConvertValue(typeof(InputList<string>), "a, b, c", ConversionContext.Empty);
+            var result = engine.ConvertValue(typeof(InputList<string>), new[] { "a", "b", "c" }, ConversionContext.Empty);
 
             result.Should().BeAssignableTo<InputList<string>>();
             var resolved = await ResolveInputAsync((Input<ImmutableArray<string>>)result);
-            resolved.Should().Equal("a, b, c");
+            resolved.Should().Equal("a", "b", "c");
+        }
+
+        [Fact]
+        public async Task ShouldConvertStringArrayToInputListOfObjectsElementByElement()
+        {
+            var engine = CreateEngine();
+
+            var result = engine.ConvertValue(typeof(InputList<object>), new[] { "a", "b", "c" }, ConversionContext.Empty);
+
+            result.Should().BeAssignableTo<InputList<object>>();
+            var resolved = await ResolveInputAsync((Input<ImmutableArray<object>>)result);
+            resolved.Should().HaveCount(3);
+            resolved[0].Should().Be("a");
+            resolved[1].Should().Be("b");
+            resolved[2].Should().Be("c");
         }
 
         [Fact]
         public async Task ShouldConvertDictionaryToInputMapOfStrings()
         {
             var engine = CreateEngine();
-            var source = new Dictionary<string, object>
+            var source = new Dictionary<string, string>
             {
                 ["one"] = "1",
                 ["two"] = "2",

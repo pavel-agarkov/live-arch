@@ -18,20 +18,15 @@ namespace LiveArch.Deployment.Converters
                 grouping => grouping.Single(),
                 StringComparer.OrdinalIgnoreCase);
 
-        public object ConvertValue(Type targetType, object sourceValue, ConversionContext context, string? converterName = null, bool allowStringInterpolation = true)
+        public object ConvertValue(Type targetType, object sourceValue, ConversionContext context, string? converterName = null)
         {
-            if (allowStringInterpolation && sourceValue is string sourceString)
-            {
-                sourceValue = context.ResolveString(sourceString);
-            }
-
             if (sourceValue == null)
             {
                 return null!;
             }
 
             var normalizedTargetType = Nullable.GetUnderlyingType(targetType) ?? targetType;
-            var request = new ConversionRequest(normalizedTargetType, sourceValue, context, allowStringInterpolation);
+            var request = new ConversionRequest(normalizedTargetType, sourceValue, context);
 
             return string.IsNullOrWhiteSpace(converterName)
                 ? ConvertUsingAutomaticConverters(request)
@@ -66,7 +61,7 @@ namespace LiveArch.Deployment.Converters
                     request.SourceValue,
                     sourceInnerType,
                     descriptor.ProjectedTargetType,
-                    value => ConvertValue(descriptor.ProjectedTargetType, value, request.Context, converterName, allowStringInterpolation: false));
+                    value => ConvertValue(descriptor.ProjectedTargetType, value, request.Context, converterName));
 
                 return descriptor.WrapProjectedOutput(projected);
             }

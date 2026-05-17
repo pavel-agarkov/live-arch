@@ -14,7 +14,7 @@ namespace LiveArch.Deployment.Transformers
         private readonly string regex;
         private readonly RegExOperation operation;
 
-        public Type InputType => typeof(string);
+        public Type OutputType => operation == RegExOperation.Split ? typeof(string[]) : typeof(string);
 
         public RegExTransformer(string regex, RegExOperation operation)
         {

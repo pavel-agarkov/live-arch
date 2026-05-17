@@ -1,10 +1,13 @@
 ﻿using LiveArch.Deployment.Azure.Docker;
+using LiveArch.Deployment.Azure.Converters;
 using LiveArch.Deployment.Azure.ResourceHierarchy;
 using LiveArch.Deployment.Azure.ServiceBus;
 using LiveArch.Deployment.Controls;
+using LiveArch.Deployment.Converters;
 using LiveArch.Deployment.Docker;
 using LiveArch.Deployment.ResourceHierarchy;
 using LiveArch.Deployment.ResourceTypes;
+using Microsoft.Extensions.DependencyInjection;
 using Pulumi.AzureNative.AppConfiguration;
 using Pulumi.AzureNative.Authorization;
 using Pulumi.AzureNative.DataBoxEdge;
@@ -39,6 +42,7 @@ namespace LiveArch.Deployment.TestRunner
         private readonly ResourceTypesRegistry resourceTypesRegistry;
         private readonly DockerImageReferenceConfigurator dockerImageConfig;
         private readonly ResourceHierarchyRegistry hierarchyRegistry;
+        private readonly IConversionEngine conversionEngine;
 
         public DeploymentTests()
         {
@@ -53,16 +57,23 @@ namespace LiveArch.Deployment.TestRunner
                 new AzureDockerImageReferenceConfigurator()
                 ]);
             hierarchyRegistry = new ResourceHierarchyBuilder([new AzureResourceHierarchy()], resourceTypesRegistry).Registry;
+
+            var services = new ServiceCollection();
+            services.AddDefaultValueConverters();
+            services.AddAzureValueConverters();
+            conversionEngine = services.BuildServiceProvider().GetRequiredService<IConversionEngine>();
         }
 
         [Fact]
         public async Task ShouldCreateAllResourcesForOrderService()
         {
             var ws = await ProcessDeployment("order-env");
+            var createdSummary = string.Join(", ", ws.CreatedResources.Values.GroupBy(resource => resource.GetType().Name).OrderBy(group => group.Key).Select(group => $"{group.Key}={group.Count()}"));
+            var referencedSummary = string.Join(", ", ws.ReferencedResources.Values.GroupBy(resource => resource.GetType().Name).OrderBy(group => group.Key).Select(group => $"{group.Key}={group.Count()}"));
 
-            ws.CreatedResources.Should().HaveCount(13);
+            ws.CreatedResources.Count.Should().Be(13, "created: {0}; referenced: {1}", createdSummary, referencedSummary);
 
-            ws.ReferencedResources.Should().HaveCount(15);
+            ws.ReferencedResources.Count.Should().Be(15);
         }
 
         [Fact]
@@ -70,9 +81,9 @@ namespace LiveArch.Deployment.TestRunner
         {
             var ws = await ProcessDeployment("delivery-env");
 
-            ws.CreatedResources.Should().HaveCount(8);
+            ws.CreatedResources.Count.Should().Be(8);
 
-            ws.ReferencedResources.Should().HaveCount(11);
+            ws.ReferencedResources.Count.Should().Be(11);
         }
 
         [Fact]
@@ -80,9 +91,9 @@ namespace LiveArch.Deployment.TestRunner
         {
             var ws = await ProcessDeployment("shared-env");
 
-            ws.CreatedResources.Should().HaveCount(4);
+            ws.CreatedResources.Count.Should().Be(4);
 
-            ws.ReferencedResources.Should().HaveCount(0);
+            ws.ReferencedResources.Count.Should().Be(0);
         }
 
         [Fact]
@@ -90,9 +101,9 @@ namespace LiveArch.Deployment.TestRunner
         {
             var ws = await ProcessDeployment("shared-ref-env");
 
-            ws.CreatedResources.GroupBy(x => x.Key.Node).Should().HaveCount(0);
+            ws.CreatedResources.GroupBy(x => x.Key.Node).Count().Should().Be(0);
 
-            ws.ReferencedResources.GroupBy(x => x.Key.Node).Should().HaveCount(4);
+            ws.ReferencedResources.GroupBy(x => x.Key.Node).Count().Should().Be(4);
         }
 
         [Fact]
@@ -100,9 +111,9 @@ namespace LiveArch.Deployment.TestRunner
         {
             var ws = await ProcessDeployment("sandbox");
 
-            ws.CreatedResources.Should().HaveCount(3);
+            ws.CreatedResources.Count.Should().Be(3);
 
-            ws.ReferencedResources.Should().HaveCount(1);
+            ws.ReferencedResources.Count.Should().Be(1);
         }
 
         [Theory]
@@ -126,8 +137,9 @@ namespace LiveArch.Deployment.TestRunner
                 .Where(scope => ReferenceEquals(scope.OwnerResource, loop.Value))
                 .ToList();
 
-            loopScopes.Should().HaveCount(expectedScopeCount);
-            loopScopes.Should().OnlyContain(scope => scope.CreatedResources.Count + scope.ReferencedResources.Count == expectedElementsPerScope);
+            loopScopes.Count.Should().Be(expectedScopeCount);
+            loopScopes.Select(scope => scope.CreatedResources.Count + scope.ReferencedResources.Count)
+                .Should().OnlyContain(elementCount => elementCount == expectedElementsPerScope);
         }
 
         [Theory]
@@ -143,13 +155,13 @@ namespace LiveArch.Deployment.TestRunner
 
             var ws = await ProcessDeployment("order-env");
 
-            ws.CreatedResources.Values.OfType<RoleAssignment>().Should().HaveCount(expectedRoleAssignments);
+            ws.CreatedResources.Values.OfType<RoleAssignment>().Count().Should().Be(expectedRoleAssignments);
         }
 
         private async Task<StructurizrComponent> ProcessDeployment(string deployment)
         {
             var ws = new StructurizrComponent("workspace.json", "prod", deployment, variables,
-                hierarchyRegistry, resourceTypesRegistry, dockerImageConfig);
+                hierarchyRegistry, resourceTypesRegistry, dockerImageConfig, conversionEngine);
 
             await Pulumi.Deployment.TestAsync(testMocks, new TestOptions { IsPreview = false }, async () =>
             {

@@ -2,6 +2,7 @@ using Pulumi;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
 using System.Reflection;
 using Type = System.Type;
@@ -77,7 +78,7 @@ namespace LiveArch.Deployment.Converters
 
         public object Convert(ConversionRequest request, IConversionEngine engine)
         {
-            var stringValue = (string)engine.ConvertValue(typeof(string), request.SourceValue, request.Context, allowStringInterpolation: request.AllowStringInterpolation);
+            var stringValue = (string)engine.ConvertValue(typeof(string), request.SourceValue, request.Context);
             var valueField = request.TargetType.GetField("_value", BindingFlags.NonPublic | BindingFlags.Instance);
 
             foreach (var property in request.TargetType.GetProperties(BindingFlags.Public | BindingFlags.Static))
@@ -122,7 +123,7 @@ namespace LiveArch.Deployment.Converters
         {
             try
             {
-                converted = engine.ConvertValue(targetType, request.SourceValue, request.Context, allowStringInterpolation: request.AllowStringInterpolation);
+                converted = engine.ConvertValue(targetType, request.SourceValue, request.Context);
                 return true;
             }
             catch
@@ -184,7 +185,7 @@ namespace LiveArch.Deployment.Converters
         {
             try
             {
-                converted = engine.ConvertValue(targetType, request.SourceValue, request.Context, allowStringInterpolation: request.AllowStringInterpolation);
+                converted = engine.ConvertValue(targetType, request.SourceValue, request.Context);
                 return true;
             }
             catch
@@ -205,7 +206,7 @@ namespace LiveArch.Deployment.Converters
         public object Convert(ConversionRequest request, IConversionEngine engine)
         {
             var innerType = request.TargetType.GetGenericArguments()[0];
-            var converted = engine.ConvertValue(innerType, request.SourceValue, request.Context, allowStringInterpolation: request.AllowStringInterpolation);
+            var converted = engine.ConvertValue(innerType, request.SourceValue, request.Context);
             return ConversionTypeHelpers.WrapInput(innerType, converted);
         }
     }
@@ -226,38 +227,102 @@ namespace LiveArch.Deployment.Converters
             {
                 foreach (var item in enumerable)
                 {
-                    typedList.Add(engine.ConvertValue(elementType, item!, request.Context, allowStringInterpolation: request.AllowStringInterpolation));
+                    typedList.Add(engine.ConvertValue(elementType, item!, request.Context));
                 }
             }
             else
             {
-                typedList.Add(engine.ConvertValue(elementType, request.SourceValue, request.Context, allowStringInterpolation: request.AllowStringInterpolation));
+                typedList.Add(engine.ConvertValue(elementType, request.SourceValue, request.Context));
             }
 
-            return ConversionTypeHelpers.WrapInputList(elementType, typedList);
+            var inputList = Activator.CreateInstance(request.TargetType)!;
+            var addMethod = request.TargetType.GetMethods()
+                .Where(method => method.Name == "Add")
+                .Where(method =>
+                {
+                    var parameters = method.GetParameters();
+                    return parameters.Length == 1 &&
+                           parameters[0].ParameterType.IsArray &&
+                           parameters[0].ParameterType.GetElementType() is { } elementParameterType &&
+                           elementParameterType.IsGenericType &&
+                           elementParameterType.GetGenericTypeDefinition() == typeof(Input<>);
+                })
+                .Single();
+
+            var inputElementType = typeof(Input<>).MakeGenericType(elementType);
+            var inputArray = Array.CreateInstance(inputElementType, typedList.Count);
+            for (var i = 0; i < typedList.Count; i++)
+            {
+                inputArray.SetValue(ConversionTypeHelpers.WrapInput(elementType, typedList[i]!), i);
+            }
+
+            addMethod.Invoke(inputList, [inputArray]);
+            return inputList;
         }
     }
 
-    public sealed class InputMapValueConverter : ITypedValueConverter
+    public sealed class ImmutableArrayValueConverter : ITypedValueConverter
     {
         public bool CanConvert(ConversionRequest request)
         {
             return !ConversionTypeHelpers.IsOutput(request.SourceType) &&
-                ConversionTypeHelpers.IsGenericInputMap(request.TargetType) &&
+                request.TargetType.IsGenericType &&
+                request.TargetType.GetGenericTypeDefinition() == typeof(ImmutableArray<>);
+        }
+
+        public object Convert(ConversionRequest request, IConversionEngine engine)
+        {
+            var elementType = request.TargetType.GetGenericArguments()[0];
+            var typedList = (IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(elementType))!;
+
+            if (request.SourceValue is IEnumerable enumerable && request.SourceValue is not string)
+            {
+                foreach (var item in enumerable)
+                {
+                    typedList.Add(engine.ConvertValue(elementType, item!, request.Context));
+                }
+            }
+            else
+            {
+                typedList.Add(engine.ConvertValue(elementType, request.SourceValue, request.Context));
+            }
+
+            var createRange = typeof(ImmutableArray)
+                .GetMethods(BindingFlags.Public | BindingFlags.Static)
+                .First(method => method.Name == nameof(ImmutableArray.CreateRange) && method.IsGenericMethod && method.GetParameters().Length == 1)
+                .MakeGenericMethod(elementType);
+
+            return createRange.Invoke(null, [typedList])!;
+        }
+    }
+
+    public sealed class ImmutableDictionaryValueConverter : ITypedValueConverter
+    {
+        public bool CanConvert(ConversionRequest request)
+        {
+            return !ConversionTypeHelpers.IsOutput(request.SourceType) &&
+                request.TargetType.IsGenericType &&
+                request.TargetType.GetGenericTypeDefinition() == typeof(ImmutableDictionary<,>) &&
+                request.TargetType.GetGenericArguments()[0] == typeof(string) &&
                 request.SourceValue is IDictionary;
         }
 
         public object Convert(ConversionRequest request, IConversionEngine engine)
         {
-            var valueType = request.TargetType.GetGenericArguments()[0];
+            var valueType = request.TargetType.GetGenericArguments()[1];
             var typedDictionary = (IDictionary)Activator.CreateInstance(typeof(Dictionary<,>).MakeGenericType(typeof(string), valueType))!;
 
             foreach (DictionaryEntry entry in (IDictionary)request.SourceValue)
             {
-                typedDictionary[entry.Key] = engine.ConvertValue(valueType, entry.Value!, request.Context, allowStringInterpolation: request.AllowStringInterpolation);
+                typedDictionary[entry.Key] = engine.ConvertValue(valueType, entry.Value!, request.Context);
             }
 
-            return ConversionTypeHelpers.WrapInputMap(valueType, typedDictionary);
+            var createRange = typeof(ImmutableDictionary)
+                .GetMethods(BindingFlags.Public | BindingFlags.Static)
+                .First(method => method.Name == nameof(ImmutableDictionary.CreateRange) && method.IsGenericMethod && method.GetParameters().Length == 1)
+                .MakeGenericMethod(typeof(string), valueType);
+
+            return createRange.Invoke(null, [typedDictionary])!;
         }
     }
 
@@ -276,7 +341,7 @@ namespace LiveArch.Deployment.Converters
                 request.SourceValue,
                 sourceInnerType,
                 descriptor.ProjectedTargetType,
-                value => engine.ConvertValue(descriptor.ProjectedTargetType, value, request.Context, allowStringInterpolation: false));
+                    value => engine.ConvertValue(descriptor.ProjectedTargetType, value, request.Context));
 
             return descriptor.WrapProjectedOutput(projected);
         }
@@ -305,7 +370,7 @@ namespace LiveArch.Deployment.Converters
             var valueProperty = request.TargetType.GetProperty("Value", BindingFlags.Public | BindingFlags.Instance)
                 ?? throw new InvalidOperationException($"{request.TargetType.Name} must contain Value property");
 
-            var convertedValue = engine.ConvertValue(valueProperty.PropertyType, request.SourceValue, request.Context, allowStringInterpolation: request.AllowStringInterpolation);
+            var convertedValue = engine.ConvertValue(valueProperty.PropertyType, request.SourceValue, request.Context);
             valueProperty.SetValue(item, convertedValue);
 
             return item;

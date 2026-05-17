@@ -27,14 +27,15 @@ namespace LiveArch.Deployment.Converters
         {
             return services
                 .AddTypedValueConverter<AssignableValueConverter>()
-                .AddTypedValueConverter<ImplicitOperatorValueConverter>()
                 .AddTypedValueConverter<PrimitiveValueConverter>()
                 .AddTypedValueConverter<PulumiEnumValueConverter>()
                 .AddTypedValueConverter<UnionValueConverter>()
                 .AddTypedValueConverter<InputUnionValueConverter>()
                 .AddTypedValueConverter<InputValueConverter>()
                 .AddTypedValueConverter<InputListValueConverter>()
-                .AddTypedValueConverter<InputMapValueConverter>()
+                .AddTypedValueConverter<ImmutableArrayValueConverter>()
+                .AddTypedValueConverter<ImmutableDictionaryValueConverter>()
+                .AddTypedValueConverter<ImplicitOperatorValueConverter>()
                 .AddTypedValueConverter<ProjectedOutputValueConverter>()
                 .AddNamedValueConverter<DefaultKeyedListValueConverter>();
         }

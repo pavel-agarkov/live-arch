@@ -1,5 +1,6 @@
 ﻿using LiveArch.Deployment.Adapters;
 using LiveArch.Deployment.Controls;
+using LiveArch.Deployment.Converters;
 using LiveArch.Deployment.Docker;
 using LiveArch.Deployment.ResourceHierarchy;
 using LiveArch.Deployment.ResourceTypes;
@@ -56,6 +57,7 @@ namespace LiveArch.Deployment
         private readonly ResourceHierarchyRegistry hierarchyRegistry;
         private readonly ResourceTypesRegistry resourceTypesRegistry;
         private readonly DockerImageReferenceConfigurator dockerImageReferenceConfigurator;
+        private readonly IConversionEngine conversionEngine;
         private readonly DeploymentView deploymentView;
         private readonly DeploymentContext rootContext;
         private Workspace workspace;
@@ -63,7 +65,7 @@ namespace LiveArch.Deployment
         private Dictionary<object, object> childInputWrappers = new();
 
         private Dictionary<Type, Dictionary<string, PropertyInfo>> allInputProps = new();
-        private readonly Dictionary<Type, Dictionary<string, MemberInfo>> _outputMembersCache = new();
+        private readonly OutputValueReader outputValueReader = new();
 
         private readonly PropertyInfo inputAttrNameProp = typeof(InputAttribute).GetProperty("Name", BindingFlags.Instance | BindingFlags.NonPublic)!;
         private readonly InvokeOptions? invokeOptions = null;
@@ -80,7 +82,8 @@ namespace LiveArch.Deployment
             IReadOnlyDictionary<string, object> variables,
             ResourceHierarchyRegistry hierarchyRegistry,
             ResourceTypesRegistry resourceTypesRegistry,
-            DockerImageReferenceConfigurator dockerImageReferenceConfigurator)
+            DockerImageReferenceConfigurator dockerImageReferenceConfigurator,
+            IConversionEngine conversionEngine)
         {
             var json = new FileInfo(workspacePath);
             workspace = WorkspaceUtils.LoadWorkspaceFromJson(json);
@@ -88,6 +91,7 @@ namespace LiveArch.Deployment
             this.hierarchyRegistry = hierarchyRegistry;
             this.resourceTypesRegistry = resourceTypesRegistry;
             this.dockerImageReferenceConfigurator = dockerImageReferenceConfigurator;
+            this.conversionEngine = conversionEngine;
             this.deploymentView = workspace.Views.DeploymentViews.FirstOrDefault(v => v.Key == deployment)
                 ?? throw new InvalidOperationException($"Deployment '{deployment}' was not found in the current workspace.");
 
@@ -138,7 +142,7 @@ namespace LiveArch.Deployment
                     throw new InvalidOperationException($"Variable '${{{name}}}' is not defined.");
                 }
 
-                return (string)ConvertValue(typeof(string), value, context);
+                return (string)conversionEngine.ConvertValue(typeof(string), value, CreateConversionContext(context));
             });
         }
 
@@ -150,6 +154,11 @@ namespace LiveArch.Deployment
         private Func<string, object> SubstituteVariables(DeploymentContext context)
         {
             return s => SubstituteVariables(s, context);
+        }
+
+        private ConversionContext CreateConversionContext(DeploymentContext context)
+        {
+            return new ConversionContext(SubstituteVariables(context));
         }
 
         /// <summary>
@@ -327,7 +336,7 @@ namespace LiveArch.Deployment
 
                         foreach ((var propName, var propVal) in deployNode.Properties)
                         {
-                            SetProperty(param, propName, propVal, paramInputProps, context);
+                            SetProperty(param, propName, propVal, paramInputProps, context, parseInlineTransformers: true);
                         }
 
                         var task = (Task)invoke.Invoke(null, [param, invokeOptions!])!;
@@ -361,7 +370,7 @@ namespace LiveArch.Deployment
 
                     foreach ((var propName, var propVal) in deployNode.Properties)
                     {
-                        SetProperty(param, propName, propVal, paramInputProps, context);
+                        SetProperty(param, propName, propVal, paramInputProps, context, parseInlineTransformers: true);
                     }
 
                     if (!deployNode.Properties.TryGetValue("var", out var resVar) &&
@@ -706,6 +715,13 @@ namespace LiveArch.Deployment
             return transformers;
         }
 
+        private static string? GetConverterName(IDictionary<string, string> properties)
+        {
+            return properties.TryGetValue("converter", out var converterName) && !string.IsNullOrWhiteSpace(converterName)
+                ? converterName.Trim()
+                : null;
+        }
+
         /// <summary>
         /// Creates relationship resources owned by the supplied node in the current scope.
         /// </summary>
@@ -842,7 +858,14 @@ namespace LiveArch.Deployment
                     relationship.Properties.TryGetValue("target", out var targetPath) &&
                     TryGetResourceByNode(relation.Destination, context, out var source))
                 {
-                    ApplyDependency(source!, param, sourcePath, targetPath, context, GetTransformers(new Dictionary<string, string>(relationship.Properties), context));
+                    ApplyDependency(
+                        source!,
+                        param,
+                        sourcePath,
+                        targetPath,
+                        context,
+                        GetTransformers(new Dictionary<string, string>(relationship.Properties), context),
+                        GetConverterName(relationship.Properties));
                 }
             }
 
@@ -1061,153 +1084,38 @@ namespace LiveArch.Deployment
 
         }
 
-        /// <summary>
-        /// Builds and caches a lookup of Pulumi output member names to CLR members.
-        /// </summary>
-        /// <param name="type">Resource or output type to inspect.</param>
-        /// <returns>Case-insensitive mapping of output names to readable members.</returns>
-        private Dictionary<string, MemberInfo> GetOutputMembers(Type type)
+        private static object ApplyTransformers(object value, IReadOnlyCollection<ITransformer> transformers)
         {
-            if (_outputMembersCache.TryGetValue(type, out var cached))
-                return cached;
-
-            var dict = new Dictionary<string, MemberInfo>(StringComparer.OrdinalIgnoreCase);
-
-            // 1. CustomResource с [Output]
-            foreach (var prop in type.GetProperties(BindingFlags.Instance | BindingFlags.Public))
-            {
-                var outAttr = prop.GetCustomAttribute<OutputAttribute>();
-                if (outAttr != null)
-                {
-                    var name = outAttr.Name; // "name", "numberOfSites" и т.п.
-                    dict[name] = prop;
-                }
-            }
-
-            // 2. [OutputType] – поля/свойства → camelCase
-            var outputTypeAttr = type.GetCustomAttribute<OutputTypeAttribute>();
-            if (outputTypeAttr != null)
-            {
-                foreach (var field in type.GetFields(BindingFlags.Instance | BindingFlags.Public))
-                {
-                    var name = ToCamelCase(field.Name); // Name → name, ResourceGroup → resourceGroup
-                    dict[name] = field;
-                }
-
-                foreach (var prop in type.GetProperties(BindingFlags.Instance | BindingFlags.Public))
-                {
-                    var name = ToCamelCase(prop.Name);
-                    dict[name] = prop;
-                }
-            }
-
-            _outputMembersCache[type] = dict;
-            return dict;
-        }
-
-        /// <summary>
-        /// Converts a CLR member name to the camelCase shape commonly used by Pulumi outputs.
-        /// </summary>
-        /// <param name="name">CLR member name.</param>
-        /// <returns>The camelCase representation.</returns>
-        private static string ToCamelCase(string name)
-        {
-            if (string.IsNullOrEmpty(name) || char.IsLower(name[0]))
-                return name;
-            return char.ToLowerInvariant(name[0]) + name.Substring(1);
-        }
-
-        /// <summary>
-        /// Reads a nested output value from a resource or invoke result using a dot-separated path.
-        /// </summary>
-        /// <param name="source">Resource or output object to inspect.</param>
-        /// <param name="path">Output path such as <c>name</c> or <c>identity.principalId</c>.</param>
-        /// <returns>The resolved value, nested output, or <c>null</c> when the path cannot be resolved.</returns>
-        /// <remarks>
-        /// When the current segment is an <c>Output&lt;T&gt;</c>, the method preserves the output wrapper for downstream conversion.
-        /// </remarks>
-        private object? GetOutputValue(object source, string path)
-        {
-            var parts = path.Split('.', 2);
-            var head = parts[0];
-            var tail = parts.Length > 1 ? parts[1] : null;
-
-            var type = source.GetType();
-            var members = GetOutputMembers(type);
-
-            if (!members.TryGetValue(head, out var member))
-                return null;
-
-            object? value = member switch
-            {
-                PropertyInfo p => p.GetValue(source),
-                FieldInfo f => f.GetValue(source),
-                _ => null
-            };
-
-            if (value == null)
-            {
-                return null;
-            }
-
-            // если это Output<T> – дальше работаем с T
-            var valueType = value.GetType();
-            if (IsOutput(valueType))
-            {
-                // тут у тебя уже есть своя логика работы с Output<T> (Apply и т.п.)
-                // для маппинга зависимостей обычно достаточно сохранить сам Output<T>
-                // и передать его в ConvertValue при установке target
-                if (tail == null)
-                {
-                    return value;
-                }
-
-                // вложенный путь внутри OutputType – нужно Apply
-                // Output<TOuter> → Output<TInner>
-                var innerType = valueType.GetGenericArguments()[0];
-                return ProjectNestedOutput(value, innerType, tail);
-            }
-
-            // если нет хвоста – это конечное значение
-            if (tail == null)
+            if (transformers.Count == 0)
             {
                 return value;
             }
 
-            // вложенный объект – рекурсивно
-            return GetOutputValue(value, tail);
+            if (ConversionTypeHelpers.IsOutput(value.GetType()))
+            {
+                var sourceInnerType = value.GetType().GetGenericArguments()[0];
+                var resultType = transformers.Last().OutputType;
+                return ConversionTypeHelpers.ProjectOutput(value, sourceInnerType, resultType, current => TransformerPipeline.Apply(current, transformers));
+            }
+
+            return TransformerPipeline.Apply(value, transformers);
         }
 
-        /// <summary>
-        /// Projects a nested value from an <c>Output&lt;T&gt;</c> into another output.
-        /// </summary>
-        /// <param name="outputObj">Source output object.</param>
-        /// <param name="innerType">Inner type carried by the output.</param>
-        /// <param name="tailPath">Remaining nested path to evaluate on the inner value.</param>
-        /// <returns>The projected output value.</returns>
-        /// <remarks>
-        /// The current implementation is a placeholder and should be completed if nested output projection becomes necessary.
-        /// </remarks>
-        private object ProjectNestedOutput(object outputObj, Type innerType, string tailPath)
+        private object PrepareDirectValue(object value, DeploymentContext context, bool parseInlineTransformers)
         {
-            // Output<TInner>.Apply(x => GetOutputValue(x, tailPath))
-            var outputType = typeof(Output<>).MakeGenericType(innerType);
-            var applyMethod = outputType.GetMethods()
-                .First(m => m.Name == "Apply" && m.GetParameters().Length == 1);
+            if (!parseInlineTransformers || value is not string stringValue)
+            {
+                return value;
+            }
 
-            // Func<TInner, object?>
-            var funcType = typeof(Func<,>).MakeGenericType(innerType, typeof(object));
-            //var func = (Delegate)Activator.CreateInstance(
-            //    typeof(Func<,>).MakeGenericType(innerType, typeof(object)),
-            //    (object?)(TInner x) => GetOutputValue(x!, tailPath))!; // псевдокод, можно собрать через Expression
+            if (!TransformerPipeline.TryParse(stringValue, out var sourceValue, out var transformers))
+            {
+                return value;
+            }
 
-            //return applyMethod.Invoke(outputObj, new object[] { func })!;
-
-            return null!;
+            var substituted = SubstituteVariables(sourceValue, context);
+            return ApplyTransformers(substituted, transformers);
         }
-
-        private static bool IsOutput(Type t)
-            => t.IsGenericType && t.GetGenericTypeDefinition() == typeof(Output<>);
 
         /// <summary>
         /// Reads a value from the source resource, optionally transforms it, and writes it into the target arguments.
@@ -1218,22 +1126,15 @@ namespace LiveArch.Deployment
         /// <param name="targetPath">Dot-separated input path on the target.</param>
         /// <param name="context">Current deployment context.</param>
         /// <param name="transformers">Optional transformer pipeline applied before assignment.</param>
-        private void ApplyDependency(object source, object target, string sourcePath, string targetPath, DeploymentContext context, IReadOnlyCollection<ITransformer> transformers)
+        private void ApplyDependency(object source, object target, string sourcePath, string targetPath, DeploymentContext context, IReadOnlyCollection<ITransformer> transformers, string? converterName = null)
         {
-            var value = GetOutputValue(source, sourcePath);
+            var value = outputValueReader.GetValue(source, sourcePath);
             if (value == null)
                 return;
 
             var inputProps = GetInputProps(target.GetType());
-            if (transformers.Count > 0)
-            {
-                foreach (var transformer in transformers)
-                {
-                    value = ConvertValue(transformer.InputType, value, context);
-                    value = transformer.Transform(value);
-                }
-            }
-            SetProperty(target, targetPath, value, inputProps, context);
+            value = ApplyTransformers(value, transformers);
+            SetProperty(target, targetPath, value, inputProps, context, parseInlineTransformers: false, converterName: converterName);
         }
 
         private static PropertyInfo? FindPropertyForBackingField(Type type, FieldInfo field)
@@ -1262,7 +1163,7 @@ namespace LiveArch.Deployment
         /// <remarks>
         /// Supports plain assignment, keyed collection assignment via <c>:</c>, and list append via <c>+=</c>.
         /// </remarks>
-        private void SetProperty(object target, string path, object value, Dictionary<string, PropertyInfo> inputProps, DeploymentContext context)
+        private void SetProperty(object target, string path, object value, Dictionary<string, PropertyInfo> inputProps, DeploymentContext context, bool parseInlineTransformers = false, string? converterName = null)
         {
             var parts = path.Split('.', 2);
 
@@ -1270,20 +1171,21 @@ namespace LiveArch.Deployment
             {
                 if (parts[0].Contains(':'))
                 {
-                    AddKeyToCollection(target, inputProps, parts[0], value, context);
+                    AddKeyToCollection(target, inputProps, parts[0], value, context, parseInlineTransformers, converterName);
                     return;
                 }
 
                 if (parts[0].Contains("+="))
                 {
-                    AddItemsToCollection(target, inputProps, parts[0], value, context);
+                    AddItemsToCollection(target, inputProps, parts[0], value, context, parseInlineTransformers, converterName);
                     return;
                 }
 
                 // leaf property
                 if (inputProps.TryGetValue(parts[0], out var prop))
                 {
-                    object converted = ConvertValue(prop.PropertyType, value, context);
+                    value = PrepareDirectValue(value, context, parseInlineTransformers);
+                    object converted = ConvertValue(prop.PropertyType, value, context, converterName);
                     prop.SetValue(target, converted);
                 }
                 return;
@@ -1305,7 +1207,7 @@ namespace LiveArch.Deployment
 
             var nestedProps = GetInputProps(GetUnderlyingArgsType(headProp.PropertyType));
 
-            SetProperty(childInputWrappers[current], tail, value, nestedProps, context);
+            SetProperty(childInputWrappers[current], tail, value, nestedProps, context, parseInlineTransformers, converterName);
         }
 
         /// <summary>
@@ -1316,7 +1218,7 @@ namespace LiveArch.Deployment
         /// <param name="path">Collection append expression.</param>
         /// <param name="value">Value to append.</param>
         /// <param name="context">Current deployment context.</param>
-        private void AddItemsToCollection(object target, Dictionary<string, PropertyInfo> inputProps, string path, object value, DeploymentContext context)
+        private void AddItemsToCollection(object target, Dictionary<string, PropertyInfo> inputProps, string path, object value, DeploymentContext context, bool parseInlineTransformers, string? converterName)
         {
             var parts = path.Split("+=", 2);
             if (parts.Length != 2)
@@ -1335,7 +1237,7 @@ namespace LiveArch.Deployment
             if (collectionType.IsGenericType &&
                 collectionType.GetGenericTypeDefinition() == typeof(InputList<>))
             {
-                AddValuesToList(target, collectionProp, value, context);
+                AddValuesToList(target, collectionProp, value, context, parseInlineTransformers, converterName);
                 return;
             }
 
@@ -1350,7 +1252,7 @@ namespace LiveArch.Deployment
         /// <param name="listProp">List property being modified.</param>
         /// <param name="value">Raw value or collection to append.</param>
         /// <param name="context">Current deployment context.</param>
-        private void AddValuesToList(object target, PropertyInfo listProp, object value, DeploymentContext context)
+        private void AddValuesToList(object target, PropertyInfo listProp, object value, DeploymentContext context, bool parseInlineTransformers, string? converterName)
         {
             var listType = listProp.PropertyType;
             var itemType = listType.GetGenericArguments()[0];
@@ -1368,7 +1270,8 @@ namespace LiveArch.Deployment
 
             // Конвертируем значение в InputList<T>
             var inputListType = typeof(InputList<>).MakeGenericType(itemType);
-            var inputList = ConvertValue(inputListType, value, context);
+            value = PrepareDirectValue(value, context, parseInlineTransformers);
+            var inputList = ConvertValue(inputListType, value, context, converterName);
 
             // Добавляем элемент
             addRangeMethod!.Invoke(list, [inputList]);
@@ -1382,7 +1285,7 @@ namespace LiveArch.Deployment
         /// <param name="path">Keyed assignment expression.</param>
         /// <param name="value">Value to assign.</param>
         /// <param name="context">Current deployment context.</param>
-        private void AddKeyToCollection(object target, Dictionary<string, PropertyInfo> inputProps, string path, object value, DeploymentContext context)
+        private void AddKeyToCollection(object target, Dictionary<string, PropertyInfo> inputProps, string path, object value, DeploymentContext context, bool parseInlineTransformers, string? converterName)
         {
             var parts = path.Split(':', 2);
             if (parts.Length != 2)
@@ -1404,7 +1307,7 @@ namespace LiveArch.Deployment
             if (collectionType.IsGenericType &&
                 collectionType.GetGenericTypeDefinition() == typeof(InputList<>))
             {
-                AddKeyToList(target, collectionProp, key, value, context);
+                AddKeyToList(target, collectionProp, key, value, context, parseInlineTransformers, converterName);
                 return;
             }
 
@@ -1412,7 +1315,7 @@ namespace LiveArch.Deployment
             if (collectionType.IsGenericType &&
                 collectionType.GetGenericTypeDefinition() == typeof(InputMap<>))
             {
-                AddKeyToMap(target, collectionProp, key, value, context);
+                AddKeyToMap(target, collectionProp, key, value, context, parseInlineTransformers, converterName);
                 return;
             }
 
@@ -1428,7 +1331,7 @@ namespace LiveArch.Deployment
         /// <param name="key">Logical item key or name.</param>
         /// <param name="value">Value assigned to the item.</param>
         /// <param name="context">Current deployment context.</param>
-        private void AddKeyToList(object target, PropertyInfo listProp, string key, object value, DeploymentContext context)
+        private void AddKeyToList(object target, PropertyInfo listProp, string key, object value, DeploymentContext context, bool parseInlineTransformers, string? converterName)
         {
             var listType = listProp.PropertyType;
             var itemType = listType.GetGenericArguments()[0];
@@ -1441,23 +1344,31 @@ namespace LiveArch.Deployment
                 listProp.SetValue(target, list);
             }
 
-            // Создаём элемент T
-            var item = Activator.CreateInstance(itemType);
-
             // Ищем Name или Key
             var nameProp = (itemType.GetProperty("Name") ?? itemType.GetProperty("Key"))
                 ?? throw new InvalidOperationException($"{itemType.Name} must contain Name or Key property");
+            var convertedName = ConvertValue(nameProp.PropertyType, key, context);
 
-            // Ищем Value
-            var valueProp = itemType.GetProperty("Value") ?? itemType.GetProperty("ConnectionString")
-                ?? throw new InvalidOperationException($"{itemType.Name} must contain Value or ConnectionString property");
+            value = PrepareDirectValue(value, context, parseInlineTransformers);
+            var effectiveConverterName = converterName ?? KnownNamedValueConverters.DefaultKeyedListValue;
+            var item = ConvertValue(itemType, value, context, effectiveConverterName);
 
-            // Конвертируем значение
-            var convertedValue = ConvertValue(valueProp.PropertyType, value, context);
-
-            // Устанавливаем свойства
-            nameProp.SetValue(item, (Input<string>)key);
-            valueProp.SetValue(item, convertedValue);
+            if (ConversionTypeHelpers.IsOutput(item.GetType()))
+            {
+                item = ConversionTypeHelpers.ProjectOutput(
+                    item,
+                    itemType,
+                    itemType,
+                    currentItem =>
+                    {
+                        nameProp.SetValue(currentItem, convertedName);
+                        return currentItem;
+                    });
+            }
+            else
+            {
+                nameProp.SetValue(item, convertedName);
+            }
 
             // Находим метод Add(params Input<T>[] inputs)
             var addMethod = listType.GetMethods().Where(m => m.Name == "Add")
@@ -1489,7 +1400,7 @@ namespace LiveArch.Deployment
         /// <param name="key">Dictionary key.</param>
         /// <param name="value">Value assigned to the key.</param>
         /// <param name="context">Current deployment context.</param>
-        private void AddKeyToMap(object target, PropertyInfo mapProp, string key, object value, DeploymentContext context)
+        private void AddKeyToMap(object target, PropertyInfo mapProp, string key, object value, DeploymentContext context, bool parseInlineTransformers, string? converterName)
         {
             var mapType = mapProp.PropertyType;
             var valueType = mapType.GetGenericArguments()[0]; // TValue
@@ -1509,7 +1420,8 @@ namespace LiveArch.Deployment
 
             // Конвертируем значение в Input<TValue>
             var inputValueType = typeof(Input<>).MakeGenericType(valueType);
-            var convertedValue = ConvertValue(inputValueType, value, context);
+            value = PrepareDirectValue(value, context, parseInlineTransformers);
+            var convertedValue = ConvertValue(inputValueType, value, context, converterName);
 
             // Добавляем в словарь
             addMethod.Invoke(map, [key, convertedValue]);
@@ -1577,108 +1489,14 @@ namespace LiveArch.Deployment
         /// <remarks>
         /// Supports primitives, enums, inputs, input collections, unions, dictionaries, lists, and selected output-to-input conversions.
         /// </remarks>
-        private object ConvertValue(Type targetType, object sourceValue, DeploymentContext context)
+        private object ConvertValue(Type targetType, object sourceValue, DeploymentContext context, string? converterName = null)
         {
-            if (sourceValue is string str)
+            if (sourceValue is string stringValue)
             {
-                sourceValue = SubstituteVariables(str, context);
+                sourceValue = SubstituteVariables(stringValue, context);
             }
 
-            if (sourceValue == null)
-            {
-                return null!;
-            }
-
-            targetType = Nullable.GetUnderlyingType(targetType) ?? targetType;
-            var sourceType = sourceValue.GetType();
-
-            if (targetType == typeof(object) || targetType.IsAssignableFrom(sourceType))
-            {
-                return sourceValue;
-            }
-
-            // source value is Output
-            if (IsGenericOutput(sourceType))
-            {
-                // target is Input
-                if (IsGenericInput(targetType))
-                {
-                    var innerTargetType = targetType.GetGenericArguments()[0];
-                    CheckGenericArguments(targetType, sourceType, innerTargetType);
-                    return ConvertOutputToInput(innerTargetType, sourceValue);
-                }
-
-                if (IsGenericInputList(targetType))
-                {
-                    var innerTargetType = targetType.GetGenericArguments()[0];
-                    CheckGenericArguments(targetType, sourceType, innerTargetType);
-                    return ConvertOutputToInputList(innerTargetType, sourceValue);
-                }
-
-                //// target is primitive or enum – пытаемся распаковать Output<T> → T и конвертировать
-                //if (targetType == typeof(string) || targetType == typeof(int) || targetType == typeof(bool))
-                //{
-                //    if (sourceValue is IOutput output)
-                //    {
-                //        return output.UntypedApply(v => ConvertValue(targetType, v!, context));
-                //    }
-                //}
-            }
-
-            // Input<T>
-            if (IsGenericInput(targetType))
-            {
-                var innerType = targetType.GetGenericArguments()[0];
-
-                // если rawValue уже совместим с innerType → используем implicit operator
-                if (innerType.IsAssignableFrom(sourceType))
-                    return WrapInput(innerType, sourceValue);
-
-                // иначе конвертируем и оборачиваем
-                var converted = ConvertValue(innerType, sourceValue, context);
-                return WrapInput(innerType, converted);
-            }
-
-            // InputList<T>
-            if (targetType.IsGenericType && targetType.GetGenericTypeDefinition() == typeof(InputList<>))
-            {
-                var elemType = targetType.GetGenericArguments()[0];
-                var list = ConvertToList(elemType, sourceValue, context);
-                return WrapInputList(elemType, list, context);
-            }
-
-            // InputMap<T>
-            if (targetType.IsGenericType && targetType.GetGenericTypeDefinition() == typeof(InputMap<>))
-            {
-                var elemType = targetType.GetGenericArguments()[0];
-                var dict = ConvertToDictionary(elemType, sourceValue, context);
-                return WrapInputMap(elemType, dict, context);
-            }
-
-            // InputUnion<T0,T1>
-            if (IsGenericInputUnion(targetType))
-            {
-                return ConvertToInputUnion(targetType, sourceValue, context);
-            }
-
-            // Union<T0,T1>
-            if (IsGenericUnion(targetType))
-            {
-                return ConvertToUnion(targetType, sourceValue, context);
-            }
-
-            // Enum
-            if (IsPulumiEnum(targetType))
-            {
-                return ConvertPulumiEnum(targetType, sourceValue, context);
-            }
-
-            // Primitives
-            if (targetType == typeof(string)) return sourceValue.ToString()!;
-            if (targetType == typeof(int)) return int.Parse(sourceValue.ToString()!);
-            if (targetType == typeof(bool)) return bool.Parse(sourceValue.ToString()!);
-
-            throw new NotSupportedException($"Cannot convert '{sourceValue}' to {targetType}");
+            return conversionEngine.ConvertValue(targetType, sourceValue, CreateConversionContext(context), converterName);
         }
 
         /// <summary>

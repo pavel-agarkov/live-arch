@@ -1,7 +1,9 @@
 using LiveArch.Deployment.Azure.Docker;
+using LiveArch.Deployment.Azure.Converters;
 using LiveArch.Deployment.Azure.ResourceHierarchy;
 using LiveArch.Deployment.Azure.ServiceBus;
 using LiveArch.Deployment.Controls;
+using LiveArch.Deployment.Converters;
 using LiveArch.Deployment.Docker;
 using LiveArch.Deployment.ResourceHierarchy;
 using LiveArch.Deployment.ResourceTypes;
@@ -26,7 +28,9 @@ namespace LiveArch.Deployment.Runner
                     .AddResourceTypes<ResourceGroup>()
                     .AddResourceTypes<ForEachLoop>()
                     .AddResourceTypes<ReadableSubscription>()
-                    .AddDockerImageReferenceConfigurator<AzureDockerImageReferenceConfigurator>();
+                    .AddDockerImageReferenceConfigurator<AzureDockerImageReferenceConfigurator>()
+                    .AddDefaultValueConverters()
+                    .AddAzureValueConverters();
 
                 builder.Services.AddSingleton(_ => DeploymentCommandOptions.FromConfiguration(builder.Configuration));
                 builder.Services.AddSingleton<DeploymentVariablesProvider>();

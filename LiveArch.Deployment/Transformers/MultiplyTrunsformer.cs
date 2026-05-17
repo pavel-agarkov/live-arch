@@ -6,7 +6,7 @@ namespace LiveArch.Deployment.Transformers
     {
         private readonly double multiplier;
 
-        public Type InputType => typeof(double);
+        public Type OutputType => typeof(double);
 
         public MultiplyTrunsformer(string multiplier)
         {
