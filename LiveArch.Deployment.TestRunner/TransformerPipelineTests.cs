@@ -46,6 +46,52 @@ namespace LiveArch.Deployment.TestRunner
             resolved.Should().Equal("get", "list");
         }
 
+        [Fact]
+        public void SplitTransformer_ShouldThrowForNonStringInput()
+        {
+            var transformer = new SplitTransformer(",");
+
+            var act = () => transformer.Transform(123);
+
+            act.Should().Throw<InvalidOperationException>();
+        }
+
+        [Fact]
+        public void RegExTransformer_ShouldThrowForNonStringInput()
+        {
+            var transformer = new RegExTransformer("[0-9]+", RegExTransformer.RegExOperation.Extract);
+
+            var act = () => transformer.Transform(123);
+
+            act.Should().Throw<InvalidOperationException>();
+        }
+
+        [Fact]
+        public void MultiplyTransformer_ShouldThrowForInvalidMultiplier()
+        {
+            var act = () => new MultiplyTransformer("not-a-number");
+
+            act.Should().Throw<InvalidOperationException>();
+        }
+
+        [Fact]
+        public void MultiplyTransformer_ShouldThrowForInvalidInput()
+        {
+            var transformer = new MultiplyTransformer("2");
+
+            var act = () => transformer.Transform("not-a-number");
+
+            act.Should().Throw<InvalidOperationException>();
+        }
+
+        [Fact]
+        public void DivideTransformer_ShouldThrowForZeroDivisor()
+        {
+            var act = () => new MultiplyTransformer("0", devider: true);
+
+            act.Should().Throw<InvalidOperationException>();
+        }
+
         private static async Task<T> ResolveInputAsync<T>(Input<T> input)
         {
             var tcs = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);

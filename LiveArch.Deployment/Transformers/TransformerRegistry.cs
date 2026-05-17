@@ -9,8 +9,8 @@
             ["extractByRegEx"] = (regex) => new RegExTransformer(regex, RegExTransformer.RegExOperation.Extract),
             ["cleanByRegEx"] = (regex) => new RegExTransformer(regex, RegExTransformer.RegExOperation.Clean),
             ["splitByRegEx"] = (regex) => new RegExTransformer(regex, RegExTransformer.RegExOperation.Split),
-            ["multiply"] = (multiplier) => new MultiplyTrunsformer(multiplier),
-            ["divide"] = (divisor) => new MultiplyTrunsformer(divisor, devider: true)
+            ["multiply"] = (multiplier) => new MultiplyTransformer(multiplier),
+            ["divide"] = (divisor) => new MultiplyTransformer(divisor, devider: true)
         };
     }
 }
