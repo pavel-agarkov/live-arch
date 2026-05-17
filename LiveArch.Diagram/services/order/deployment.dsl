@@ -56,8 +56,8 @@ orderRg = deploymentNode "Order Resource Group" {
                     name                                  ${ENV}-order-api
                     identity.type                         "UserAssigned"
                     siteConfig.AppSettings:WEBSITES_PORT  "8080"
-                    siteConfig.Cors.allowedOrigins        "https://web-${ENV}.azurewebsites.net,https://mobile-${ENV}.azurewebsites.net"
-                    siteConfig.Cors.allowedOrigins+=      "https://${ENV}-order-api.azurewebsites.net,https://${ENV}-delivery-api.azurewebsites.net"
+                    siteConfig.Cors.allowedOrigins        "https://web-${ENV}.azurewebsites.net,https://mobile-${ENV}.azurewebsites.net | split ,"
+                    siteConfig.Cors.allowedOrigins+=      "https://${ENV}-order-api.azurewebsites.net,https://${ENV}-delivery-api.azurewebsites.net | split ,"
                 }
             }
             orderWorkerInstance = containerInstance orderWorker {
