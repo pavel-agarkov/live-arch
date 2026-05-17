@@ -49,7 +49,7 @@ deliveryRg = deploymentNode "Delivery Resource Group" {
             properties {
                 var "delivery-service-kv-access-policy"
                 policy.tenantId    ${TENANT_ID}
-                policy.permissions.secrets  "get, list"
+                policy.permissions.secrets  "get, list | split ,"
             }
         }
     }

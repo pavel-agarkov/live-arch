@@ -5,9 +5,10 @@
         public static Dictionary<string, Func<string, ITransformer>> Registry { get; } = new()
         {
             ["format"] = (format) => new FormatTransformer(format),
-            ["extract"] = (regex) => new RegExTransformer(regex, RegExTransformer.RegExOperation.Extract),
-            ["clean"] = (regex) => new RegExTransformer(regex, RegExTransformer.RegExOperation.Clean),
-            ["split"] = (regex) => new RegExTransformer(regex, RegExTransformer.RegExOperation.Split),
+            ["split"] = (separator) => new SplitTransformer(separator),
+            ["extractByRegEx"] = (regex) => new RegExTransformer(regex, RegExTransformer.RegExOperation.Extract),
+            ["cleanByRegEx"] = (regex) => new RegExTransformer(regex, RegExTransformer.RegExOperation.Clean),
+            ["splitByRegEx"] = (regex) => new RegExTransformer(regex, RegExTransformer.RegExOperation.Split),
             ["multiply"] = (multiplier) => new MultiplyTrunsformer(multiplier),
             ["divide"] = (divisor) => new MultiplyTrunsformer(divisor, devider: true)
         };
