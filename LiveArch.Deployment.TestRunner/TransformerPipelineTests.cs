@@ -92,6 +92,16 @@ namespace LiveArch.Deployment.TestRunner
             act.Should().Throw<InvalidOperationException>();
         }
 
+        [Fact]
+        public void FormatTransformer_ShouldThrowForInvalidFormatString()
+        {
+            var transformer = new FormatTransformer("{0");
+
+            var act = () => transformer.Transform("value");
+
+            act.Should().Throw<InvalidOperationException>();
+        }
+
         private static async Task<T> ResolveInputAsync<T>(Input<T> input)
         {
             var tcs = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);

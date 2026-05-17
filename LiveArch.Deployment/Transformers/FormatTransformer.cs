@@ -10,12 +10,24 @@ namespace LiveArch.Deployment.Transformers
 
         public FormatTransformer(string format)
         {
+            if (string.IsNullOrWhiteSpace(format))
+            {
+                throw new InvalidOperationException("FormatTransformer requires a non-empty format string.");
+            }
+
             this.format = format;
         }
 
         public object Transform(object input)
         {
-            return string.Format(format, input);
+            try
+            {
+                return string.Format(format, input);
+            }
+            catch (FormatException ex)
+            {
+                throw new InvalidOperationException($"FormatTransformer received an invalid format string '{format}'.", ex);
+            }
         }
     }
 }
