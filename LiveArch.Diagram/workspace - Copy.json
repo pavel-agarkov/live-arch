@@ -842,6 +842,11 @@
           "description" : "uses",
           "destinationId" : "20",
           "id" : "28",
+          "properties" : {
+            "format" : "Server=tcp:${SQL_SERVER_NAME}.database.windows.net,1433;Initial Catalog={0};",
+            "source" : "name",
+            "target" : "siteConfig.connectionStrings:DefaultConnection"
+          },
           "sourceId" : "27",
           "tags" : "Relationship"
         }, {

@@ -23,6 +23,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Update="workspace - Copy.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
     <None Update="workspace.json">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>

@@ -1615,14 +1615,14 @@ namespace LiveArch.Deployment
                     return ConvertOutputToInputList(innerTargetType, sourceValue);
                 }
 
-                // target is primitive or enum – пытаемся распаковать Output<T> → T и конвертировать
-                if (targetType == typeof(string) || targetType == typeof(int) || targetType == typeof(bool))
-                {
-                    if (sourceValue is IOutput output)
-                    {
-                        return output.UntypedApply(v => ConvertValue(targetType, v!, context));
-                    }
-                }
+                //// target is primitive or enum – пытаемся распаковать Output<T> → T и конвертировать
+                //if (targetType == typeof(string) || targetType == typeof(int) || targetType == typeof(bool))
+                //{
+                //    if (sourceValue is IOutput output)
+                //    {
+                //        return output.UntypedApply(v => ConvertValue(targetType, v!, context));
+                //    }
+                //}
             }
 
             // Input<T>

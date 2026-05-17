@@ -32,8 +32,9 @@ group "Delivery" {
             -> deliveryDb "uses" {
                 properties {
                     source  "name"
-                    target  "siteConfig.connectionStrings:DefaultConnection"
+                    target  "siteConfig.connectionStrings:DeliveryDatabase"
                     format  "Server=tcp:${SQL_SERVER_NAME}.database.windows.net,1433;Initial Catalog={0};"
+                    converter "azure-sql-connection-string"
                 }
             }
             -> orderEventsTopic "subscribe to Order Placed Message" "azurela:servicebus:ReadableSubscription" {
