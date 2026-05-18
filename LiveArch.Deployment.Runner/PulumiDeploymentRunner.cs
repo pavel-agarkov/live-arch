@@ -90,16 +90,18 @@ namespace LiveArch.Deployment.Runner
                 case "up":
                     var result = await stack.UpAsync(new UpOptions
                     {
-                        OnEvent = OnEngineEvent,
-                        OnStandardError = LogError
+                        Color = "always",
+                        OnStandardError = WritePulumiStandardError,
+                        OnStandardOutput = WritePulumiStandardOutput
                     }, cancellationToken);
                     return result.Summary.Result == UpdateState.Succeeded ? 0 : 1;
 
                 case "preview":
                     var previewResult = await stack.PreviewAsync(new PreviewOptions
                     {
-                        OnEvent = OnEngineEvent,
-                        OnStandardError = LogError
+                        Color = "always",
+                        OnStandardError = WritePulumiStandardError,
+                        OnStandardOutput = WritePulumiStandardOutput
                     }, cancellationToken);
                     return 0;
 
@@ -110,8 +112,8 @@ namespace LiveArch.Deployment.Runner
                         Debug = true,
                         Color= "always",
                         LogVerbosity = 4,
-                        OnEvent = OnEngineEvent,
-                        OnStandardError = LogError
+                        OnStandardError = WritePulumiStandardError,
+                        OnStandardOutput = WritePulumiStandardOutput
                     }, cancellationToken);
                     return destroyResult.Summary.Result == UpdateState.Succeeded ? 0 : 1;
 
@@ -122,9 +124,14 @@ namespace LiveArch.Deployment.Runner
 
         }
 
-        private void LogError(string message)
+        private static void WritePulumiStandardOutput(string message)
         {
-            logger.LogError(message);
+            Console.WriteLine(message);
+        }
+
+        private static void WritePulumiStandardError(string message)
+        {
+            Console.Error.WriteLine(message);
         }
 
         private static string GetRunnerAssemblyPath()
@@ -147,23 +154,6 @@ namespace LiveArch.Deployment.Runner
             }
 
             throw new DirectoryNotFoundException("Could not locate a .csproj file.");
-        }
-
-        private void OnEngineEvent(EngineEvent engineEvent)
-        {
-            if (engineEvent.StandardOutputEvent != null)
-            {
-                logger.LogInformation(engineEvent.StandardOutputEvent.Message);
-            }
-
-            if (engineEvent.DiagnosticEvent != null)
-            {
-                var message = engineEvent.DiagnosticEvent.Message;
-                if (!string.IsNullOrWhiteSpace(message))
-                {
-                    logger.LogInformation(message);
-                }
-            }
         }
     }
 }
