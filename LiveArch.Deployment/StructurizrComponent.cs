@@ -377,11 +377,7 @@ namespace LiveArch.Deployment
                             inputValueBinder.SetProperty(param, propName, propVal, paramInputProps, context, parseInlineTransformers: true);
                         }
 
-                        var task = (Task)invoke.Invoke(null, [param, invokeOptions!])!;
-                        await task.ConfigureAwait(false);
-
-                        var resultProperty = task.GetType().GetProperty("Result");
-                        var resource = resultProperty!.GetValue(task);
+                        var resource = invoke.Invoke(null, [param, invokeOptions!])!;
 
                         AddResource(deployNode.Node, context.Scope, resource!, isExistingResource: true);
 

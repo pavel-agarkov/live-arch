@@ -89,6 +89,10 @@ src: ./sections/4.structurizr.md
 ---
 
 ---
+src: ./sections/5.pulumi.md
+---
+
+---
 
 # Thank You!
 

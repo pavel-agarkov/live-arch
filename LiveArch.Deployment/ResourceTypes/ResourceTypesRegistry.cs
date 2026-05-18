@@ -51,15 +51,15 @@ namespace LiveArch.Deployment.ResourceTypes
                 if (!type.IsAbstract || !type.IsSealed) continue;
                 if (!type.Name.StartsWith("Get")) continue;
 
-                var invokeAsync = type.GetMethods(BindingFlags.Public | BindingFlags.Static)
-                    .FirstOrDefault(m => m.Name == "InvokeAsync");
+                var invoke = type.GetMethods(BindingFlags.Public | BindingFlags.Static)
+                    .FirstOrDefault(m => m.Name == "Invoke" && m.GetParameters().Last().ParameterType == typeof(InvokeOptions));
 
-                if (invokeAsync == null) continue;
+                if (invoke == null) continue;
 
-                var token = ExtractInvokeToken(invokeAsync);
+                var token = ExtractInvokeToken(invoke);
                 if (token == null) continue;
 
-                invokeMethods[token] = invokeAsync;
+                invokeMethods[token] = invoke;
                 resourceTypes[token] = type;
             }
         }
