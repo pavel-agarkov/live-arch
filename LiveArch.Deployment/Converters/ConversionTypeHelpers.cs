@@ -50,13 +50,23 @@ namespace LiveArch.Deployment.Converters
 
         public static bool TryGetImplicitOperator(Type targetType, Type sourceType, out MethodInfo? implicitOperator)
         {
-            implicitOperator = targetType.GetMethods(BindingFlags.Public | BindingFlags.Static)
+            var candidateOperators = targetType.GetMethods(BindingFlags.Public | BindingFlags.Static)
                 .Where(method => method.Name == "op_Implicit" && method.ReturnType == targetType)
-                .FirstOrDefault(method =>
-                {
-                    var parameters = method.GetParameters();
-                    return parameters.Length == 1 && parameters[0].ParameterType.IsAssignableFrom(sourceType);
-                });
+                .Where(method => method.GetParameters().Length == 1)
+                .Cast<MethodBase>()
+                .ToArray();
+
+            if (candidateOperators.Length == 0)
+            {
+                implicitOperator = null;
+                return false;
+            }
+
+            implicitOperator = Type.DefaultBinder.SelectMethod(
+                BindingFlags.Public | BindingFlags.Static,
+                candidateOperators,
+                [sourceType],
+                modifiers: null) as MethodInfo;
 
             return implicitOperator != null;
         }
@@ -71,6 +81,28 @@ namespace LiveArch.Deployment.Converters
 
             wrapped = null!;
             return false;
+        }
+
+        public static object WrapIntoTargetType(Type targetType, Type parameterType, object value)
+        {
+            var implicitOperator = targetType.GetMethods(BindingFlags.Public | BindingFlags.Static)
+                .SingleOrDefault(method =>
+                {
+                    if (method.Name != "op_Implicit" || method.ReturnType != targetType)
+                    {
+                        return false;
+                    }
+
+                    var parameters = method.GetParameters();
+                    return parameters.Length == 1 && parameters[0].ParameterType == parameterType;
+                });
+
+            if (implicitOperator == null)
+            {
+                throw new InvalidOperationException($"Cannot find implicit operator from {parameterType.FullName} to {targetType.FullName}");
+            }
+
+            return implicitOperator.Invoke(null, [value])!;
         }
 
         public static object ConvertOutputToInput(Type innerType, object output)
@@ -181,14 +213,10 @@ namespace LiveArch.Deployment.Converters
             {
                 var elementType = targetType.GetGenericArguments()[0];
                 var immutableArrayType = typeof(ImmutableArray<>).MakeGenericType(elementType);
+                var outputImmutableArrayType = typeof(Output<>).MakeGenericType(immutableArrayType);
                 return new OutputProjectionDescriptor(immutableArrayType, projectedOutput =>
                 {
-                    if (!TryWrapIntoTargetType(targetType, projectedOutput, out var wrapped))
-                    {
-                        throw new InvalidOperationException($"Cannot wrap projected output into {targetType.FullName}");
-                    }
-
-                    return wrapped;
+                    return WrapIntoTargetType(targetType, outputImmutableArrayType, projectedOutput);
                 });
             }
 
@@ -196,14 +224,10 @@ namespace LiveArch.Deployment.Converters
             {
                 var valueType = targetType.GetGenericArguments()[0];
                 var immutableDictionaryType = typeof(ImmutableDictionary<,>).MakeGenericType(typeof(string), valueType);
+                var outputImmutableDictionaryType = typeof(Output<>).MakeGenericType(immutableDictionaryType);
                 return new OutputProjectionDescriptor(immutableDictionaryType, projectedOutput =>
                 {
-                    if (!TryWrapIntoTargetType(targetType, projectedOutput, out var wrapped))
-                    {
-                        throw new InvalidOperationException($"Cannot wrap projected output into {targetType.FullName}");
-                    }
-
-                    return wrapped;
+                    return WrapIntoTargetType(targetType, outputImmutableDictionaryType, projectedOutput);
                 });
             }
 
@@ -223,5 +247,6 @@ namespace LiveArch.Deployment.Converters
         {
             return output.Apply(value => (TResult)projector(value!));
         }
+
     }
 }

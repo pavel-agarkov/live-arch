@@ -20,12 +20,6 @@ namespace LiveArch.Deployment.Controls
     public class ForEachSourceArgs
     {
         [Input("source", true, false)]
-        private InputList<object>? source;
-
-        public required InputList<object> Source
-        {
-            get => source ?? (source = new InputList<object>());
-            set => source = value;
-        }
+        public required Input<ImmutableArray<object>> Source { get; set; }
     }
 }

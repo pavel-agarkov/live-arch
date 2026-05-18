@@ -42,10 +42,27 @@ namespace LiveArch.Deployment.Converters
 
     public sealed class PrimitiveValueConverter : ITypedValueConverter
     {
+        private static readonly HashSet<Type> NumericTypes =
+        [
+            typeof(byte),
+            typeof(sbyte),
+            typeof(short),
+            typeof(ushort),
+            typeof(int),
+            typeof(uint),
+            typeof(long),
+            typeof(ulong),
+            typeof(float),
+            typeof(double),
+            typeof(decimal)
+        ];
+
         public bool CanConvert(ConversionRequest request)
         {
             return !ConversionTypeHelpers.IsOutput(request.SourceType) &&
-                (request.TargetType == typeof(string) || request.TargetType == typeof(int) || request.TargetType == typeof(bool));
+                (request.TargetType == typeof(string) ||
+                 request.TargetType == typeof(bool) ||
+                 NumericTypes.Contains(request.TargetType) && request.SourceValue is IConvertible);
         }
 
         public object Convert(ConversionRequest request, IConversionEngine engine)
@@ -55,14 +72,14 @@ namespace LiveArch.Deployment.Converters
                 return request.SourceValue.ToString()!;
             }
 
-            if (request.TargetType == typeof(int))
-            {
-                return int.Parse(request.SourceValue.ToString()!);
-            }
-
             if (request.TargetType == typeof(bool))
             {
                 return bool.Parse(request.SourceValue.ToString()!);
+            }
+
+            if (NumericTypes.Contains(request.TargetType))
+            {
+                return System.Convert.ChangeType(request.SourceValue, request.TargetType);
             }
 
             throw new NotSupportedException($"Cannot convert '{request.SourceValue}' to {request.TargetType}");

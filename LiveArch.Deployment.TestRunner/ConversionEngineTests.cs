@@ -104,6 +104,72 @@ namespace LiveArch.Deployment.TestRunner
         }
 
         [Fact]
+        public async Task ShouldPreferCollectionImplicitOperatorOverUnaryObjectOperatorForInputListOfObjects()
+        {
+            var engine = CreateEngine();
+            var source = ImmutableArray.Create("a", "b", "c");
+
+            var result = engine.ConvertValue(typeof(InputList<object>), source, ConversionContext.Empty);
+
+            result.Should().BeAssignableTo<InputList<object>>();
+            var resolved = await ResolveInputAsync((Input<ImmutableArray<object>>)result);
+            resolved[0].Should().NotBeNull();
+            resolved[0].GetType().FullName.Should().Be("System.String");
+            resolved.Length.Should().Be(3);
+            resolved[0].Should().Be("a");
+            resolved[1].Should().Be("b");
+            resolved[2].Should().Be("c");
+        }
+
+        [Fact(Skip = "Not supported yet")]
+        public async Task ShouldPreferCollectionImplicitOperatorOverUnaryObjectOperatorForInputListOfObjectsFromOutput()
+        {
+            var engine = CreateEngine();
+            var source = Output.Create(ImmutableArray.Create("a", "b", "c"));
+
+            var result = engine.ConvertValue(typeof(InputList<object>), source, ConversionContext.Empty);
+
+            result.Should().BeAssignableTo<InputList<object>>();
+            var resolved = await ResolveInputAsync((Input<ImmutableArray<object>>)result);
+            resolved[0].Should().NotBeNull();
+            resolved[0].GetType().FullName.Should().Be("System.String");
+            resolved.Length.Should().Be(3);
+            resolved[0].Should().Be("a");
+            resolved[1].Should().Be("b");
+            resolved[2].Should().Be("c");
+        }
+
+        [Fact]
+        public async Task ShouldPreferCollectionImplicitOperatorOverUnaryObjectOperatorForInputListOfNumbersFromOutput()
+        {
+            var engine = CreateEngine();
+            var source = Output.Create(ImmutableArray.Create(1, 2, 3));
+
+            var result = engine.ConvertValue(typeof(InputList<double>), source, ConversionContext.Empty);
+
+            result.Should().BeAssignableTo<InputList<double>>();
+            var resolved = await ResolveInputAsync((Input<ImmutableArray<double>>)result);
+            resolved[0].GetType().FullName.Should().Be("System.Double");
+            resolved.Length.Should().Be(3);
+            resolved[0].Should().Be(1);
+            resolved[1].Should().Be(2);
+            resolved[2].Should().Be(3);
+        }
+
+        [Fact]
+        public async Task ShouldConvertInputOfDoubleFromOutputOfInt()
+        {
+            var engine = CreateEngine();
+            var source = Output.Create(1);
+
+            var result = engine.ConvertValue(typeof(Input<double>), source, ConversionContext.Empty);
+
+            result.Should().BeAssignableTo<Input<double>>();
+            var resolved = await ResolveInputAsync((Input<double>)result);
+            resolved.Should().Be(1);
+        }
+
+        [Fact]
         public async Task ShouldProjectOutputStringToInputPulumiEnum()
         {
             var engine = CreateEngine();

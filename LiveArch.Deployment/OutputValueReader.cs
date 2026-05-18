@@ -36,11 +36,18 @@ namespace LiveArch.Deployment
         /// </summary>
         private object? GetValueCore(object source, string path)
         {
+            var sourceType = source.GetType();
+            if (ConversionTypeHelpers.IsOutput(sourceType))
+            {
+                var innerType = sourceType.GetGenericArguments()[0];
+                return ProjectNestedOutput(source, innerType, path);
+            }
+
             var parts = path.Split('.', 2);
             var head = parts[0];
             var tail = parts.Length > 1 ? parts[1] : null;
 
-            if (!TryGetOutputMember(source.GetType(), head, out var member))
+            if (!TryGetOutputMember(sourceType, head, out var member))
             {
                 return null;
             }

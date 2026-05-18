@@ -166,7 +166,10 @@ namespace LiveArch.Deployment
             {
                 return direct.Value;
             }
-            return VarRegex.Replace(input, match =>
+
+            object result = input;
+            var outputReplacementCount = 0;
+            foreach (Match match in VarRegex.Matches(input))
             {
                 var name = match.Groups[1].Value;
 
@@ -175,8 +178,52 @@ namespace LiveArch.Deployment
                     throw new InvalidOperationException($"Variable '${{{name}}}' is not defined.");
                 }
 
-                return (string)conversionEngine.ConvertValue(typeof(string), value, CreateConversionContext(context));
-            });
+                var replacement = conversionEngine.ConvertValue(typeof(string), value, CreateConversionContext(context));
+                if (ConversionTypeHelpers.IsOutput(replacement.GetType()))
+                {
+                    outputReplacementCount++;
+                    if (outputReplacementCount > 1)
+                    {
+                        throw new NotSupportedException($"String interpolation with more than one Output-backed variable is not supported: '{input}'.");
+                    }
+
+                    var currentTemplate = result;
+                    var replacementOutputType = replacement.GetType();
+                    var replacementInnerType = replacementOutputType.GetGenericArguments()[0];
+                    result = ConversionTypeHelpers.ProjectOutput(
+                        replacement,
+                        replacementInnerType,
+                        typeof(string),
+                        resolvedReplacement => ReplaceTemplatePlaceholder(currentTemplate, match.Value, resolvedReplacement));
+                    continue;
+                }
+
+                result = ReplaceTemplatePlaceholder(result, match.Value, replacement);
+            }
+
+            return result;
+        }
+
+        private static object ReplaceTemplatePlaceholder(object template, string placeholder, object? replacement)
+        {
+            var replacementText = replacement?.ToString() ?? string.Empty;
+            if (template is string templateText)
+            {
+                return templateText.Replace(placeholder, replacementText);
+            }
+
+            if (ConversionTypeHelpers.IsOutput(template.GetType()))
+            {
+                var templateType = template.GetType();
+                var templateInnerType = templateType.GetGenericArguments()[0];
+                return ConversionTypeHelpers.ProjectOutput(
+                    template,
+                    templateInnerType,
+                    typeof(string),
+                    currentTemplate => (currentTemplate?.ToString() ?? string.Empty).Replace(placeholder, replacementText));
+            }
+
+            throw new InvalidOperationException($"Unsupported template value type '{template.GetType().FullName}'.");
         }
 
         /// <summary>
@@ -932,7 +979,28 @@ namespace LiveArch.Deployment
                 return;
             }
 
-            if (hierarchyRegistry.TryGetValue(resource!.GetType(), out var rules))
+            var resourceType = resource!.GetType();
+            if (ConversionTypeHelpers.IsOutput(resourceType))
+            {
+                var innerType = resourceType.GetGenericArguments()[0];
+                if (!hierarchyRegistry.TryGetValue(innerType, out var outputRules))
+                {
+                    return;
+                }
+
+                foreach (var rule in outputRules)
+                {
+                    var value = ConversionTypeHelpers.ProjectOutput(resource, innerType, typeof(object), current => rule.ParentOutputProperty(current));
+                    foreach (var targetProp in rule.TargetInputProperties)
+                    {
+                        inputValueBinder.SetProperty(param, targetProp, value, paramInputProps, context);
+                    }
+                }
+
+                return;
+            }
+
+            if (hierarchyRegistry.TryGetValue(resourceType, out var rules))
             {
                 foreach (var rule in rules)
                 {

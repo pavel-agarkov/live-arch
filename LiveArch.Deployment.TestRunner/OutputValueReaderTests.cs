@@ -47,6 +47,22 @@ namespace LiveArch.Deployment.TestRunner
             resolved.Should().Be("client-1");
         }
 
+        [Fact]
+        public async Task ShouldProjectValueFromRootOutputObject()
+        {
+            var reader = new OutputValueReader();
+            var source = Output.Create(new FakeIdentityResponse
+            {
+                PrincipalId = "principal-1",
+            });
+
+            var value = reader.GetValue(source, "principalId");
+
+            value.Should().BeAssignableTo<Output<string>>();
+            var resolved = await ResolveOutputAsync((Output<string>)value!);
+            resolved.Should().Be("principal-1");
+        }
+
         private static async Task<T> ResolveOutputAsync<T>(Output<T> output)
         {
             var tcs = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);

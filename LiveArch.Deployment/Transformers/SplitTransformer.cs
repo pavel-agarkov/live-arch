@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Immutable;
 
 namespace LiveArch.Deployment.Transformers
 {
@@ -6,7 +7,7 @@ namespace LiveArch.Deployment.Transformers
     {
         private readonly string separator;
 
-        public Type OutputType => typeof(string[]);
+        public Type OutputType => typeof(ImmutableArray<string>);
 
         public SplitTransformer(string separator)
         {
@@ -17,14 +18,14 @@ namespace LiveArch.Deployment.Transformers
         {
             if (input == null)
             {
-                return Array.Empty<string>();
+                return ImmutableArray<string>.Empty;
             }
             if (input is not string inputString)
             {
                 throw new InvalidOperationException($"SplitTransformer can only be applied to string inputs, but got {input.GetType().FullName}");
             }
-            return inputString.Split(separator,
-                StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+            return ImmutableArray.CreateRange(inputString.Split(separator,
+                StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries));
         }
     }
 }
