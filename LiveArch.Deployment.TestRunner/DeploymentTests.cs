@@ -293,24 +293,24 @@ namespace LiveArch.Deployment.TestRunner
                     Scope = sa.Id
                 });
 
-            var sbNs = await Pulumi.AzureNative.ServiceBus.GetNamespace.InvokeAsync(new Pulumi.AzureNative.ServiceBus.GetNamespaceArgs
+            var sbNs = Pulumi.AzureNative.ServiceBus.GetNamespace.Invoke(new Pulumi.AzureNative.ServiceBus.GetNamespaceInvokeArgs
             {
                 NamespaceName = "",
                 ResourceGroupName = ""
-             });
-             var sbTopic = new Pulumi.AzureNative.ServiceBus.Topic("sb-topic", new Pulumi.AzureNative.ServiceBus.TopicArgs
-             {
-                 TopicName = "",
-                 NamespaceName = sbNs.ServiceBusEndpoint,
-                 ResourceGroupName = ""
-             });
-             var sbSub = new Pulumi.AzureNative.ServiceBus.Subscription("sb-subscription", new Pulumi.AzureNative.ServiceBus.SubscriptionArgs
-             {
-                 SubscriptionName = "",
-                 TopicName = sbTopic.Name,
-                 NamespaceName = sbNs.Name,
-                 ResourceGroupName = ""
-              });
+            });
+            var sbTopic = new Pulumi.AzureNative.ServiceBus.Topic("sb-topic", new Pulumi.AzureNative.ServiceBus.TopicArgs
+            {
+                TopicName = "",
+                NamespaceName = sbNs.Apply(x => x.ServiceBusEndpoint),
+                ResourceGroupName = ""
+            });
+            var sbSub = new Pulumi.AzureNative.ServiceBus.Subscription("sb-subscription", new Pulumi.AzureNative.ServiceBus.SubscriptionArgs
+            {
+                SubscriptionName = "",
+                TopicName = sbTopic.Name,
+                NamespaceName = sbNs.Apply(x => x.Name),
+                ResourceGroupName = ""
+            });
 
         }
     }

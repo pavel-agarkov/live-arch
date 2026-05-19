@@ -74,10 +74,9 @@ sandbox = deploymentNode "Sandbox" {
         resourceGroupName     sandbox
     }
     testSa = infrastructureNode "Test Storage Account" {
-        tags "Microsoft Azure - Storage Accounts"
         technology "azure-native:storage:StorageAccount"
         properties {
-            accountName                 testtatrasa
+            accountName                 testsa
             allowBlobPublicAccess       false
             minimumTlsVersion           TLS1_2
             sku.name                    Standard_LRS
@@ -86,10 +85,9 @@ sandbox = deploymentNode "Sandbox" {
         }
     }
     testMi = infrastructureNode "Test Managed Identity" {
-        tags "Microsoft Azure - Managed Identities"
         technology "azure-native:managedidentity:UserAssignedIdentity"
         properties {
-            resourceName   test-tatra-mi
+            resourceName   test-mi
         }
         -> testSa "Contribute" "azure-native:authorization:RoleAssignment" {
             properties {
