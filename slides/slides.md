@@ -114,7 +114,7 @@ h4 {
 </style>
 
 ## Questions & Discussion
-#### also online in [GitHub issue #1](https://github.com/pavel-agarkov/tech-scam/issues/1)
+#### also online in [GitHub issue #1](https://github.com/pavel-agarkov/live-arch/issues/1)
 
 
 <img src="/images/qr.png" style="display: inline; margin: 1rem;" width="200px">
