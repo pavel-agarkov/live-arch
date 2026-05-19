@@ -1,6 +1,6 @@
 ---
 theme: default
-colorSchema: light
+colorSchema: auto
 # background: /images/cyberlit-wide-lite.png
 title: Live Arch
 titleTemplate: "%s - by Pavel Agarkov"
@@ -18,23 +18,26 @@ duration: 60min
 ### by Pavel Agarkov
 <style>
 .slidev-layout {
-  background-image: url(/images/cyberlit-wide-lite.png)!important;
+  background-image: url(/images/promo.png)!important;
 }
 h1 {
+  color: white;
   letter-spacing: 0.3em;
-  opacity: 0.6
+  opacity: 0.8
 }
 h3 {
-  opacity: 0.5
+  color: white;
+  opacity: 0.7;
+  margin-right: 16px;
 }
 </style>
 
-<div style="position:absolute;left:0;right:0;bottom:2rem;text-align:center" class="text-md opacity-50">
+<div style="position:absolute;left:0;right:0;bottom:2rem;text-align:center;color:white" class="text-md opacity-90">
   Blueprints to Clouds: Turning Architecture into Automated Infrastructure
 </div>
 
 <div class="abs-br m-6 text-xl">
-  <a href="https://github.com/pavel-agarkov/live-arch" target="_blank" class="slidev-icon-btn">
+  <a href="https://github.com/pavel-agarkov/live-arch" target="_blank" class="slidev-icon-btn" style="color:white;">
     <carbon:logo-github />
   </a>
 </div>
