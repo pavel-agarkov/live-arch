@@ -93,6 +93,10 @@ src: ./sections/5.pulumi.md
 ---
 
 ---
+src: ./sections/6.engine.md
+---
+
+---
 
 # Thank You!
 

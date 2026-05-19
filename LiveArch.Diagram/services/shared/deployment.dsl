@@ -71,7 +71,7 @@ sharedRgReference = deploymentNode "Shared Resource Group Reference" {
 sandbox = deploymentNode "Sandbox" {
     technology "azure-native:resources:getResourceGroup"
     properties {
-        resourceGroupName     sandbox
+        resourceGroupName               sandbox
     }
     testSa = infrastructureNode "Test Storage Account" {
         technology "azure-native:storage:StorageAccount"
@@ -87,12 +87,12 @@ sandbox = deploymentNode "Sandbox" {
     testMi = infrastructureNode "Test Managed Identity" {
         technology "azure-native:managedidentity:UserAssignedIdentity"
         properties {
-            resourceName   test-mi
+            resourceName                test-mi
         }
         -> testSa "Contribute" "azure-native:authorization:RoleAssignment" {
             properties {
-                principalType ServicePrincipal
-                roleDefinitionId "${storageBlobDataContributor}"
+                principalType           ServicePrincipal
+                roleDefinitionId        "${storageBlobDataContributor}"
             }
         }
     }
