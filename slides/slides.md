@@ -92,6 +92,10 @@ src: ./sections/6.engine.md
 ---
 
 ---
+src: ./sections/7.patterns.md
+---
+
+---
 
 # Thank You!
 
