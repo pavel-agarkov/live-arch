@@ -76,15 +76,7 @@ That is the frame for the rest of the talk.
 -->
 
 ---
-src: ./sections/1.problem.md
----
-
----
-src: ./sections/2.why.md
----
-
----
-src: ./sections/3.goals.md
+src: ./sections/1.problem-space.md
 ---
 
 ---
