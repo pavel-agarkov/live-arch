@@ -1,6 +1,6 @@
 ---
 theme: default
-# colorSchema: dark
+colorSchema: light
 # background: /images/cyberlit-wide-lite.png
 title: Live Arch
 titleTemplate: "%s - by Pavel Agarkov"
