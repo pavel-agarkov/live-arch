@@ -3,6 +3,16 @@ systemLandscape enterprise {
     autoLayout tb
 }
 
+systemContext orderMsgSys order-message-system {
+    include *
+    autoLayout tb
+}
+
+systemContext deliveryMsgSys delivery-message-system {
+    include *
+    autoLayout tb
+}
+
 deployment * cloud env {
     include *
     exclude sharedRg
@@ -24,12 +34,12 @@ deployment * cloud sandbox "Sandbox resources" {
     autolayout
 }
 
-container orderMsgSys order-message-system {
+container orderMsgSys order-msg {
     include *
     autolayout
 }
 
-container deliveryMsgSys delivery-message-system {
+container deliveryMsgSys delivery-msg {
     include *
     autolayout
 }

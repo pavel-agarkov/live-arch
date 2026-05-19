@@ -1,0 +1,22 @@
+graph LR
+  linkStyle default fill:#ffffff
+
+  subgraph diagram ["Container View: Order Messaging System"]
+    style diagram fill:#ffffff,stroke:#ffffff
+
+    5["<div style='font-weight: bold'>Order Microservice</div><div style='font-size: 70%; margin-top: 0px'>[Software System]</div>"]
+    style 5 fill:#ffffff,stroke:#444444,color:#444444
+    19["<div style='font-weight: bold'>Delivery Microservice</div><div style='font-size: 70%; margin-top: 0px'>[Software System]</div>"]
+    style 19 fill:#ffffff,stroke:#444444,color:#444444
+
+    subgraph 1 ["Order Messaging System"]
+      style 1 fill:#ffffff,stroke:#444444,color:#444444
+
+      2["<div style='font-weight: bold'>Order Events</div><div style='font-size: 70%; margin-top: 0px'>[Container: azure-native:servicebus:getTopic]</div>"]
+      style 2 fill:#ffffff,stroke:#444444,color:#444444
+    end
+
+    5-. "<div>publish Order Placed Message</div><div style='font-size: 70%'></div>" .->2
+    19-. "<div>subscribe to Order Placed<br />Message</div><div style='font-size: 70%'>[azurela:servicebus:ReadableSubscription]</div>" .->2
+
+  end

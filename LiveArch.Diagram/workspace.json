@@ -3,7 +3,7 @@
   "description" : "An example of an enterprise architecture model using Structurizr DSL with Microsoft Azure components",
   "documentation" : { },
   "id" : 1,
-  "lastModifiedDate" : "2026-05-17T20:42:55Z",
+  "lastModifiedDate" : "2026-05-19T20:39:23Z",
   "model" : {
     "deploymentNodes" : [ {
       "children" : [ {
@@ -14,7 +14,7 @@
           "id" : "35",
           "name" : "Order Events Topic",
           "properties" : {
-            "structurizr.dsl.identifier" : "93526d1a-f2e4-4994-b461-870cd89acc7a",
+            "structurizr.dsl.identifier" : "5e288693-0162-4b3a-a2a7-a1baf154745c",
             "var" : "order-events-topic",
             "topicName" : "${ENV}-order-events-topic"
           },
@@ -25,7 +25,7 @@
           "id" : "36",
           "name" : "Delivery Events Topic",
           "properties" : {
-            "structurizr.dsl.identifier" : "c94bfd8c-3499-495e-9f92-6b588d78eb92",
+            "structurizr.dsl.identifier" : "0bf6317a-bc9a-4b66-b511-f2dee731a24a",
             "var" : "delivery-events-topic",
             "topicName" : "${ENV}-delivery-events-topic"
           },
@@ -35,7 +35,7 @@
         "instances" : "1",
         "name" : "Service Bus Namespace",
         "properties" : {
-          "structurizr.dsl.identifier" : "63c4c5ba-6a82-471d-8961-34e6f74ed028",
+          "structurizr.dsl.identifier" : "c09c073d-2cda-41d8-af6c-8ee28b1b5db6",
           "namespaceName" : "${ENV}-sbns"
         },
         "tags" : "Element,Deployment Node,Microsoft Azure - Azure Service Bus",
@@ -84,7 +84,7 @@
         "instances" : "1",
         "name" : "Service Bus Namespace",
         "properties" : {
-          "structurizr.dsl.identifier" : "b1f54d29-bc1e-4769-92bc-99e4479f1c00",
+          "structurizr.dsl.identifier" : "fae2ccaf-5269-429d-b41b-5a688fead809",
           "namespaceName" : "${ENV}-sbns"
         },
         "tags" : "Element,Deployment Node,Microsoft Azure - Azure Service Bus",
@@ -109,14 +109,14 @@
         "name" : "Test Storage Account",
         "properties" : {
           "structurizr.dsl.identifier" : "testSa",
-          "accountName" : "testtatrasa",
+          "accountName" : "testsa",
           "minimumTlsVersion" : "TLS1_2",
           "kind" : "StorageV2",
           "sku.name" : "Standard_LRS",
           "accessTier" : "Cool",
           "allowBlobPublicAccess" : "false"
         },
-        "tags" : "Element,Infrastructure Node,Microsoft Azure - Storage Accounts",
+        "tags" : "Element,Infrastructure Node",
         "technology" : "azure-native:storage:StorageAccount"
       }, {
         "environment" : "${ENV}",
@@ -124,7 +124,7 @@
         "name" : "Test Managed Identity",
         "properties" : {
           "structurizr.dsl.identifier" : "testMi",
-          "resourceName" : "test-tatra-mi"
+          "resourceName" : "test-mi"
         },
         "relationships" : [ {
           "description" : "Contribute",
@@ -138,7 +138,7 @@
           "tags" : "Relationship",
           "technology" : "azure-native:authorization:RoleAssignment"
         } ],
-        "tags" : "Element,Infrastructure Node,Microsoft Azure - Managed Identities",
+        "tags" : "Element,Infrastructure Node",
         "technology" : "azure-native:managedidentity:UserAssignedIdentity"
       } ],
       "instances" : "1",
@@ -160,7 +160,7 @@
               "id" : "49",
               "instanceId" : 1,
               "properties" : {
-                "structurizr.dsl.identifier" : "bcf7a5a0-a7d0-47e2-93eb-2da4cad4b1f5",
+                "structurizr.dsl.identifier" : "ee03395e-fdb5-44d2-b883-df4b39e848b4",
                 "databaseName" : "${ENV}-order-db",
                 "var" : "order-db"
               },
@@ -171,7 +171,7 @@
             "instances" : "1",
             "name" : "Elastic Pool",
             "properties" : {
-              "structurizr.dsl.identifier" : "1d6d339b-7d1e-404c-b4f9-b46b654655bf",
+              "structurizr.dsl.identifier" : "6bb8eaa0-5f43-4f93-af5b-605f923b462c",
               "elasticPoolName" : "${SQL_ELASTIC_POOL_NAME}"
             },
             "tags" : "Element,Deployment Node,Microsoft Azure - SQL Elastic Pools",
@@ -182,7 +182,7 @@
           "instances" : "1",
           "name" : "SQL Server",
           "properties" : {
-            "structurizr.dsl.identifier" : "322cc672-615c-42c2-83b0-08d8d79d45fe",
+            "structurizr.dsl.identifier" : "6ce05592-1fe2-43f2-84e5-09c3b932f294",
             "sqlServerName" : "${SQL_SERVER_NAME}"
           },
           "tags" : "Element,Deployment Node,Microsoft Azure - Azure SQL",
@@ -193,7 +193,7 @@
         "instances" : "1",
         "name" : "SQL Server Registration",
         "properties" : {
-          "structurizr.dsl.identifier" : "25e0d75e-d934-4be8-84f7-0b03a06bdda2",
+          "structurizr.dsl.identifier" : "ab7d2d4d-6aaa-47cf-bb69-cce571c70b18",
           "sqlServerRegistrationName" : "${SQL_SERVER_REGISTRATION_NAME}"
         },
         "tags" : "Element,Deployment Node,Microsoft Azure - SQL Server Registries",
@@ -282,7 +282,7 @@
           "instances" : "1",
           "name" : "App Service Plan",
           "properties" : {
-            "structurizr.dsl.identifier" : "3403e8c4-6588-45fb-97f5-283b74585623",
+            "structurizr.dsl.identifier" : "8d24dcd7-770b-4d63-bc53-4370c1603f2d",
             "name" : "${ENV}-app-service-plan"
           },
           "tags" : "Element,Deployment Node,Microsoft Azure - App Service Plans",
@@ -293,7 +293,7 @@
         "instances" : "1",
         "name" : "Virtual Network",
         "properties" : {
-          "structurizr.dsl.identifier" : "b8c86bd8-5c81-46fd-823f-0e044f995774",
+          "structurizr.dsl.identifier" : "03d79e5d-68ea-40af-bb0a-6e20393393d7",
           "virtualNetworkName" : "${VNET_NAME}"
         },
         "tags" : "Element,Deployment Node,Microsoft Azure - Virtual Networks",
@@ -306,7 +306,7 @@
           "id" : "64",
           "name" : "Source",
           "properties" : {
-            "structurizr.dsl.identifier" : "287cdbc1-1fb0-4528-a868-9c2f40e23e0d"
+            "structurizr.dsl.identifier" : "a7c02485-7a66-417f-bf83-12c1755b24ed"
           },
           "relationships" : [ {
             "description" : "take",
@@ -394,7 +394,7 @@
         "id" : "68",
         "name" : "Key Vault Access Policy",
         "properties" : {
-          "structurizr.dsl.identifier" : "cf1ae6c3-0e2b-4c2f-bb08-3ce272b35caa",
+          "structurizr.dsl.identifier" : "ddaf0a9f-0c10-41ff-8659-e9c9345b2890",
           "var" : "order-service-kv-access-policy",
           "policy.permissions.secrets" : "get, list | split ,",
           "policy.tenantId" : "${TENANT_ID}"
@@ -442,7 +442,7 @@
               "id" : "75",
               "instanceId" : 1,
               "properties" : {
-                "structurizr.dsl.identifier" : "670a719f-a754-4d94-8c2f-3469f222a132",
+                "structurizr.dsl.identifier" : "c7b8012e-1400-4eb5-9600-574ad4d0ee7c",
                 "databaseName" : "${ENV}-delivery-db",
                 "var" : "delivery-db"
               },
@@ -453,7 +453,7 @@
             "instances" : "1",
             "name" : "Elastic Pool",
             "properties" : {
-              "structurizr.dsl.identifier" : "2c25e85f-dea1-4889-ae99-33d00fce1c88",
+              "structurizr.dsl.identifier" : "84b629a4-0443-4201-a1fc-b5b7b497c325",
               "elasticPoolName" : "${SQL_ELASTIC_POOL_NAME}"
             },
             "tags" : "Element,Deployment Node,Microsoft Azure - SQL Elastic Pools",
@@ -464,7 +464,7 @@
           "instances" : "1",
           "name" : "SQL Server",
           "properties" : {
-            "structurizr.dsl.identifier" : "28b3aa92-8f8f-459f-aabe-55368ec5dadf",
+            "structurizr.dsl.identifier" : "18329e8a-e478-4c02-be34-0a5677871cff",
             "sqlServerName" : "${SQL_SERVER_NAME}"
           },
           "tags" : "Element,Deployment Node,Microsoft Azure - Azure SQL",
@@ -475,7 +475,7 @@
         "instances" : "1",
         "name" : "SQL Server Registration",
         "properties" : {
-          "structurizr.dsl.identifier" : "51b682c7-3c80-46dc-994b-5c69bb16795d",
+          "structurizr.dsl.identifier" : "203f9399-6718-425b-8d45-3c49ef26dd64",
           "sqlServerRegistrationName" : "${SQL_SERVER_REGISTRATION_NAME}"
         },
         "tags" : "Element,Deployment Node,Microsoft Azure - SQL Server Registries",
@@ -489,7 +489,7 @@
             "id" : "81",
             "instanceId" : 1,
             "properties" : {
-              "structurizr.dsl.identifier" : "303cf839-6dea-47d1-8ddf-204fe4ee82d8",
+              "structurizr.dsl.identifier" : "16647452-1db6-4f81-b623-198c24358e91",
               "var" : "delivery-api",
               "name" : "${ENV}-delivery-api",
               "identity.type" : "UserAssigned"
@@ -525,7 +525,7 @@
             "id" : "85",
             "instanceId" : 1,
             "properties" : {
-              "structurizr.dsl.identifier" : "8e2e8379-0707-4db6-afc9-a7948f3e4e10",
+              "structurizr.dsl.identifier" : "ec6de828-2203-442a-99c3-468e7a246b83",
               "var" : "delivery-worker",
               "name" : "${ENV}-delivery-worker",
               "identity.type" : "UserAssigned"
@@ -561,7 +561,7 @@
           "instances" : "1",
           "name" : "App Service Plan",
           "properties" : {
-            "structurizr.dsl.identifier" : "bf2d8f67-4a84-4394-be9f-d1cce08ab196",
+            "structurizr.dsl.identifier" : "e80409c9-9159-4767-8ef8-b27f430e9268",
             "name" : "${ENV}-app-service-plan"
           },
           "tags" : "Element,Deployment Node,Microsoft Azure - App Service Plans",
@@ -572,7 +572,7 @@
         "instances" : "1",
         "name" : "Virtual Network",
         "properties" : {
-          "structurizr.dsl.identifier" : "ee453ef1-8f0e-4115-bdd1-9671664bbe88",
+          "structurizr.dsl.identifier" : "5ed81b63-c855-4430-b876-a9e65e398c26",
           "virtualNetworkName" : "${VNET_NAME}"
         },
         "tags" : "Element,Deployment Node,Microsoft Azure - Virtual Networks",
@@ -913,7 +913,7 @@
   },
   "name" : "EnterpriseArchitecture",
   "properties" : {
-    "structurizr.inspection.error" : "80",
+    "structurizr.inspection.error" : "81",
     "structurizr.inspection.info" : "0",
     "structurizr.inspection.ignore" : "0",
     "structurizr.inspection.warning" : "0"
@@ -2831,9 +2831,9 @@
         "y" : 0
       } ],
       "externalSoftwareSystemBoundariesVisible" : false,
-      "key" : "order-message-system",
+      "key" : "order-msg",
       "name" : "Container View: Order Messaging System",
-      "order" : 6,
+      "order" : 8,
       "relationships" : [ {
         "id" : "11"
       }, {
@@ -2862,9 +2862,9 @@
         "y" : 0
       } ],
       "externalSoftwareSystemBoundariesVisible" : false,
-      "key" : "delivery-message-system",
+      "key" : "delivery-msg",
       "name" : "Container View: Delivery Messaging System",
-      "order" : 7,
+      "order" : 9,
       "relationships" : [ {
         "id" : "17"
       }, {
@@ -2903,7 +2903,7 @@
       "externalSoftwareSystemBoundariesVisible" : false,
       "key" : "order-service",
       "name" : "Container View: Order Microservice",
-      "order" : 8,
+      "order" : 11,
       "relationships" : [ {
         "id" : "10"
       }, {
@@ -2946,7 +2946,7 @@
       "externalSoftwareSystemBoundariesVisible" : false,
       "key" : "delivery-service",
       "name" : "Container View: Delivery Microservice",
-      "order" : 10,
+      "order" : 14,
       "relationships" : [ {
         "id" : "22"
       }, {
@@ -3106,7 +3106,7 @@
       "environment" : "${ENV}",
       "key" : "env",
       "name" : "Deployment View: ${ENV}",
-      "order" : 2,
+      "order" : 4,
       "relationships" : [ {
         "id" : "44"
       }, {
@@ -3173,7 +3173,7 @@
       "environment" : "${ENV}",
       "key" : "shared-env",
       "name" : "Deployment View: ${ENV}",
-      "order" : 3
+      "order" : 5
     }, {
       "automaticLayout" : {
         "edgeSeparation" : 50,
@@ -3203,7 +3203,7 @@
       "environment" : "${ENV}",
       "key" : "shared-ref-env",
       "name" : "Deployment View: ${ENV}",
-      "order" : 4
+      "order" : 6
     }, {
       "automaticLayout" : {
         "edgeSeparation" : 50,
@@ -3229,7 +3229,7 @@
       "environment" : "${ENV}",
       "key" : "sandbox",
       "name" : "Deployment View: ${ENV}",
-      "order" : 5,
+      "order" : 7,
       "relationships" : [ {
         "id" : "44"
       } ]
@@ -3325,7 +3325,7 @@
       "environment" : "${ENV}",
       "key" : "order-env",
       "name" : "Deployment View: ${ENV}",
-      "order" : 9,
+      "order" : 12,
       "relationships" : [ {
         "id" : "54"
       }, {
@@ -3419,7 +3419,7 @@
       "environment" : "${ENV}",
       "key" : "delivery-env",
       "name" : "Deployment View: ${ENV}",
-      "order" : 11,
+      "order" : 15,
       "relationships" : [ {
         "id" : "78"
       }, {
@@ -3435,6 +3435,131 @@
       }, {
         "id" : "88"
       } ]
+    } ],
+    "systemContextViews" : [ {
+      "automaticLayout" : {
+        "edgeSeparation" : 50,
+        "nodeSeparation" : 50,
+        "rankDirection" : "TopBottom",
+        "rankSeparation" : 100,
+        "vertices" : true
+      },
+      "elements" : [ {
+        "id" : "1",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "5",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "19",
+        "x" : 0,
+        "y" : 0
+      } ],
+      "enterpriseBoundaryVisible" : true,
+      "key" : "order-message-system",
+      "name" : "System Context View: Order Messaging System",
+      "order" : 2,
+      "relationships" : [ {
+        "id" : "12"
+      }, {
+        "id" : "32"
+      } ],
+      "softwareSystemId" : "1"
+    }, {
+      "automaticLayout" : {
+        "edgeSeparation" : 50,
+        "nodeSeparation" : 50,
+        "rankDirection" : "TopBottom",
+        "rankSeparation" : 100,
+        "vertices" : true
+      },
+      "elements" : [ {
+        "id" : "3",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "5",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "19",
+        "x" : 0,
+        "y" : 0
+      } ],
+      "enterpriseBoundaryVisible" : true,
+      "key" : "delivery-message-system",
+      "name" : "System Context View: Delivery Messaging System",
+      "order" : 3,
+      "relationships" : [ {
+        "id" : "18"
+      }, {
+        "id" : "26"
+      } ],
+      "softwareSystemId" : "3"
+    }, {
+      "automaticLayout" : {
+        "edgeSeparation" : 50,
+        "nodeSeparation" : 50,
+        "rankDirection" : "TopBottom",
+        "rankSeparation" : 100,
+        "vertices" : true
+      },
+      "elements" : [ {
+        "id" : "1",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "3",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "5",
+        "x" : 0,
+        "y" : 0
+      } ],
+      "enterpriseBoundaryVisible" : true,
+      "key" : "order",
+      "name" : "System Context View: Order Microservice",
+      "order" : 10,
+      "relationships" : [ {
+        "id" : "12"
+      }, {
+        "id" : "18"
+      } ],
+      "softwareSystemId" : "5"
+    }, {
+      "automaticLayout" : {
+        "edgeSeparation" : 50,
+        "nodeSeparation" : 50,
+        "rankDirection" : "TopBottom",
+        "rankSeparation" : 100,
+        "vertices" : true
+      },
+      "elements" : [ {
+        "id" : "1",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "3",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "19",
+        "x" : 0,
+        "y" : 0
+      } ],
+      "enterpriseBoundaryVisible" : true,
+      "key" : "delivery",
+      "name" : "System Context View: Delivery Microservice",
+      "order" : 13,
+      "relationships" : [ {
+        "id" : "26"
+      }, {
+        "id" : "32"
+      } ],
+      "softwareSystemId" : "19"
     } ],
     "systemLandscapeViews" : [ {
       "automaticLayout" : {

@@ -1,3 +1,8 @@
+systemContext orderService order {
+    include *
+    autoLayout tb
+}
+
 container orderService order-service {
     include *
     autolayout

@@ -1,3 +1,8 @@
+systemContext deliveryService delivery {
+    include *
+    autoLayout tb
+}
+
 container deliveryService delivery-service {
     include *
     autolayout tb
