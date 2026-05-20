@@ -7,3 +7,9 @@
 .note details summary {
     cursor: pointer;
   } 
+
+.run-log pre {
+  font-size: 0.8rem;
+  line-height: 1.08;
+  white-space: pre-wrap;
+}

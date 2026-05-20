@@ -96,6 +96,10 @@ src: ./sections/7.patterns.md
 ---
 
 ---
+src: ./sections/8.run.md
+---
+
+---
 
 # Thank You!
 
