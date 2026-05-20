@@ -23,7 +23,7 @@ namespace LiveArch.Deployment
     /// This processor coordinates variable substitution, dependency ordering, output-to-input mapping,
     /// loop expansion, and resource registration across nested deployment scopes.
     /// </remarks>
-    public partial class StructurizrDeploymentProcessor
+    public partial class StructurizrDeploymentProcessor : IStructurizrDeploymentProcessor
     {
         /// <summary>
         /// Identifies a resource registration by its model node and owning scope.

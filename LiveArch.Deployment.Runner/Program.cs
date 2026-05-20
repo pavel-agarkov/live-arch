@@ -1,18 +1,7 @@
-using LiveArch.Deployment.Azure.Docker;
-using LiveArch.Deployment.Azure.Converters;
-using LiveArch.Deployment.Azure.ResourceHierarchy;
-using LiveArch.Deployment.Azure.ServiceBus;
-using LiveArch.Deployment.Controls;
-using LiveArch.Deployment.Converters;
-using LiveArch.Deployment.Docker;
-using LiveArch.Deployment.ResourceHierarchy;
-using LiveArch.Deployment.ResourceTypes;
-using LiveArch.Deployment.Transformers;
+using LiveArch.Deployment.Azure.Configuration;
+using LiveArch.Deployment.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Pulumi.AzureNative.Resources;
-using Pulumi.DockerBuild;
-using LiveArch.Deployment.Configuration;
 
 namespace LiveArch.Deployment.Runner
 {
@@ -25,21 +14,12 @@ namespace LiveArch.Deployment.Runner
                 var builder = Host.CreateApplicationBuilder(args);
 
                 builder.Services
-                    .AddResourceHierarchy<AzureResourceHierarchy>()
-                    .AddResourceTypes<Image>()
-                    .AddResourceTypes<ResourceGroup>()
-                    .AddResourceTypes<ForEachLoop>()
-                    .AddResourceTypes<ReadableSubscription>()
-                    .AddDockerImageReferenceConfigurator<AzureDockerImageReferenceConfigurator>()
-                    .AddDefaultTransformers()
-                    .AddDefaultValueConverters()
-                    .AddAzureValueConverters();
+                    .AddAzureDeploymentServices();
 
                 builder.Services.AddSingleton(_ => DeploymentCommandOptions.FromConfiguration(builder.Configuration));
                 builder.Services.AddSingleton<IDeploymentCommandOptions>(sp => sp.GetRequiredService<DeploymentCommandOptions>());
                 builder.Services.AddSingleton<DeploymentVariablesProvider>();
                 builder.Services.AddSingleton<IDeploymentVariablesProvider>(sp => sp.GetRequiredService<DeploymentVariablesProvider>());
-                builder.Services.AddTransient<StructurizrDeploymentProcessor>();
                 builder.Services.AddTransient<PulumiDeploymentRunner>();
 
                 using var host = builder.Build();

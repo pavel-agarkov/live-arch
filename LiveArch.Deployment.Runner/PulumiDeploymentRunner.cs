@@ -1,4 +1,4 @@
-using LiveArch.Deployment;
+using LiveArch.Deployment.Configuration;
 using Microsoft.Extensions.Logging;
 using Pulumi.Automation;
 using Pulumi.Automation.Events;
@@ -8,12 +8,12 @@ namespace LiveArch.Deployment.Runner
     internal sealed class PulumiDeploymentRunner
     {
         private readonly DeploymentCommandOptions options;
-            private readonly StructurizrDeploymentProcessor deploymentProcessor;
+        private readonly IStructurizrDeploymentProcessor deploymentProcessor;
         private readonly ILogger<PulumiDeploymentRunner> logger;
 
         public PulumiDeploymentRunner(
             DeploymentCommandOptions options,
-            StructurizrDeploymentProcessor deploymentProcessor,
+            IStructurizrDeploymentProcessor deploymentProcessor,
             ILogger<PulumiDeploymentRunner> logger)
         {
             this.options = options;
