@@ -1,9 +1,10 @@
 using Microsoft.Extensions.Configuration;
 using System.Text.RegularExpressions;
+using LiveArch.Deployment.Configuration;
 
 namespace LiveArch.Deployment.Runner
 {
-    internal sealed class DeploymentVariablesProvider
+    internal sealed class DeploymentVariablesProvider : IDeploymentVariablesProvider
     {
         private static readonly Regex DeploymentVariableKeyRegex = new("^[A-Z0-9_\\.:-]+$", RegexOptions.Compiled);
 
@@ -26,7 +27,7 @@ namespace LiveArch.Deployment.Runner
 
         public IReadOnlyDictionary<string, object> GetVariables()
         {
-            var variables = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+            var resolvedVariables = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
 
             foreach (var pair in configuration.AsEnumerable())
             {
@@ -37,7 +38,7 @@ namespace LiveArch.Deployment.Runner
 
                 if (pair.Key.StartsWith("variables:", StringComparison.OrdinalIgnoreCase))
                 {
-                    variables[pair.Key["variables:".Length..]] = pair.Value;
+                    resolvedVariables[pair.Key["variables:".Length..]] = pair.Value;
                     continue;
                 }
 
@@ -48,11 +49,11 @@ namespace LiveArch.Deployment.Runner
 
                 if (DeploymentVariableKeyRegex.IsMatch(pair.Key))
                 {
-                    variables[pair.Key] = pair.Value;
+                    resolvedVariables[pair.Key] = pair.Value;
                 }
             }
 
-            return variables;
+            return resolvedVariables;
         }
     }
 }

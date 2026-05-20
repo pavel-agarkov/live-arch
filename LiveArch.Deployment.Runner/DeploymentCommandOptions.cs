@@ -1,8 +1,9 @@
 using Microsoft.Extensions.Configuration;
+using LiveArch.Deployment.Configuration;
 
 namespace LiveArch.Deployment.Runner
 {
-    internal sealed class DeploymentCommandOptions
+    internal sealed class DeploymentCommandOptions : IDeploymentCommandOptions
     {
         public string ProjectName => "LiveArch.Deployment";
 
@@ -28,8 +29,7 @@ namespace LiveArch.Deployment.Runner
         /// </summary>
         public string PulumiCommand { get; }
 
-
-        private DeploymentCommandOptions(string environment, string deployment, string workspacePath, string pulumiCommand)
+        public DeploymentCommandOptions(string environment, string deployment, string workspacePath, string pulumiCommand)
         {
             Environment = environment;
             Deployment = deployment;

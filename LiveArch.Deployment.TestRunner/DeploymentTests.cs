@@ -1,7 +1,8 @@
-﻿using LiveArch.Deployment.Azure.Docker;
-using LiveArch.Deployment.Azure.Converters;
+﻿using LiveArch.Deployment.Azure.Converters;
+using LiveArch.Deployment.Azure.Docker;
 using LiveArch.Deployment.Azure.ResourceHierarchy;
 using LiveArch.Deployment.Azure.ServiceBus;
+using LiveArch.Deployment.Configuration;
 using LiveArch.Deployment.Controls;
 using LiveArch.Deployment.Converters;
 using LiveArch.Deployment.Docker;
@@ -11,7 +12,6 @@ using LiveArch.Deployment.Transformers;
 using Microsoft.Extensions.DependencyInjection;
 using Pulumi.AzureNative.AppConfiguration;
 using Pulumi.AzureNative.Authorization;
-using Pulumi.AzureNative.DataBoxEdge;
 using Pulumi.AzureNative.ManagedIdentity;
 using Pulumi.AzureNative.Resources;
 using Pulumi.AzureNative.Sql;
@@ -163,20 +163,26 @@ namespace LiveArch.Deployment.TestRunner
             ws.CreatedResources.Values.OfType<RoleAssignment>().Count().Should().Be(expectedRoleAssignments);
         }
 
-        private async Task<StructurizrComponent> ProcessDeployment(string deployment)
+        private async Task<StructurizrDeploymentProcessor> ProcessDeployment(string deployment)
         {
-            var ws = new StructurizrComponent("workspace.json", "prod", deployment, variables,
-                hierarchyRegistry, resourceTypesRegistry, dockerImageConfig, conversionEngine, transformerRegistry);
+            var ws = new StructurizrDeploymentProcessor(
+                new TestDeploymentCommandOptions("prod", deployment, "workspace.json"),
+                new TestDeploymentVariablesProvider(variables),
+                new ResourceHierarchyBuilder([new AzureResourceHierarchy()], resourceTypesRegistry),
+                resourceTypesRegistry,
+                dockerImageConfig,
+                conversionEngine,
+                transformerRegistry);
 
             await Pulumi.Deployment.TestAsync(testMocks, new TestOptions { IsPreview = false }, async () =>
             {
-                await ws.ProcessWorkspaceAsync(default);
+                await ws.ProcessDeploymentAsync(default);
             });
 
             return ws;
         }
 
-        private static IEnumerable<StructurizrComponent.ResourceScope> GetDescendantScopes(StructurizrComponent.ResourceScope scope)
+        private static IEnumerable<StructurizrDeploymentProcessor.ResourceScope> GetDescendantScopes(StructurizrDeploymentProcessor.ResourceScope scope)
         {
             foreach (var childScope in scope.ChildScopes)
             {
@@ -189,11 +195,23 @@ namespace LiveArch.Deployment.TestRunner
             }
         }
 
-        private static StructurizrComponent.ResourceScope FindScopeById(StructurizrComponent.ResourceScope scope, int scopeId)
+        private static StructurizrDeploymentProcessor.ResourceScope FindScopeById(StructurizrDeploymentProcessor.ResourceScope scope, int scopeId)
         {
             return scope.Id == scopeId
                 ? scope
                 : GetDescendantScopes(scope).Single(childScope => childScope.Id == scopeId);
+        }
+
+        private sealed class TestDeploymentCommandOptions(string environment, string deployment, string workspacePath) : IDeploymentCommandOptions
+        {
+            public string Environment { get; } = environment;
+            public string Deployment { get; } = deployment;
+            public string WorkspacePath { get; } = workspacePath;
+        }
+
+        private sealed class TestDeploymentVariablesProvider(IReadOnlyDictionary<string, object> values) : IDeploymentVariablesProvider
+        {
+            public IReadOnlyDictionary<string, object> GetVariables() => values;
         }
 
         public static async Task TestCases()

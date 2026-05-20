@@ -1,9 +1,4 @@
 using LiveArch.Deployment;
-using LiveArch.Deployment.Converters;
-using LiveArch.Deployment.Docker;
-using LiveArch.Deployment.ResourceHierarchy;
-using LiveArch.Deployment.ResourceTypes;
-using LiveArch.Deployment.Transformers;
 using Microsoft.Extensions.Logging;
 using Pulumi.Automation;
 using Pulumi.Automation.Events;
@@ -13,31 +8,16 @@ namespace LiveArch.Deployment.Runner
     internal sealed class PulumiDeploymentRunner
     {
         private readonly DeploymentCommandOptions options;
-        private readonly DeploymentVariablesProvider variablesProvider;
-        private readonly IResourceHierarchyBuilder resourceHierarchyBuilder;
-        private readonly ResourceTypesRegistry resourceTypesRegistry;
-        private readonly DockerImageReferenceConfigurator dockerImageReferenceConfigurator;
-        private readonly IConversionEngine conversionEngine;
-        private readonly ITransformerRegistry transformerRegistry;
+            private readonly StructurizrDeploymentProcessor deploymentProcessor;
         private readonly ILogger<PulumiDeploymentRunner> logger;
 
         public PulumiDeploymentRunner(
             DeploymentCommandOptions options,
-            DeploymentVariablesProvider variablesProvider,
-            IResourceHierarchyBuilder resourceHierarchyBuilder,
-            ResourceTypesRegistry resourceTypesRegistry,
-            DockerImageReferenceConfigurator dockerImageReferenceConfigurator,
-            IConversionEngine conversionEngine,
-            ITransformerRegistry transformerRegistry,
+            StructurizrDeploymentProcessor deploymentProcessor,
             ILogger<PulumiDeploymentRunner> logger)
         {
             this.options = options;
-            this.variablesProvider = variablesProvider;
-            this.resourceHierarchyBuilder = resourceHierarchyBuilder;
-            this.resourceTypesRegistry = resourceTypesRegistry;
-            this.dockerImageReferenceConfigurator = dockerImageReferenceConfigurator;
-            this.conversionEngine = conversionEngine;
-            this.transformerRegistry = transformerRegistry;
+            this.deploymentProcessor = deploymentProcessor;
             this.logger = logger;
         }
 
@@ -45,18 +25,7 @@ namespace LiveArch.Deployment.Runner
         {
             var stackArgs = new InlineProgramArgs(options.ProjectName, options.StackName, PulumiFn.Create(async () =>
             {
-                var deployment = new StructurizrComponent(
-                    options.WorkspacePath,
-                    options.Environment,
-                    options.Deployment,
-                    variablesProvider.GetVariables(),
-                    resourceHierarchyBuilder.Registry,
-                    resourceTypesRegistry,
-                    dockerImageReferenceConfigurator,
-                    conversionEngine,
-                    transformerRegistry);
-
-                await deployment.ProcessWorkspaceAsync(cancellationToken);
+                await deploymentProcessor.ProcessDeploymentAsync(cancellationToken);
             }))
             {
                 WorkDir = "./.pulumi",
