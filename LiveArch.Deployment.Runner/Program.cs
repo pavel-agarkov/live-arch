@@ -12,6 +12,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Pulumi.AzureNative.Resources;
 using Pulumi.DockerBuild;
+using LiveArch.Deployment.Configuration;
 
 namespace LiveArch.Deployment.Runner
 {
@@ -35,7 +36,10 @@ namespace LiveArch.Deployment.Runner
                     .AddAzureValueConverters();
 
                 builder.Services.AddSingleton(_ => DeploymentCommandOptions.FromConfiguration(builder.Configuration));
+                builder.Services.AddSingleton<IDeploymentCommandOptions>(sp => sp.GetRequiredService<DeploymentCommandOptions>());
                 builder.Services.AddSingleton<DeploymentVariablesProvider>();
+                builder.Services.AddSingleton<IDeploymentVariablesProvider>(sp => sp.GetRequiredService<DeploymentVariablesProvider>());
+                builder.Services.AddTransient<StructurizrDeploymentProcessor>();
                 builder.Services.AddTransient<PulumiDeploymentRunner>();
 
                 using var host = builder.Build();

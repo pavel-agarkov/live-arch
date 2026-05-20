@@ -6,7 +6,7 @@ using Type = System.Type;
 
 namespace LiveArch.Deployment
 {
-    public partial class StructurizrComponent
+    public partial class StructurizrDeploymentProcessor
     {
         /// <summary>
         /// Encapsulates low-level binding of converted values into Pulumi argument objects.
@@ -15,7 +15,7 @@ namespace LiveArch.Deployment
         /// The binder resolves input metadata, creates nested input wrappers, and supports plain assignments,
         /// keyed collection writes, and append operations for Pulumi input collection types.
         /// </remarks>
-        private sealed class InputValueBinder(StructurizrComponent owner)
+        private sealed class InputValueBinder(StructurizrDeploymentProcessor owner)
         {
             private readonly Dictionary<object, object> childInputWrappers = new();
             private readonly Dictionary<Type, Dictionary<string, PropertyInfo>> allInputProps = new();

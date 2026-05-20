@@ -1,4 +1,5 @@
 ﻿using LiveArch.Deployment.Adapters;
+using LiveArch.Deployment.Configuration;
 using LiveArch.Deployment.Controls;
 using LiveArch.Deployment.Converters;
 using LiveArch.Deployment.Docker;
@@ -19,10 +20,10 @@ namespace LiveArch.Deployment
     /// Processes a Structurizr deployment view and materializes the corresponding Pulumi resources.
     /// </summary>
     /// <remarks>
-    /// This component coordinates variable substitution, dependency ordering, output-to-input mapping,
+    /// This processor coordinates variable substitution, dependency ordering, output-to-input mapping,
     /// loop expansion, and resource registration across nested deployment scopes.
     /// </remarks>
-    public partial class StructurizrComponent
+    public partial class StructurizrDeploymentProcessor
     {
         /// <summary>
         /// Identifies a resource registration by its model node and owning scope.
@@ -68,18 +69,18 @@ namespace LiveArch.Deployment
             public HashSet<ModelItem> PendingDependencies { get; } = [.. pendingDependencies];
         }
 
-        [GeneratedRegex(@"\$\{([a-zA-Z0-9_\.\:\-]+)\}", RegexOptions.Multiline, 1000)]
-        private static partial Regex InterpolationRegex();
-        private static readonly Regex VarRegex = InterpolationRegex();
+        private static readonly Regex VarRegex = new(@"\$\{([a-zA-Z0-9_\.\:\-]+)\}", RegexOptions.Multiline | RegexOptions.Compiled, TimeSpan.FromMilliseconds(1000));
         private int scopeId;
-        private readonly string environment;
+        private readonly IDeploymentCommandOptions options;
+        private readonly IDeploymentVariablesProvider variablesProvider;
+        private readonly IResourceHierarchyBuilder resourceHierarchyBuilder;
         private readonly ResourceHierarchyRegistry hierarchyRegistry;
         private readonly ResourceTypesRegistry resourceTypesRegistry;
         private readonly DockerImageReferenceConfigurator dockerImageReferenceConfigurator;
         private readonly IConversionEngine conversionEngine;
-        private readonly DeploymentView deploymentView;
-        private readonly DeploymentContext rootContext;
-        private Workspace workspace;
+        private DeploymentView deploymentView = null!;
+        private DeploymentContext rootContext = null!;
+        private Workspace workspace = null!;
         private Dictionary<ResourceKey, WaitingNodeRegistration> waitingNodes = new();
         private readonly OutputValueReader outputValueReader = new();
         private readonly InputValueBinder inputValueBinder;
@@ -93,42 +94,34 @@ namespace LiveArch.Deployment
         public IReadOnlyDictionary<ResourceKey, object> ReferencedResources => FlattenResources(static scope => scope.ReferencedResources);
 
         /// <summary>
-        /// Initializes the component for a specific deployment view and root variable set.
+        /// Initializes the processor for a specific deployment view and root variable set.
         /// </summary>
-        /// <param name="workspacePath">Path to the Structurizr workspace JSON file.</param>
-        /// <param name="environment">Deployment environment name used to filter active nodes.</param>
-        /// <param name="deployment">Deployment view key to execute.</param>
-        /// <param name="variables">Root variables available during substitution and conversion.</param>
-        /// <param name="hierarchyRegistry">Registry that defines parent-to-child property propagation rules.</param>
+        /// <param name="options">Deployment options that identify the workspace, environment, and deployment view.</param>
+        /// <param name="variablesProvider">Provider of root variables available during substitution and conversion.</param>
+        /// <param name="resourceHierarchyBuilder">Builder that provides parent-to-child property propagation rules.</param>
         /// <param name="resourceTypesRegistry">Registry that maps technology strings to Pulumi resource types or invokes.</param>
         /// <param name="dockerImageReferenceConfigurator">Helper used to map built images into container resource inputs.</param>
         /// <param name="conversionEngine">Conversion engine responsible for typed and named value conversion.</param>
         /// <param name="transformerRegistry">Registry that resolves built-in and custom transformer factories by DSL name.</param>
-        public StructurizrComponent(
-            string workspacePath,
-            string environment,
-            string deployment,
-            IReadOnlyDictionary<string, object> variables,
-            ResourceHierarchyRegistry hierarchyRegistry,
+        public StructurizrDeploymentProcessor(
+            IDeploymentCommandOptions options,
+            IDeploymentVariablesProvider variablesProvider,
+            IResourceHierarchyBuilder resourceHierarchyBuilder,
             ResourceTypesRegistry resourceTypesRegistry,
             DockerImageReferenceConfigurator dockerImageReferenceConfigurator,
             IConversionEngine conversionEngine,
             ITransformerRegistry transformerRegistry)
         {
-            var json = new FileInfo(workspacePath);
-            workspace = WorkspaceUtils.LoadWorkspaceFromJson(json);
-            this.environment = environment;
-            this.hierarchyRegistry = hierarchyRegistry;
+            this.options = options;
+            this.variablesProvider = variablesProvider;
+            this.resourceHierarchyBuilder = resourceHierarchyBuilder;
+            this.hierarchyRegistry = resourceHierarchyBuilder.Registry;
             this.resourceTypesRegistry = resourceTypesRegistry;
             this.dockerImageReferenceConfigurator = dockerImageReferenceConfigurator;
             this.conversionEngine = conversionEngine;
             this.transformerRegistry = transformerRegistry;
             this.transformerPipeline = new TransformerPipeline(this.transformerRegistry);
             this.inputValueBinder = new InputValueBinder(this);
-            this.deploymentView = workspace.Views.DeploymentViews.FirstOrDefault(v => v.Key == deployment)
-                ?? throw new InvalidOperationException($"Deployment '{deployment}' was not found in the current workspace.");
-
-            rootContext = CreateDeploymentContext(CreateScope(null, workspace), variables);
         }
 
         /// <summary>
@@ -138,9 +131,11 @@ namespace LiveArch.Deployment
         /// <remarks>
         /// Throws when at least one node remains unresolved in the waiting queue after traversal completes.
         /// </remarks>
-        public async Task ProcessWorkspaceAsync(CancellationToken cancellationToken)
+        public async Task ProcessDeploymentAsync(CancellationToken cancellationToken)
         {
-            var rootDeploymentNodes = workspace.Model.DeploymentNodes.On(environment, deploymentView, SubstituteVariables(rootContext));
+            InitializeProcessingState();
+
+            var rootDeploymentNodes = workspace.Model.DeploymentNodes.On(options.Environment, deploymentView, SubstituteVariables(rootContext));
             foreach (var deployNode in rootDeploymentNodes)
             {
                 await ProcessDeploymentNodeAsync(deployNode, rootContext, cancellationToken);
@@ -151,6 +146,18 @@ namespace LiveArch.Deployment
                 var unresolvedNodes = string.Join(", ", waitingNodes.Keys.Select(x => x.Node.ToString()));
                 throw new InvalidOperationException($"Unable to resolve resource dependencies for nodes: {unresolvedNodes}");
             }
+        }
+
+        private void InitializeProcessingState()
+        {
+            scopeId = 0;
+            waitingNodes = new Dictionary<ResourceKey, WaitingNodeRegistration>();
+
+            var json = new FileInfo(options.WorkspacePath);
+            workspace = WorkspaceUtils.LoadWorkspaceFromJson(json);
+            deploymentView = workspace.Views.DeploymentViews.FirstOrDefault(v => v.Key == options.Deployment)
+                ?? throw new InvalidOperationException($"Deployment '{options.Deployment}' was not found in the current workspace.");
+            rootContext = CreateDeploymentContext(CreateScope(null, workspace), variablesProvider.GetVariables());
         }
 
         /// <summary>
@@ -340,7 +347,7 @@ namespace LiveArch.Deployment
                 await CreateNodeAsync(infraNode, context, cancellationToken);
             }
 
-            foreach (var containerInstance in deployNode.ContainerInstances.On(environment, deploymentView, SubstituteVariables(context)))
+            foreach (var containerInstance in deployNode.ContainerInstances.On(options.Environment, deploymentView, SubstituteVariables(context)))
             {
                 await ProcessContainerInstanceAsync(containerInstance!, context, cancellationToken);
             }

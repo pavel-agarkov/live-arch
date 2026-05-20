@@ -1,10 +1,9 @@
-﻿using LiveArch.Deployment.Adapters;
-using Structurizr;
+﻿using Structurizr;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace LiveArch.Deployment
+namespace LiveArch.Deployment.Adapters
 {
     public static class StructurizrExtensions
     {
