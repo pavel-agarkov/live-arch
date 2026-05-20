@@ -43,7 +43,8 @@ h3 {
 </div>
 
 <!--
-  presenter comments
+Hi, my name is Pavel Agarkov and I'm a Solution Architect at Capgemini.
+I focus on Azure, .NET, event‑driven and distributed systems, high‑load workloads, and microservice architectures. Over the years, I’ve been involved in a wide range of projects, including cloud migrations, microservice decomposition, and platform automation. I enjoy designing systems that are both scalable and maintainable, and I’m passionate about improving engineering workflows through automation. At home, I’m a husband and a father to a one‑year‑old son — which means my main hobby right now is sleep management.
 -->
 
 ---

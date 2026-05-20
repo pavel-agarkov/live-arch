@@ -4,3 +4,28 @@
   white-space: pre-wrap;
   opacity: 0.8;
 }
+
+.patterns-compare-60-40 {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: 1.5rem;
+}
+
+.patterns-compare-70-30 {
+    display: grid;
+    grid-template-columns: minmax(0, 7fr) minmax(0, 3fr);
+    gap: 1.5rem;
+}
+
+.patterns-diagram-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.patterns-diagram-center .mermaid,
+.patterns-diagram-center svg {
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
