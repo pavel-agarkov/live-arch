@@ -76,7 +76,7 @@ sandbox = deploymentNode "Sandbox" {
     testSa = infrastructureNode "Test Storage Account" {
         technology "azure-native:storage:StorageAccount"
         properties {
-            accountName                 testsa
+            accountName                 test523412oqwsa
             allowBlobPublicAccess       false
             minimumTlsVersion           TLS1_2
             sku.name                    Standard_LRS
