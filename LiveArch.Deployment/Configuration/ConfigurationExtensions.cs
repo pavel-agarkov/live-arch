@@ -8,8 +8,16 @@ using Pulumi.DockerBuild;
 
 namespace LiveArch.Deployment.Configuration
 {
+    /// <summary>
+    /// Registers core deployment services and the default processor implementation.
+    /// </summary>
     public static class ConfigurationExtensions
     {
+        /// <summary>
+        /// Registers the core default services required by the deployment engine.
+        /// </summary>
+        /// <param name="services">Service collection to extend.</param>
+        /// <returns>The updated service collection.</returns>
         public static IServiceCollection AddDefaultDeploymentServices(this IServiceCollection services)
         {
             return services
@@ -20,6 +28,11 @@ namespace LiveArch.Deployment.Configuration
                 .AddStructurizrDeploymentProcessor();
         }
 
+        /// <summary>
+        /// Registers the standard <see cref="StructurizrDeploymentProcessor"/> implementation and exposes it through <see cref="IStructurizrDeploymentProcessor"/>.
+        /// </summary>
+        /// <param name="services">Service collection to extend.</param>
+        /// <returns>The updated service collection.</returns>
         public static IServiceCollection AddStructurizrDeploymentProcessor(this IServiceCollection services)
         {
             services.TryAddTransient<StructurizrDeploymentProcessor>();

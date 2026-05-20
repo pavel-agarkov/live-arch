@@ -6,11 +6,18 @@ using System.Text;
 
 namespace LiveArch.Deployment.ResourceTypes
 {
+    /// <summary>
+    /// Resolves Pulumi resource types and invoke methods from registered provider assemblies.
+    /// </summary>
     public class ResourceTypesRegistry
     {
         private readonly Dictionary<string, Type> resourceTypes = new();
         private Dictionary<string, MethodInfo> invokeMethods = new();
 
+        /// <summary>
+        /// Initializes the registry by scanning the assemblies referenced by the supplied markers.
+        /// </summary>
+        /// <param name="assemblyMarkers">Marker types that identify assemblies to scan.</param>
         public ResourceTypesRegistry(IEnumerable<ResourceTypesAssemblyMarker> assemblyMarkers)
         {
             foreach (var marker in assemblyMarkers)
@@ -19,11 +26,23 @@ namespace LiveArch.Deployment.ResourceTypes
             }
         }
 
+        /// <summary>
+        /// Tries to resolve a Pulumi resource CLR type for the given Pulumi token.
+        /// </summary>
+        /// <param name="token">Pulumi type token such as <c>azure-native:storage:StorageAccount</c>.</param>
+        /// <param name="type">Resolved CLR type when found.</param>
+        /// <returns><c>true</c> when the token is known; otherwise <c>false</c>.</returns>
         public bool TryGetResourceType(string token, out Type? type)
         {
             return resourceTypes.TryGetValue(token, out type);
         }
 
+        /// <summary>
+        /// Tries to resolve a Pulumi invoke method for the given Pulumi token.
+        /// </summary>
+        /// <param name="token">Pulumi invoke token such as <c>azure-native:resources:getResourceGroup</c>.</param>
+        /// <param name="method">Resolved static invoke method when found.</param>
+        /// <returns><c>true</c> when the token is known; otherwise <c>false</c>.</returns>
         public bool TryGetInvokeMethod(string token, out MethodInfo? method)
         {
             return invokeMethods.TryGetValue(token, out method);
@@ -91,6 +110,10 @@ namespace LiveArch.Deployment.ResourceTypes
             return null;
         }
 
+        /// <summary>
+        /// Returns every distinct resource or invoke result type discovered in the registry.
+        /// </summary>
+        /// <returns>A de-duplicated collection of CLR types used by the deployment engine.</returns>
         public IReadOnlyCollection<Type> GetAllResourceTypes()
         {
             return [

@@ -37,12 +37,39 @@ namespace LiveArch.Deployment
         /// </summary>
         public sealed class ResourceScope(int id, int level, ResourceScope? parentScope, object ownerResource)
         {
+            /// <summary>
+            /// Gets the unique numeric identifier of the scope.
+            /// </summary>
             public int Id { get; } = id;
+
+            /// <summary>
+            /// Gets the nesting level of the scope, starting at <c>1</c> for the root scope.
+            /// </summary>
             public int Level { get; } = level;
+
+            /// <summary>
+            /// Gets the parent scope, or <c>null</c> when this is the root scope.
+            /// </summary>
             public ResourceScope? ParentScope { get; } = parentScope;
+
+            /// <summary>
+            /// Gets the resource or model object that owns this scope.
+            /// </summary>
             public object OwnerResource { get; } = ownerResource;
+
+            /// <summary>
+            /// Gets resources created directly in this scope.
+            /// </summary>
             public Dictionary<ModelItem, object> CreatedResources { get; } = new();
+
+            /// <summary>
+            /// Gets resources referenced directly in this scope.
+            /// </summary>
             public Dictionary<ModelItem, object> ReferencedResources { get; } = new();
+
+            /// <summary>
+            /// Gets child scopes created beneath this scope.
+            /// </summary>
             public List<ResourceScope> ChildScopes { get; } = [];
         }
 
@@ -89,8 +116,19 @@ namespace LiveArch.Deployment
         private readonly InvokeOptions? invokeOptions = null;
         private readonly CustomResourceOptions? customResourceOptions = null;
 
+        /// <summary>
+        /// Gets the root scope created for the current deployment run.
+        /// </summary>
         public ResourceScope RootScope => rootContext.Scope;
+
+        /// <summary>
+        /// Gets all created resources flattened across the scope tree.
+        /// </summary>
         public IReadOnlyDictionary<ResourceKey, object> CreatedResources => FlattenResources(static scope => scope.CreatedResources);
+
+        /// <summary>
+        /// Gets all referenced resources flattened across the scope tree.
+        /// </summary>
         public IReadOnlyDictionary<ResourceKey, object> ReferencedResources => FlattenResources(static scope => scope.ReferencedResources);
 
         /// <summary>

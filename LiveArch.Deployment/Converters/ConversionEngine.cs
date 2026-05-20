@@ -5,6 +5,9 @@ using Type = System.Type;
 
 namespace LiveArch.Deployment.Converters
 {
+    /// <summary>
+    /// Converts raw DSL values into the CLR and Pulumi input shapes expected by target resources.
+    /// </summary>
     public sealed class ConversionEngine(
         IEnumerable<ITypedValueConverter> typedConverters,
         IEnumerable<INamedValueConverter> namedConverters) : IConversionEngine
@@ -18,6 +21,7 @@ namespace LiveArch.Deployment.Converters
                 grouping => grouping.Single(),
                 StringComparer.OrdinalIgnoreCase);
 
+        /// <inheritdoc />
         public object ConvertValue(Type targetType, object sourceValue, ConversionContext context, string? converterName = null)
         {
             if (sourceValue == null)
