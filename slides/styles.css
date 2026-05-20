@@ -1,13 +1,3 @@
-.light .slidev-layout img[src^="https://www.plantuml.com"],
-.light .slidev-layout[style*="background-image"]:not(.cover)
- {
-  filter: invert(1) hue-rotate(180deg);
-}
-
-.note details summary {
-    cursor: pointer;
-  } 
-
 .run-log pre {
   font-size: 0.8rem;
   line-height: 1.08;
