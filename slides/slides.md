@@ -56,6 +56,7 @@ I focus on Azure, .NET, event‑driven and distributed systems, high‑load work
 - I am not trying to sell any specific technology
 - I am not claiming this is the only right approach
 - I hope parts of it may still be useful to others
+- You can stop me at any point to ask questions
 
 <!--
 Today I want to share my experience of solving a set of problems that were standing in front of me.
@@ -72,8 +73,6 @@ I want to show:
 
 So the right way to listen to this talk is not: "should we adopt this exact stack tomorrow?"
 The better question is: "is there anything in this approach that can help reduce the gap between architecture and delivery in our own context?"
-
-That is the frame for the rest of the talk.
 -->
 
 ---
