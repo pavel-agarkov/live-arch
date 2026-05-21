@@ -41,7 +41,7 @@ namespace LiveArch.Deployment.TestRunner
 
             pipeline.TryParse("get, list | split ,", out var sourceValue, out var transformers).Should().BeTrue();
             var transformed = TransformerPipeline.Apply(sourceValue, transformers);
-            var result = engine.ConvertValue(typeof(InputList<string>), transformed, ConversionContext.Empty);
+            var result = engine.ConvertValue(typeof(InputList<string>), transformed);
 
             var resolved = await ResolveInputAsync((Input<ImmutableArray<string>>)result);
             resolved.Should().Equal("get", "list");

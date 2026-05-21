@@ -223,7 +223,7 @@ namespace LiveArch.Deployment
                     throw new InvalidOperationException($"Variable '${{{name}}}' is not defined.");
                 }
 
-                var replacement = conversionEngine.ConvertValue(typeof(string), value, CreateConversionContext(context));
+                var replacement = conversionEngine.ConvertValue(typeof(string), value);
                 if (ConversionTypeHelpers.IsOutput(replacement.GetType()))
                 {
                     outputReplacementCount++;
@@ -279,16 +279,6 @@ namespace LiveArch.Deployment
         private Func<string, object> SubstituteVariables(DeploymentContext context)
         {
             return s => SubstituteVariables(s, context);
-        }
-
-        /// <summary>
-        /// Creates a conversion context bound to the current deployment variable resolver.
-        /// </summary>
-        /// <param name="context">Deployment context that provides variable resolution.</param>
-        /// <returns>A conversion context configured for this deployment scope.</returns>
-        private ConversionContext CreateConversionContext(DeploymentContext context)
-        {
-            return new ConversionContext(SubstituteVariables(context));
         }
 
         /// <summary>
@@ -1270,7 +1260,7 @@ namespace LiveArch.Deployment
                 sourceValue = SubstituteVariables(stringValue, context);
             }
 
-            return conversionEngine.ConvertValue(targetType, sourceValue, CreateConversionContext(context), converterName);
+            return conversionEngine.ConvertValue(targetType, sourceValue, converterName);
         }
     }
 }

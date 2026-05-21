@@ -22,7 +22,7 @@ namespace LiveArch.Deployment.Converters
                 StringComparer.OrdinalIgnoreCase);
 
         /// <inheritdoc />
-        public object ConvertValue(Type targetType, object sourceValue, ConversionContext context, string? converterName = null)
+        public object ConvertValue(Type targetType, object sourceValue, string? converterName = null)
         {
             if (sourceValue == null)
             {
@@ -30,7 +30,7 @@ namespace LiveArch.Deployment.Converters
             }
 
             var normalizedTargetType = Nullable.GetUnderlyingType(targetType) ?? targetType;
-            var request = new ConversionRequest(normalizedTargetType, sourceValue, context);
+            var request = new ConversionRequest(normalizedTargetType, sourceValue);
 
             return string.IsNullOrWhiteSpace(converterName)
                 ? ConvertUsingAutomaticConverters(request)
@@ -65,7 +65,7 @@ namespace LiveArch.Deployment.Converters
                     request.SourceValue,
                     sourceInnerType,
                     descriptor.ProjectedTargetType,
-                    value => ConvertValue(descriptor.ProjectedTargetType, value, request.Context, converterName));
+                    value => ConvertValue(descriptor.ProjectedTargetType, value, converterName));
 
                 return descriptor.WrapProjectedOutput(projected);
             }

@@ -3,35 +3,11 @@ using System;
 namespace LiveArch.Deployment.Converters
 {
     /// <summary>
-    /// Carries services needed during value conversion, primarily string resolution.
-    /// </summary>
-    public sealed class ConversionContext(Func<string, object>? stringValueResolver = null)
-    {
-        /// <summary>
-        /// Gets an empty conversion context with identity string resolution.
-        /// </summary>
-        public static ConversionContext Empty { get; } = new();
-
-        /// <summary>
-        /// Gets the delegate used to resolve string values before conversion.
-        /// </summary>
-        public Func<string, object> StringValueResolver { get; } = stringValueResolver ?? (static value => value);
-
-        /// <summary>
-        /// Resolves the supplied string through the configured resolver.
-        /// </summary>
-        /// <param name="value">Raw string value.</param>
-        /// <returns>The resolved value.</returns>
-        public object ResolveString(string value) => StringValueResolver(value);
-    }
-
-    /// <summary>
     /// Describes a single conversion request.
     /// </summary>
     public readonly record struct ConversionRequest(
         Type TargetType,
-        object SourceValue,
-        ConversionContext Context)
+        object SourceValue)
     {
         /// <summary>
         /// Gets the CLR type of the source value.
@@ -49,10 +25,10 @@ namespace LiveArch.Deployment.Converters
         /// </summary>
         /// <param name="targetType">Destination type to produce.</param>
         /// <param name="sourceValue">Source value to convert.</param>
-        /// <param name="context">Conversion context used during resolution.</param>
         /// <param name="converterName">Optional named converter to force for this conversion.</param>
+        /// 
         /// <returns>The converted value.</returns>
-        object ConvertValue(Type targetType, object sourceValue, ConversionContext context, string? converterName = null);
+        object ConvertValue(Type targetType, object sourceValue, string? converterName = null);
     }
 
     /// <summary>

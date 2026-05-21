@@ -16,9 +16,8 @@ namespace LiveArch.Deployment.TestRunner
         public void ShouldNotResolveStringVariablesInsideConversionEngine()
         {
             var engine = CreateEngine();
-            var context = new ConversionContext(value => value == "${FLAG}" ? "true" : value);
 
-            var act = () => engine.ConvertValue(typeof(bool), "${FLAG}", context);
+            var act = () => engine.ConvertValue(typeof(bool), "${FLAG}");
 
             act.Should().Throw<FormatException>();
         }
@@ -28,7 +27,7 @@ namespace LiveArch.Deployment.TestRunner
         {
             var engine = CreateEngine();
 
-            var result = engine.ConvertValue(typeof(ManagedServiceIdentityType), "UserAssigned", ConversionContext.Empty);
+            var result = engine.ConvertValue(typeof(ManagedServiceIdentityType), "UserAssigned");
 
             result.Should().Be(ManagedServiceIdentityType.UserAssigned);
         }
@@ -38,7 +37,7 @@ namespace LiveArch.Deployment.TestRunner
         {
             var engine = CreateEngine();
 
-            var result = engine.ConvertValue(typeof(Input<ManagedServiceIdentityType>), "UserAssigned", ConversionContext.Empty);
+            var result = engine.ConvertValue(typeof(Input<ManagedServiceIdentityType>), "UserAssigned");
 
             result.Should().BeAssignableTo<Input<ManagedServiceIdentityType>>();
             var resolved = await ResolveInputAsync((Input<ManagedServiceIdentityType>)result);
@@ -50,7 +49,7 @@ namespace LiveArch.Deployment.TestRunner
         {
             var engine = CreateEngine();
 
-            var result = engine.ConvertValue(typeof(InputList<string>), new[] { "a", "b", "c" }, ConversionContext.Empty);
+            var result = engine.ConvertValue(typeof(InputList<string>), new[] { "a", "b", "c" });
 
             result.Should().BeAssignableTo<InputList<string>>();
             var resolved = await ResolveInputAsync((Input<ImmutableArray<string>>)result);
@@ -62,7 +61,7 @@ namespace LiveArch.Deployment.TestRunner
         {
             var engine = CreateEngine();
 
-            var result = engine.ConvertValue(typeof(InputList<object>), new[] { "a", "b", "c" }, ConversionContext.Empty);
+            var result = engine.ConvertValue(typeof(InputList<object>), new[] { "a", "b", "c" });
 
             result.Should().BeAssignableTo<InputList<object>>();
             var resolved = await ResolveInputAsync((Input<ImmutableArray<object>>)result);
@@ -82,7 +81,7 @@ namespace LiveArch.Deployment.TestRunner
                 ["two"] = "2",
             };
 
-            var result = engine.ConvertValue(typeof(InputMap<string>), source, ConversionContext.Empty);
+            var result = engine.ConvertValue(typeof(InputMap<string>), source);
 
             result.Should().BeAssignableTo<InputMap<string>>();
             var resolved = await ResolveInputAsync((Input<ImmutableDictionary<string, string>>)result);
@@ -96,7 +95,7 @@ namespace LiveArch.Deployment.TestRunner
             var engine = CreateEngine();
             var source = Output.Create(ImmutableArray.Create("x", "y"));
 
-            var result = engine.ConvertValue(typeof(InputList<string>), source, ConversionContext.Empty);
+            var result = engine.ConvertValue(typeof(InputList<string>), source);
 
             result.Should().BeAssignableTo<InputList<string>>();
             var resolved = await ResolveInputAsync((Input<ImmutableArray<string>>)result);
@@ -109,7 +108,7 @@ namespace LiveArch.Deployment.TestRunner
             var engine = CreateEngine();
             var source = ImmutableArray.Create("a", "b", "c");
 
-            var result = engine.ConvertValue(typeof(InputList<object>), source, ConversionContext.Empty);
+            var result = engine.ConvertValue(typeof(InputList<object>), source);
 
             result.Should().BeAssignableTo<InputList<object>>();
             var resolved = await ResolveInputAsync((Input<ImmutableArray<object>>)result);
@@ -127,7 +126,7 @@ namespace LiveArch.Deployment.TestRunner
             var engine = CreateEngine();
             var source = Output.Create(ImmutableArray.Create("a", "b", "c"));
 
-            var result = engine.ConvertValue(typeof(InputList<object>), source, ConversionContext.Empty);
+            var result = engine.ConvertValue(typeof(InputList<object>), source);
 
             result.Should().BeAssignableTo<InputList<object>>();
             var resolved = await ResolveInputAsync((Input<ImmutableArray<object>>)result);
@@ -145,7 +144,7 @@ namespace LiveArch.Deployment.TestRunner
             var engine = CreateEngine();
             var source = Output.Create(ImmutableArray.Create(1, 2, 3));
 
-            var result = engine.ConvertValue(typeof(InputList<double>), source, ConversionContext.Empty);
+            var result = engine.ConvertValue(typeof(InputList<double>), source);
 
             result.Should().BeAssignableTo<InputList<double>>();
             var resolved = await ResolveInputAsync((Input<ImmutableArray<double>>)result);
@@ -162,7 +161,7 @@ namespace LiveArch.Deployment.TestRunner
             var engine = CreateEngine();
             var source = Output.Create(1);
 
-            var result = engine.ConvertValue(typeof(Input<double>), source, ConversionContext.Empty);
+            var result = engine.ConvertValue(typeof(Input<double>), source);
 
             result.Should().BeAssignableTo<Input<double>>();
             var resolved = await ResolveInputAsync((Input<double>)result);
@@ -175,7 +174,7 @@ namespace LiveArch.Deployment.TestRunner
             var engine = CreateEngine();
             var source = Output.Create("UserAssigned");
 
-            var result = engine.ConvertValue(typeof(Input<ManagedServiceIdentityType>), source, ConversionContext.Empty);
+            var result = engine.ConvertValue(typeof(Input<ManagedServiceIdentityType>), source);
 
             result.Should().BeAssignableTo<Input<ManagedServiceIdentityType>>();
             var resolved = await ResolveInputAsync((Input<ManagedServiceIdentityType>)result);
@@ -187,7 +186,7 @@ namespace LiveArch.Deployment.TestRunner
         {
             var engine = CreateEngine();
 
-            var result = engine.ConvertValue(typeof(NamedValueArgs), "hello", ConversionContext.Empty, KnownNamedValueConverters.DefaultKeyedListValue);
+            var result = engine.ConvertValue(typeof(NamedValueArgs), "hello", KnownNamedValueConverters.DefaultKeyedListValue);
 
             result.Should().BeOfType<NamedValueArgs>();
             var typed = (NamedValueArgs)result;
@@ -200,7 +199,7 @@ namespace LiveArch.Deployment.TestRunner
         {
             var engine = CreateEngine();
 
-            var result = (NamedValueArgs)engine.ConvertValue(typeof(NamedValueArgs), "hello", ConversionContext.Empty, KnownNamedValueConverters.DefaultKeyedListValue);
+            var result = (NamedValueArgs)engine.ConvertValue(typeof(NamedValueArgs), "hello", KnownNamedValueConverters.DefaultKeyedListValue);
 
             var resolved = await ResolveInputAsync(result.Value!);
             resolved.Should().Be("hello");
@@ -211,7 +210,7 @@ namespace LiveArch.Deployment.TestRunner
         {
             var engine = CreateEngine();
 
-            var result = engine.ConvertValue(typeof(ConnStringInfoArgs), "Server=tcp:test.database.windows.net;Initial Catalog=db;", ConversionContext.Empty, AzureKnownConverterNames.AzureSqlConnectionString);
+            var result = engine.ConvertValue(typeof(ConnStringInfoArgs), "Server=tcp:test.database.windows.net;Initial Catalog=db;", AzureKnownConverterNames.AzureSqlConnectionString);
 
             result.Should().BeOfType<ConnStringInfoArgs>();
             var typed = (ConnStringInfoArgs)result;
@@ -230,7 +229,7 @@ namespace LiveArch.Deployment.TestRunner
             services.AddAzureValueConverters();
             var engine = services.BuildServiceProvider().GetRequiredService<IConversionEngine>();
 
-            var result = engine.ConvertValue(typeof(Input<string>), "original", ConversionContext.Empty);
+            var result = engine.ConvertValue(typeof(Input<string>), "original");
 
             var resolved = await ResolveInputAsync((Input<string>)result);
             resolved.Should().Be("overridden");
@@ -242,7 +241,7 @@ namespace LiveArch.Deployment.TestRunner
             var engine = CreateEngine();
             var source = Output.Create("Server=tcp:test.database.windows.net;Initial Catalog=db;");
 
-            var result = engine.ConvertValue(typeof(ConnStringInfoArgs), source, ConversionContext.Empty, AzureKnownConverterNames.AzureSqlConnectionString);
+            var result = engine.ConvertValue(typeof(ConnStringInfoArgs), source, AzureKnownConverterNames.AzureSqlConnectionString);
 
             result.Should().BeAssignableTo<Output<ConnStringInfoArgs>>();
             var typed = await ResolveOutputAsync((Output<ConnStringInfoArgs>)result);
@@ -256,7 +255,7 @@ namespace LiveArch.Deployment.TestRunner
         public void ShouldThrowWhenNamedConverterIsMissing()
         {
             var engine = CreateEngine();
-            var act = () => engine.ConvertValue(typeof(string), "value", ConversionContext.Empty, "missing-converter");
+            var act = () => engine.ConvertValue(typeof(string), "value", "missing-converter");
 
             act.Should().Throw<NotSupportedException>();
         }
@@ -265,7 +264,7 @@ namespace LiveArch.Deployment.TestRunner
         public void ShouldThrowWhenAutomaticConverterIsMissing()
         {
             var engine = CreateEngine();
-            var act = () => engine.ConvertValue(typeof(DateTime), "2025-01-01", ConversionContext.Empty);
+            var act = () => engine.ConvertValue(typeof(DateTime), "2025-01-01");
 
             act.Should().Throw<NotSupportedException>();
         }

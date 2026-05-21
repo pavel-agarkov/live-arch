@@ -19,7 +19,7 @@ namespace LiveArch.Deployment.Azure.Converters
         {
             return new ConnStringInfoArgs
             {
-                ConnectionString = (Input<string>)engine.ConvertValue(typeof(Input<string>), request.SourceValue, request.Context),
+                ConnectionString = (Input<string>)engine.ConvertValue(typeof(Input<string>), request.SourceValue),
                 Type = ConnectionStringType.SQLAzure,
             };
         }

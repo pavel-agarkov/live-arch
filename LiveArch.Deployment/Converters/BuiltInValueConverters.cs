@@ -95,7 +95,7 @@ namespace LiveArch.Deployment.Converters
 
         public object Convert(ConversionRequest request, IConversionEngine engine)
         {
-            var stringValue = (string)engine.ConvertValue(typeof(string), request.SourceValue, request.Context);
+            var stringValue = (string)engine.ConvertValue(typeof(string), request.SourceValue);
             var valueField = request.TargetType.GetField("_value", BindingFlags.NonPublic | BindingFlags.Instance);
 
             foreach (var property in request.TargetType.GetProperties(BindingFlags.Public | BindingFlags.Static))
@@ -140,7 +140,7 @@ namespace LiveArch.Deployment.Converters
         {
             try
             {
-                converted = engine.ConvertValue(targetType, request.SourceValue, request.Context);
+                converted = engine.ConvertValue(targetType, request.SourceValue);
                 return true;
             }
             catch
@@ -202,7 +202,7 @@ namespace LiveArch.Deployment.Converters
         {
             try
             {
-                converted = engine.ConvertValue(targetType, request.SourceValue, request.Context);
+                converted = engine.ConvertValue(targetType, request.SourceValue);
                 return true;
             }
             catch
@@ -223,7 +223,7 @@ namespace LiveArch.Deployment.Converters
         public object Convert(ConversionRequest request, IConversionEngine engine)
         {
             var innerType = request.TargetType.GetGenericArguments()[0];
-            var converted = engine.ConvertValue(innerType, request.SourceValue, request.Context);
+            var converted = engine.ConvertValue(innerType, request.SourceValue);
             return ConversionTypeHelpers.WrapInput(innerType, converted);
         }
     }
@@ -244,12 +244,12 @@ namespace LiveArch.Deployment.Converters
             {
                 foreach (var item in enumerable)
                 {
-                    typedList.Add(engine.ConvertValue(elementType, item!, request.Context));
+                    typedList.Add(engine.ConvertValue(elementType, item!));
                 }
             }
             else
             {
-                typedList.Add(engine.ConvertValue(elementType, request.SourceValue, request.Context));
+                typedList.Add(engine.ConvertValue(elementType, request.SourceValue));
             }
 
             var inputList = Activator.CreateInstance(request.TargetType)!;
@@ -296,12 +296,12 @@ namespace LiveArch.Deployment.Converters
             {
                 foreach (var item in enumerable)
                 {
-                    typedList.Add(engine.ConvertValue(elementType, item!, request.Context));
+                    typedList.Add(engine.ConvertValue(elementType, item!));
                 }
             }
             else
             {
-                typedList.Add(engine.ConvertValue(elementType, request.SourceValue, request.Context));
+                typedList.Add(engine.ConvertValue(elementType, request.SourceValue));
             }
 
             var createRange = typeof(ImmutableArray)
@@ -331,7 +331,7 @@ namespace LiveArch.Deployment.Converters
 
             foreach (DictionaryEntry entry in (IDictionary)request.SourceValue)
             {
-                typedDictionary[entry.Key] = engine.ConvertValue(valueType, entry.Value!, request.Context);
+                typedDictionary[entry.Key] = engine.ConvertValue(valueType, entry.Value!);
             }
 
             var createRange = typeof(ImmutableDictionary)
@@ -358,7 +358,7 @@ namespace LiveArch.Deployment.Converters
                 request.SourceValue,
                 sourceInnerType,
                 descriptor.ProjectedTargetType,
-                    value => engine.ConvertValue(descriptor.ProjectedTargetType, value, request.Context));
+                    value => engine.ConvertValue(descriptor.ProjectedTargetType, value));
 
             return descriptor.WrapProjectedOutput(projected);
         }
@@ -387,7 +387,7 @@ namespace LiveArch.Deployment.Converters
             var valueProperty = request.TargetType.GetProperty("Value", BindingFlags.Public | BindingFlags.Instance)
                 ?? throw new InvalidOperationException($"{request.TargetType.Name} must contain Value property");
 
-            var convertedValue = engine.ConvertValue(valueProperty.PropertyType, request.SourceValue, request.Context);
+            var convertedValue = engine.ConvertValue(valueProperty.PropertyType, request.SourceValue);
             valueProperty.SetValue(item, convertedValue);
 
             return item;
