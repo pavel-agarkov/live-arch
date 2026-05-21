@@ -38,7 +38,7 @@ Relationships can represent:
 
 In practice this means a diagram like:
 
-```text
+```ts
 Managed Identity -> Storage Account
 ```
 
@@ -115,7 +115,7 @@ The syntax is standard `Structurizr DSL` enriched with Pulumi-specific `technolo
 
 Variables use the familiar syntax:
 
-```text
+```ts
 ${ENV}
 ${RESOURCE_GROUP_NAME}
 ${saName}
@@ -130,7 +130,7 @@ They can be used in:
 
 Examples:
 
-```text
+```ts
 properties {
     resourceName ${ENV}-order-service-mi
     vaultName ${KEY_VAULT_NAME}
@@ -143,7 +143,7 @@ This makes it possible to pass non-string values through the same syntax when ne
 
 ### Reference an existing resource
 
-```text
+```ts
 deploymentNode "Resource Group" {
     technology "azure-native:resources:getResourceGroup"
     properties {
@@ -160,7 +160,7 @@ This means:
 
 ### Create a new resource
 
-```text
+```ts
 infrastructureNode "Managed Identity" {
     technology "azure-native:managedidentity:UserAssignedIdentity"
     properties {
@@ -218,7 +218,7 @@ workerComponent -> cacheSizeConfig "cache size" {
 
 or as an inline pipeline embedded directly inside a property value:
 
-```text
+```ts
 deliveryMi -> deliveryKeyVault reads "azure-native:keyvault:AccessPolicy" {
     properties {
         var "delivery-service-kv-access-policy"
@@ -234,7 +234,7 @@ Realistic examples:
 
 #### Example 1: Convert megabytes from configuration into bytes
 
-```text
+```ts
 cacheSizeConfig = infrastructureNode "Cache Size Config" {
     technology "azure-native:appconfiguration:getKeyValue"
     properties {
@@ -264,7 +264,7 @@ but the consuming resource expects a lower-level numeric value.
 
 #### Example 2: Build a standard Azure App Service URL from the app name
 
-```text
+```ts
 orderApiInstance = containerInstance orderApi {
     properties {
         name ${ENV}-order-api
@@ -292,7 +292,7 @@ while another resource or application setting expects a fully formed URL.
 
 #### Example 3: Split a comma-separated permission list through an inline pipeline
 
-```text
+```ts
 deliveryMi -> deliveryKeyVault reads "azure-native:keyvault:AccessPolicy" {
     properties {
         var "delivery-service-kv-access-policy"
@@ -312,7 +312,7 @@ This keeps simple data-shaping logic close to the DSL value that needs it.
 
 ### Create a relationship-resource
 
-```text
+```ts
 testMi -> testSa "Contribute" "azure-native:authorization:RoleAssignment" {
     properties {
         principalType ServicePrincipal
@@ -329,7 +329,7 @@ This means:
 
 ### Repeat resources with `foreach`
 
-```text
+```ts
 saList = infrastructureNode "Storage Accounts" {
     technology "azure-native:appconfiguration:getKeyValue"
     properties {
@@ -369,7 +369,7 @@ This means:
 
 ### Relationship-resource from outside a loop into the loop
 
-```text
+```ts
 prodMi -> sa "Contribute" "azure-native:authorization:RoleAssignment" {
     properties {
         var order-service-${saName}-contributor
@@ -395,7 +395,7 @@ For example, if the source contains `sa1, sa2, sa3`, the engine creates:
 
 Simple assignment:
 
-```text
+```ts
 properties {
     accountName my-storage-account
 }
@@ -403,7 +403,7 @@ properties {
 
 Nested assignment:
 
-```text
+```ts
 properties {
     identity.type UserAssigned
 }
@@ -411,7 +411,7 @@ properties {
 
 Map entry assignment:
 
-```text
+```ts
 properties {
     siteConfig.AppSettings:WEBSITES_PORT "8080"
 }
@@ -419,7 +419,7 @@ properties {
 
 Append to list:
 
-```text
+```ts
 properties {
     siteConfig.Cors.allowedOrigins+= "https://app.example.com"
 }
@@ -427,7 +427,7 @@ properties {
 
 Explicit split into a list:
 
-```text
+```ts
 properties {
     siteConfig.Cors.allowedOrigins "https://web.example.com,https://api.example.com | split ,"
 }
@@ -437,7 +437,7 @@ If a target expects a list-like Pulumi input, the `split` transformer should be 
 
 Loop sources commonly use the same idea through a `foreach:source` relationship:
 
-```text
+```ts
 saList = infrastructureNode "Storage Accounts" {
     tags "Microsoft Azure - App Configuration"
     technology "azure-native:appconfiguration:getKeyValue"
@@ -466,7 +466,7 @@ This lets the loop source be converted into a typed collection before iteration 
 
 Inline pipelines are useful when the transformation should live directly inside a single property value:
 
-```text
+```ts
 deliveryMi -> deliveryKeyVault reads "azure-native:keyvault:AccessPolicy" {
     properties {
         var "delivery-service-kv-access-policy"
@@ -519,7 +519,7 @@ Custom converters can be registered either as:
 
 Example:
 
-```text
+```ts
 properties {
     converter "default-keyed-list-value"
 }
