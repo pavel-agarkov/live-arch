@@ -2,6 +2,7 @@
 using LiveArch.Deployment.Azure.Docker;
 using LiveArch.Deployment.Azure.ResourceHierarchy;
 using LiveArch.Deployment.Azure.ServiceBus;
+using LiveArch.Deployment;
 using LiveArch.Deployment.Configuration;
 using LiveArch.Deployment.Controls;
 using LiveArch.Deployment.Converters;
@@ -10,6 +11,7 @@ using LiveArch.Deployment.ResourceHierarchy;
 using LiveArch.Deployment.ResourceTypes;
 using LiveArch.Deployment.Transformers;
 using Microsoft.Extensions.DependencyInjection;
+using Pulumi;
 using Pulumi.AzureNative.AppConfiguration;
 using Pulumi.AzureNative.Authorization;
 using Pulumi.AzureNative.ManagedIdentity;
@@ -20,6 +22,7 @@ using Pulumi.AzureNative.Web;
 using Pulumi.AzureNative.Web.Inputs;
 using Pulumi.DockerBuild;
 using Pulumi.Testing;
+using Structurizr;
 using ManagedServiceIdentityType = Pulumi.AzureNative.Web.ManagedServiceIdentityType;
 
 namespace LiveArch.Deployment.TestRunner
@@ -163,7 +166,18 @@ namespace LiveArch.Deployment.TestRunner
             ws.CreatedResources.Values.OfType<RoleAssignment>().Count().Should().Be(expectedRoleAssignments);
         }
 
-        private async Task<StructurizrDeploymentProcessor> ProcessDeployment(string deployment)
+        [Fact]
+        public async Task ShouldNotifyObserverForCreatedAndReferencedResources()
+        {
+            var observer = new RecordingStructurizrDeploymentObserver();
+
+            var ws = await ProcessDeployment("order-env", observer);
+
+            observer.CreatedResources.Count.Should().Be(ws.CreatedResources.Count);
+            observer.ReferencedResources.Count.Should().Be(ws.ReferencedResources.Count);
+        }
+
+        private async Task<StructurizrDeploymentProcessor> ProcessDeployment(string deployment, IStructurizrDeploymentObserver? observer = null)
         {
             var ws = new StructurizrDeploymentProcessor(
                 new TestDeploymentCommandOptions("prod", deployment, "workspace.json"),
@@ -172,7 +186,8 @@ namespace LiveArch.Deployment.TestRunner
                 resourceTypesRegistry,
                 dockerImageConfig,
                 conversionEngine,
-                transformerRegistry);
+                transformerRegistry,
+                observer ?? new RecordingStructurizrDeploymentObserver());
 
             await Pulumi.Deployment.TestAsync(testMocks, new TestOptions { IsPreview = false }, async () =>
             {
@@ -212,6 +227,24 @@ namespace LiveArch.Deployment.TestRunner
         private sealed class TestDeploymentVariablesProvider(IReadOnlyDictionary<string, object> values) : IDeploymentVariablesProvider
         {
             public IReadOnlyDictionary<string, object> GetVariables() => values;
+        }
+
+        private sealed record RegisteredResource(ModelItem Node, int ScopeId, object Resource);
+
+        private sealed class RecordingStructurizrDeploymentObserver : IStructurizrDeploymentObserver
+        {
+            public List<RegisteredResource> CreatedResources { get; } = [];
+            public List<RegisteredResource> ReferencedResources { get; } = [];
+
+            public void OnResourceCreated(ModelItem node, StructurizrDeploymentProcessor.ResourceScope scope, object resource)
+            {
+                CreatedResources.Add(new RegisteredResource(node, scope.Id, resource));
+            }
+
+            public void OnResourceReferenced(ModelItem node, StructurizrDeploymentProcessor.ResourceScope scope, object resource)
+            {
+                ReferencedResources.Add(new RegisteredResource(node, scope.Id, resource));
+            }
         }
 
         public static async Task TestCases()

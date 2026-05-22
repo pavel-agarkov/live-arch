@@ -114,8 +114,7 @@ namespace LiveArch.Deployment
         private readonly InputValueBinder inputValueBinder;
         private readonly ITransformerRegistry transformerRegistry;
         private readonly TransformerPipeline transformerPipeline;
-        private readonly InvokeOptions? invokeOptions = null;
-        private readonly CustomResourceOptions? customResourceOptions = null;
+        private readonly IStructurizrDeploymentObserver observer;
 
         /// <summary>
         /// Gets the root scope created for the current deployment run.
@@ -142,6 +141,7 @@ namespace LiveArch.Deployment
         /// <param name="dockerImageReferenceConfigurator">Helper used to map built images into container resource inputs.</param>
         /// <param name="conversionEngine">Conversion engine responsible for typed and named value conversion.</param>
         /// <param name="transformerRegistry">Registry that resolves built-in and custom transformer factories by DSL name.</param>
+        /// <param name="observer">Observer that receives resource registration notifications.</param>
         public StructurizrDeploymentProcessor(
             IDeploymentCommandOptions options,
             IDeploymentVariablesProvider variablesProvider,
@@ -149,7 +149,8 @@ namespace LiveArch.Deployment
             ResourceTypesRegistry resourceTypesRegistry,
             DockerImageReferenceConfigurator dockerImageReferenceConfigurator,
             IConversionEngine conversionEngine,
-            ITransformerRegistry transformerRegistry)
+            ITransformerRegistry transformerRegistry,
+            IStructurizrDeploymentObserver observer)
         {
             this.options = options;
             this.variablesProvider = variablesProvider;
@@ -160,6 +161,7 @@ namespace LiveArch.Deployment
             this.conversionEngine = conversionEngine;
             this.transformerRegistry = transformerRegistry;
             this.transformerPipeline = new TransformerPipeline(this.transformerRegistry);
+            this.observer = observer;
             this.inputValueBinder = new InputValueBinder(this);
         }
 
@@ -460,9 +462,9 @@ namespace LiveArch.Deployment
                             inputValueBinder.SetProperty(param, propName, propVal, paramInputProps, context, parseInlineTransformers: true);
                         }
 
-                        var resource = invoke.Invoke(null, [param, invokeOptions!])!;
+                        var resource = invoke.Invoke(null, [param, null!])!;
 
-                        AddResource(deployNode.Node, context.Scope, resource!, isExistingResource: true);
+                        AddReferencedResource(deployNode.Node, context.Scope, resource!);
 
                         await CreateRelationNodesAsync(deployNode, context, cancellationToken);
                         await CreateIncomingLoopRelationNodesAsync(deployNode, context, cancellationToken);
@@ -508,8 +510,8 @@ namespace LiveArch.Deployment
                         }
                     }
 
-                    var newRes = Activator.CreateInstance(type, [SubstituteVariables(resVar, context), param, customResourceOptions!]);
-                    AddResource(deployNode.Node, context.Scope, newRes!, isExistingResource: false);
+                    var newRes = Activator.CreateInstance(type, [SubstituteVariables(resVar, context), param, null!]);
+                    AddCreatedResource(deployNode.Node, context.Scope, newRes!);
 
                     await CreateRelationNodesAsync(deployNode, context, cancellationToken);
                     await CreateIncomingLoopRelationNodesAsync(deployNode, context, cancellationToken);
@@ -1135,16 +1137,27 @@ namespace LiveArch.Deployment
         }
 
         /// <summary>
-        /// Stores a resource in the current scope as either created or referenced.
+        /// Stores a newly created resource in the current scope.
         /// </summary>
         /// <param name="node">Model item represented by the resource.</param>
         /// <param name="scope">Scope that should own the registration.</param>
-        /// <param name="resource">Pulumi resource or invoke result.</param>
-        /// <param name="isExistingResource">Whether the resource is referenced rather than newly created.</param>
-        private void AddResource(ModelItem node, ResourceScope scope, object resource, bool isExistingResource)
+        /// <param name="resource">Pulumi resource instance.</param>
+        private void AddCreatedResource(ModelItem node, ResourceScope scope, object resource)
         {
-            var resources = isExistingResource ? scope.ReferencedResources : scope.CreatedResources;
-            resources.Add(node, resource);
+            scope.CreatedResources.Add(node, resource);
+            observer.OnResourceCreated(node, scope, resource);
+        }
+
+        /// <summary>
+        /// Stores a referenced resource in the current scope.
+        /// </summary>
+        /// <param name="node">Model item represented by the resource.</param>
+        /// <param name="scope">Scope that should own the registration.</param>
+        /// <param name="resource">Referenced resource or invoke result.</param>
+        private void AddReferencedResource(ModelItem node, ResourceScope scope, object resource)
+        {
+            scope.ReferencedResources.Add(node, resource);
+            observer.OnResourceReferenced(node, scope, resource);
         }
 
         /// <summary>

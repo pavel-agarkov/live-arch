@@ -35,6 +35,7 @@ namespace LiveArch.Deployment.Configuration
         /// <returns>The updated service collection.</returns>
         public static IServiceCollection AddStructurizrDeploymentProcessor(this IServiceCollection services)
         {
+            services.TryAddSingleton<IStructurizrDeploymentObserver, NullStructurizrDeploymentObserver>();
             services.TryAddTransient<StructurizrDeploymentProcessor>();
             services.TryAddTransient<IStructurizrDeploymentProcessor>(serviceProvider => serviceProvider.GetRequiredService<StructurizrDeploymentProcessor>());
             return services;
