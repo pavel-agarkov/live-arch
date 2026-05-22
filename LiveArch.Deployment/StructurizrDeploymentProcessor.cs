@@ -446,6 +446,7 @@ namespace LiveArch.Deployment
                 {
                     if (resourceTypesRegistry.TryGetInvokeMethod(deployNode.Technology, out var invoke))
                     {
+                        var dependsOnResources = GetDependsOnResources(deployNode, context);
                         var paramType = invoke!.GetParameters().First();
                         var param = Activator.CreateInstance(paramType.ParameterType)!;
                         var paramInputProps = inputValueBinder.GetInputProps(paramType.ParameterType);
@@ -462,9 +463,10 @@ namespace LiveArch.Deployment
                             inputValueBinder.SetProperty(param, propName, propVal, paramInputProps, context, parseInlineTransformers: true);
                         }
 
-                        var resource = invoke.Invoke(null, [param, null!])!;
+                        var invokeOptions = CreateInvokeOptions(invoke, dependsOnResources);
+                        var resource = invoke.Invoke(null, [param, invokeOptions!])!;
 
-                        AddReferencedResource(deployNode.Node, context.Scope, resource!);
+                        AddReferencedResource(deployNode.Node, context.Scope, resource!, dependsOnResources);
 
                         await CreateRelationNodesAsync(deployNode, context, cancellationToken);
                         await CreateIncomingLoopRelationNodesAsync(deployNode, context, cancellationToken);
@@ -476,6 +478,7 @@ namespace LiveArch.Deployment
                 }
                 else
                 {
+                    var dependsOnResources = GetDependsOnResources(deployNode, context);
                     var paramType = type.GetConstructors()[0].GetParameters()[1];
                     var param = Activator.CreateInstance(paramType.ParameterType)!;
                     var paramInputProps = inputValueBinder.GetInputProps(paramType.ParameterType);
@@ -510,8 +513,9 @@ namespace LiveArch.Deployment
                         }
                     }
 
-                    var newRes = Activator.CreateInstance(type, [SubstituteVariables(resVar, context), param, null!]);
-                    AddCreatedResource(deployNode.Node, context.Scope, newRes!);
+                    var customResourceOptions = CreateCustomResourceOptions(dependsOnResources);
+                    var newRes = Activator.CreateInstance(type, [SubstituteVariables(resVar, context), param, customResourceOptions!]);
+                    AddCreatedResource(deployNode.Node, context.Scope, newRes!, dependsOnResources);
 
                     await CreateRelationNodesAsync(deployNode, context, cancellationToken);
                     await CreateIncomingLoopRelationNodesAsync(deployNode, context, cancellationToken);
@@ -550,7 +554,20 @@ namespace LiveArch.Deployment
         /// <returns>A distinct set of missing model items.</returns>
         private IReadOnlyCollection<ModelItem> GetMissingDependencies(IDeploymentAdapter deployNode, DeploymentContext context)
         {
-            var missingDependencies = new HashSet<ModelItem>();
+            return [..
+                GetDependencyNodes(deployNode, context)
+                    .Where(dependencyNode => !TryGetExistingResourceByNode(dependencyNode, context.Scope, out _))];
+        }
+
+        /// <summary>
+        /// Collects model nodes that participate in explicit ordering for the supplied deployment node.
+        /// </summary>
+        /// <param name="deployNode">Node whose dependency model should be evaluated.</param>
+        /// <param name="context">Current deployment scope and variables.</param>
+        /// <returns>A distinct set of dependency model items.</returns>
+        private IReadOnlyCollection<ModelItem> GetDependencyNodes(IDeploymentAdapter deployNode, DeploymentContext context)
+        {
+            var dependencyNodes = new HashSet<ModelItem>();
 
             foreach (var relationship in GetRelationshipAdapters(deployNode))
             {
@@ -564,20 +581,14 @@ namespace LiveArch.Deployment
                 }
 
                 var relation = (Relationship)relationship.Node;
-                if (!TryGetExistingResourceByNode(relation.Destination, context.Scope, out _))
-                {
-                    missingDependencies.Add(relation.Destination);
-                }
+                dependencyNodes.Add(relation.Destination);
             }
 
             if (deployNode is RelationshipAdapter)
             {
                 foreach (var parentNode in deployNode.Parents)
                 {
-                    if (!TryGetExistingResourceByNode(parentNode.Node, context.Scope, out _))
-                    {
-                        missingDependencies.Add(parentNode.Node);
-                    }
+                    dependencyNodes.Add(parentNode.Node);
                 }
             }
 
@@ -587,14 +598,83 @@ namespace LiveArch.Deployment
 
                 if (sourceNode != null)
                 {
-                    foreach (var dependency in GetMissingDependencies(sourceNode, context))
+                    foreach (var dependency in GetDependencyNodes(sourceNode, context))
                     {
-                        missingDependencies.Add(dependency);
+                        dependencyNodes.Add(dependency);
                     }
                 }
             }
 
-            return missingDependencies;
+            return dependencyNodes;
+        }
+
+        /// <summary>
+        /// Resolves explicit resource dependencies that should be applied to a custom resource.
+        /// </summary>
+        /// <param name="deployNode">Node whose dependencies should be resolved.</param>
+        /// <param name="context">Current deployment context.</param>
+        /// <returns>Visible Pulumi resources that should be placed into <c>DependsOn</c>.</returns>
+        private IReadOnlyCollection<Resource> GetDependsOnResources(IDeploymentAdapter deployNode, DeploymentContext context)
+        {
+            var resources = new HashSet<Resource>();
+            foreach (var dependencyNode in GetDependencyNodes(deployNode, context))
+            {
+                if (TryGetExistingResourceByNode(dependencyNode, context.Scope, out var dependencyResource) && dependencyResource is Resource resource)
+                {
+                    resources.Add(resource);
+                }
+            }
+
+            return [.. resources];
+        }
+
+        /// <summary>
+        /// Creates custom resource options for explicit resource dependencies.
+        /// </summary>
+        /// <param name="dependsOnResources">Explicit resource dependencies to apply.</param>
+        /// <returns>Custom resource options when dependencies exist; otherwise <c>null</c>.</returns>
+        private static CustomResourceOptions? CreateCustomResourceOptions(IReadOnlyCollection<Resource> dependsOnResources)
+        {
+            if (dependsOnResources.Count == 0)
+            {
+                return null;
+            }
+
+            var options = new CustomResourceOptions();
+            foreach (var dependency in dependsOnResources)
+            {
+                options.DependsOn.Add(dependency);
+            }
+
+            return options;
+        }
+
+        /// <summary>
+        /// Creates invoke options matching the selected invoke overload.
+        /// </summary>
+        /// <param name="invokeMethod">Invoke method selected for the current token.</param>
+        /// <param name="dependsOnResources">Explicit resource dependencies to apply when supported.</param>
+        /// <returns>An <see cref="InvokeOptions"/> or <see cref="InvokeOutputOptions"/> instance, or <c>null</c>.</returns>
+        private static InvokeOptions? CreateInvokeOptions(MethodInfo invokeMethod, IReadOnlyCollection<Resource> dependsOnResources)
+        {
+            var optionsType = invokeMethod.GetParameters()[1].ParameterType;
+            if (optionsType == typeof(InvokeOutputOptions))
+            {
+                if (dependsOnResources.Count == 0)
+                {
+                    return null;
+                }
+
+                var options = new InvokeOutputOptions();
+                foreach (var dependency in dependsOnResources)
+                {
+                    options.DependsOn.Add(dependency);
+                }
+
+                return options;
+            }
+
+            return null;
         }
 
         /// <summary>
@@ -1142,10 +1222,10 @@ namespace LiveArch.Deployment
         /// <param name="node">Model item represented by the resource.</param>
         /// <param name="scope">Scope that should own the registration.</param>
         /// <param name="resource">Pulumi resource instance.</param>
-        private void AddCreatedResource(ModelItem node, ResourceScope scope, object resource)
+        private void AddCreatedResource(ModelItem node, ResourceScope scope, object resource, IReadOnlyCollection<Resource> dependsOn)
         {
             scope.CreatedResources.Add(node, resource);
-            observer.OnResourceCreated(node, scope, resource);
+            observer.OnResourceCreated(node, scope, resource, dependsOn);
         }
 
         /// <summary>
@@ -1154,10 +1234,10 @@ namespace LiveArch.Deployment
         /// <param name="node">Model item represented by the resource.</param>
         /// <param name="scope">Scope that should own the registration.</param>
         /// <param name="resource">Referenced resource or invoke result.</param>
-        private void AddReferencedResource(ModelItem node, ResourceScope scope, object resource)
+        private void AddReferencedResource(ModelItem node, ResourceScope scope, object resource, IReadOnlyCollection<Resource> dependsOn)
         {
             scope.ReferencedResources.Add(node, resource);
-            observer.OnResourceReferenced(node, scope, resource);
+            observer.OnResourceReferenced(node, scope, resource, dependsOn);
         }
 
         /// <summary>

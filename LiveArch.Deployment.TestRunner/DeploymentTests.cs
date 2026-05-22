@@ -175,6 +175,7 @@ namespace LiveArch.Deployment.TestRunner
 
             observer.CreatedResources.Count.Should().Be(ws.CreatedResources.Count);
             observer.ReferencedResources.Count.Should().Be(ws.ReferencedResources.Count);
+            observer.CreatedResources.Any(resource => resource.DependsOn.Count > 0).Should().BeTrue();
         }
 
         private async Task<StructurizrDeploymentProcessor> ProcessDeployment(string deployment, IStructurizrDeploymentObserver? observer = null)
@@ -229,21 +230,21 @@ namespace LiveArch.Deployment.TestRunner
             public IReadOnlyDictionary<string, object> GetVariables() => values;
         }
 
-        private sealed record RegisteredResource(ModelItem Node, int ScopeId, object Resource);
+        private sealed record RegisteredResource(ModelItem Node, int ScopeId, object Resource, IReadOnlyCollection<Pulumi.Resource> DependsOn);
 
         private sealed class RecordingStructurizrDeploymentObserver : IStructurizrDeploymentObserver
         {
             public List<RegisteredResource> CreatedResources { get; } = [];
             public List<RegisteredResource> ReferencedResources { get; } = [];
 
-            public void OnResourceCreated(ModelItem node, StructurizrDeploymentProcessor.ResourceScope scope, object resource)
+            public void OnResourceCreated(ModelItem node, StructurizrDeploymentProcessor.ResourceScope scope, object resource, IReadOnlyCollection<Pulumi.Resource> dependsOn)
             {
-                CreatedResources.Add(new RegisteredResource(node, scope.Id, resource));
+                CreatedResources.Add(new RegisteredResource(node, scope.Id, resource, dependsOn));
             }
 
-            public void OnResourceReferenced(ModelItem node, StructurizrDeploymentProcessor.ResourceScope scope, object resource)
+            public void OnResourceReferenced(ModelItem node, StructurizrDeploymentProcessor.ResourceScope scope, object resource, IReadOnlyCollection<Pulumi.Resource> dependsOn)
             {
-                ReferencedResources.Add(new RegisteredResource(node, scope.Id, resource));
+                ReferencedResources.Add(new RegisteredResource(node, scope.Id, resource, dependsOn));
             }
         }
 

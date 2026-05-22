@@ -71,7 +71,13 @@ namespace LiveArch.Deployment.ResourceTypes
                 if (!type.Name.StartsWith("Get")) continue;
 
                 var invoke = type.GetMethods(BindingFlags.Public | BindingFlags.Static)
-                    .FirstOrDefault(m => m.Name == "Invoke" && m.GetParameters().Last().ParameterType == typeof(InvokeOptions));
+                    .Where(m => m.Name == "Invoke" && m.GetParameters().Length == 2)
+                    .OrderByDescending(m => m.GetParameters()[1].ParameterType == typeof(InvokeOutputOptions))
+                    .FirstOrDefault(m =>
+                    {
+                        var optionsType = m.GetParameters()[1].ParameterType;
+                        return optionsType == typeof(InvokeOptions) || optionsType == typeof(InvokeOutputOptions);
+                    });
 
                 if (invoke == null) continue;
 

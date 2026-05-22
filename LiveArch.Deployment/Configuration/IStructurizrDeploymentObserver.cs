@@ -1,3 +1,4 @@
+using Pulumi;
 using Structurizr;
 
 namespace LiveArch.Deployment.Configuration
@@ -13,7 +14,8 @@ namespace LiveArch.Deployment.Configuration
         /// <param name="node">Model node represented by the resource.</param>
         /// <param name="scope">Scope that owns the registration.</param>
         /// <param name="resource">Registered resource.</param>
-        void OnResourceCreated(ModelItem node, StructurizrDeploymentProcessor.ResourceScope scope, object resource);
+        /// <param name="dependsOn">Explicit resource dependencies applied to the created resource.</param>
+        void OnResourceCreated(ModelItem node, StructurizrDeploymentProcessor.ResourceScope scope, object resource, IReadOnlyCollection<Resource> dependsOn);
 
         /// <summary>
         /// Notifies the observer after a referenced or invoke-backed resource has been registered in a scope.
@@ -21,6 +23,7 @@ namespace LiveArch.Deployment.Configuration
         /// <param name="node">Model node represented by the resource.</param>
         /// <param name="scope">Scope that owns the registration.</param>
         /// <param name="resource">Registered resource or invoke result.</param>
-        void OnResourceReferenced(ModelItem node, StructurizrDeploymentProcessor.ResourceScope scope, object resource);
+        /// <param name="dependsOn">Explicit resource dependencies applied to the invoke-backed resource lookup.</param>
+        void OnResourceReferenced(ModelItem node, StructurizrDeploymentProcessor.ResourceScope scope, object resource, IReadOnlyCollection<Resource> dependsOn);
     }
 }
