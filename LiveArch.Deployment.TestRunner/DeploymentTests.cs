@@ -1,17 +1,15 @@
 ﻿using LiveArch.Deployment.Azure.Converters;
 using LiveArch.Deployment.Azure.Docker;
 using LiveArch.Deployment.Azure.ResourceHierarchy;
-using LiveArch.Deployment.Azure.ServiceBus;
-using LiveArch.Deployment;
 using LiveArch.Deployment.Configuration;
 using LiveArch.Deployment.Controls;
 using LiveArch.Deployment.Converters;
 using LiveArch.Deployment.Docker;
+using LiveArch.Deployment.Export.CSharp;
 using LiveArch.Deployment.ResourceHierarchy;
 using LiveArch.Deployment.ResourceTypes;
 using LiveArch.Deployment.Transformers;
 using Microsoft.Extensions.DependencyInjection;
-using Pulumi;
 using Pulumi.AzureNative.AppConfiguration;
 using Pulumi.AzureNative.Authorization;
 using Pulumi.AzureNative.ManagedIdentity;
@@ -56,7 +54,7 @@ namespace LiveArch.Deployment.TestRunner
                 new ResourceTypesAssemblyMarker(typeof(Image)),
                 new ResourceTypesAssemblyMarker(typeof(ResourceGroup)),
                 new ResourceTypesAssemblyMarker(typeof(ForEachLoop)),
-                new ResourceTypesAssemblyMarker(typeof(ReadableSubscription)),
+                new ResourceTypesAssemblyMarker(typeof(LiveArch.Resources.Azure.ServiceBus.ReadableSubscription)),
             });
             dockerImageConfig = new DockerImageReferenceConfigurator([
                 new AzureDockerImageReferenceConfigurator()
@@ -176,6 +174,42 @@ namespace LiveArch.Deployment.TestRunner
             observer.CreatedResources.Count.Should().Be(ws.CreatedResources.Count);
             observer.ReferencedResources.Count.Should().Be(ws.ReferencedResources.Count);
             observer.CreatedResources.Any(resource => resource.DependsOn.Count > 0).Should().BeTrue();
+        }
+
+        [Fact]
+        public async Task ShouldExportCSharpPulumiProjectLibraryToTestResults()
+        {
+            var exporter = new CSharpPulumiProjectExporter();
+
+            var ws = await ProcessDeployment("order-env", exporter);
+            var export = exporter.Export("order-env", new CSharpPulumiProjectExporterOptions(
+                ProjectName: "Order.Generated.Pulumi",
+                RootNamespace: "Generated.Order.Pulumi",
+                AdditionalNamespaces: ["System.Linq"],
+                AdditionalPackageReferences: [new CSharpPackageReference("Awesome.Custom.Package", "1.2.3")]));
+
+            Directory.Exists(export.DirectoryPath).Should().BeTrue();
+            File.Exists(export.ProjectFilePath).Should().BeTrue();
+            File.Exists(export.DeploymentFilePath).Should().BeTrue();
+
+            export.Model.CreatedCount.Should().Be(ws.CreatedResources.Count);
+            export.Model.ReferencedCount.Should().Be(ws.ReferencedResources.Count);
+            export.Model.Resources.Should().NotBeEmpty();
+            export.Model.Resources.Should().Contain(resource => resource.Kind == "Created");
+            export.Model.Resources.Should().Contain(resource => resource.Kind == "Referenced");
+            export.Model.ProjectName.Should().Be("Order.Generated.Pulumi");
+            export.Model.AdditionalNamespaces.Should().Contain("System.Linq");
+            export.Model.PackageReferences.Should().Contain(reference => reference.PackageId == "Awesome.Custom.Package");
+
+            var projectText = File.ReadAllText(export.ProjectFilePath);
+            projectText.Should().Contain("Awesome.Custom.Package");
+            projectText.Should().Contain("Pulumi.AzureNative");
+
+            var deploymentText = File.ReadAllText(export.DeploymentFilePath);
+            deploymentText.Should().Contain("Generated.Order.Pulumi");
+            deploymentText.Should().Contain("ExportedResourceDescriptor");
+            deploymentText.Should().Contain("Pulumi.AzureNative.ManagedIdentity.UserAssignedIdentity");
+            deploymentText.Should().Contain("order-env");
         }
 
         private async Task<StructurizrDeploymentProcessor> ProcessDeployment(string deployment, IStructurizrDeploymentObserver? observer = null)

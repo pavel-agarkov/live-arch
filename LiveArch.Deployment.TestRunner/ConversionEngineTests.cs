@@ -280,7 +280,7 @@ namespace LiveArch.Deployment.TestRunner
         private static async Task<T> ResolveInputAsync<T>(Input<T> input)
         {
             var tcs = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
-            await Pulumi.Deployment.TestAsync(new global::LiveArch.Deployment.Mocks(), new TestOptions { IsPreview = false }, () =>
+            await Pulumi.Deployment.TestAsync(new LiveArch.Deployment.Mocks(), new TestOptions { IsPreview = false }, () =>
             {
                 input.Apply(value =>
                 {
@@ -297,7 +297,7 @@ namespace LiveArch.Deployment.TestRunner
         private static async Task<T> ResolveOutputAsync<T>(Output<T> output)
         {
             var tcs = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
-            await Pulumi.Deployment.TestAsync(new global::LiveArch.Deployment.Mocks(), new TestOptions { IsPreview = false }, () =>
+            await Pulumi.Deployment.TestAsync(new LiveArch.Deployment.Mocks(), new TestOptions { IsPreview = false }, () =>
             {
                 output.Apply(value =>
                 {

@@ -12,6 +12,11 @@
 
 	<ItemGroup>
 	  <ProjectReference Include="..\LiveArch.Deployment\LiveArch.Deployment.csproj" />
+      <ProjectReference Include="..\LiveArch.Resources.Azure\LiveArch.Resources.Azure.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <Folder Include="ServiceBus\" />
 	</ItemGroup>
 
 </Project>

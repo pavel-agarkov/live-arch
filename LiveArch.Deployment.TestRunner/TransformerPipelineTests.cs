@@ -158,7 +158,7 @@ namespace LiveArch.Deployment.TestRunner
         private static async Task<T> ResolveInputAsync<T>(Input<T> input)
         {
             var tcs = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
-            await Pulumi.Deployment.TestAsync(new global::LiveArch.Deployment.Mocks(), new Pulumi.Testing.TestOptions { IsPreview = false }, () =>
+            await Pulumi.Deployment.TestAsync(new LiveArch.Deployment.Mocks(), new Pulumi.Testing.TestOptions { IsPreview = false }, () =>
             {
                 input.Apply(value =>
                 {

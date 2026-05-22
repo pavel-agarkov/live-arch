@@ -10,7 +10,9 @@
   </Folder>
   <Folder Name="/Libraries/">
     <Project Path="LiveArch.Deployment.Azure/LiveArch.Deployment.Azure.csproj" Id="02144a47-e659-4c9d-9310-dbf67792dc0f" />
+    <Project Path="LiveArch.Deployment.Export.CSharp/LiveArch.Deployment.Export.CSharp.csproj" />
     <Project Path="LiveArch.Deployment/LiveArch.Deployment.csproj" />
+    <Project Path="LiveArch.Resources.Azure/LiveArch.Resources.Azure.csproj" />
     <Project Path="LiveArch.Transformers.Abstractions/LiveArch.Transformers.Abstractions.csproj" />
     <Project Path="LiveArch.Transformers/LiveArch.Transformers.csproj" />
   </Folder>

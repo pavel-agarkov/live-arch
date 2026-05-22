@@ -24,13 +24,19 @@
 
   <ItemGroup>
     <ProjectReference Include="..\LiveArch.Deployment.Azure\LiveArch.Deployment.Azure.csproj" />
+    <ProjectReference Include="..\LiveArch.Deployment.Export.CSharp\LiveArch.Deployment.Export.CSharp.csproj" />
     <ProjectReference Include="..\LiveArch.Deployment\LiveArch.Deployment.csproj" />
     <ProjectReference Include="..\LiveArch.Diagram\LiveArch.Diagram.csproj" />
+    <ProjectReference Include="..\LiveArch.Resources.Azure\LiveArch.Resources.Azure.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <Using Include="Xunit" />
     <Using Include="FluentAssertions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="ProjectExport\" />
   </ItemGroup>
 
 </Project>

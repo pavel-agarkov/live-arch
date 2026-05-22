@@ -1,11 +1,11 @@
 using LiveArch.Deployment.Azure.Converters;
 using LiveArch.Deployment.Azure.Docker;
 using LiveArch.Deployment.Azure.ResourceHierarchy;
-using LiveArch.Deployment.Azure.ServiceBus;
 using LiveArch.Deployment.Configuration;
 using LiveArch.Deployment.Docker;
 using LiveArch.Deployment.ResourceHierarchy;
 using LiveArch.Deployment.ResourceTypes;
+using LiveArch.Resources.Azure.ServiceBus;
 using Microsoft.Extensions.DependencyInjection;
 using Pulumi.AzureNative.Resources;
 
