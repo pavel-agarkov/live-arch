@@ -6,6 +6,7 @@ using LiveArch.Deployment.Docker;
 using LiveArch.Deployment.ResourceHierarchy;
 using LiveArch.Deployment.ResourceTypes;
 using LiveArch.Deployment.Transformers;
+using LiveArch.Transformers;
 using Pulumi;
 using Pulumi.DockerBuild;
 using Structurizr;

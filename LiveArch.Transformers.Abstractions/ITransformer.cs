@@ -1,6 +1,6 @@
-﻿using System;
+using System;
 
-namespace LiveArch.Deployment.Transformers
+namespace LiveArch.Transformers
 {
     /// <summary>
     /// Transforms a value before it is bound into a target resource input.

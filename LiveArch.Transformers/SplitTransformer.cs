@@ -1,7 +1,7 @@
-﻿using System;
+using System;
 using System.Collections.Immutable;
 
-namespace LiveArch.Deployment.Transformers
+namespace LiveArch.Transformers
 {
     public class SplitTransformer : ITransformer
     {

@@ -1,7 +1,7 @@
-﻿using System;
+using System;
 using System.Globalization;
 
-namespace LiveArch.Deployment.Transformers
+namespace LiveArch.Transformers
 {
     public class MultiplyTransformer : ITransformer
     {

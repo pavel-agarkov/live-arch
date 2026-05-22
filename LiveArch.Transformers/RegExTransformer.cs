@@ -1,7 +1,7 @@
-﻿using System;
+using System;
 using System.Text.RegularExpressions;
 
-namespace LiveArch.Deployment.Transformers
+namespace LiveArch.Transformers
 {
     public class RegExTransformer : ITransformer
     {

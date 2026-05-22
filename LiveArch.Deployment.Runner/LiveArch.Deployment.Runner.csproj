@@ -16,6 +16,7 @@
     <ProjectReference Include="..\LiveArch.Deployment.Azure\LiveArch.Deployment.Azure.csproj" />
     <ProjectReference Include="..\LiveArch.Deployment\LiveArch.Deployment.csproj" />
     <ProjectReference Include="..\LiveArch.Diagram\LiveArch.Diagram.csproj" />
+    <ProjectReference Include="..\LiveArch.Transformers\LiveArch.Transformers.csproj" />
   </ItemGroup>
 
 </Project>

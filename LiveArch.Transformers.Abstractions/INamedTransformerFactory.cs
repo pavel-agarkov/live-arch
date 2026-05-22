@@ -1,4 +1,4 @@
-namespace LiveArch.Deployment.Transformers
+namespace LiveArch.Transformers
 {
     /// <summary>
     /// Defines a named transformer factory that can be registered in dependency injection.

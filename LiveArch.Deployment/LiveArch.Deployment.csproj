@@ -8,6 +8,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\LiveArch.Transformers.Abstractions\LiveArch.Transformers.Abstractions.csproj" />
+    <ProjectReference Include="..\LiveArch.Transformers\LiveArch.Transformers.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
     <PackageReference Include="Pulumi" Version="3.106.2" />
     <PackageReference Include="Pulumi.DockerBuild" Version="0.0.16" />

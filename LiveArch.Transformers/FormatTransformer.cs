@@ -1,6 +1,6 @@
-﻿using System;
+using System;
 
-namespace LiveArch.Deployment.Transformers
+namespace LiveArch.Transformers
 {
     public class FormatTransformer : ITransformer
     {

@@ -1,4 +1,6 @@
-﻿namespace LiveArch.Deployment.Transformers
+﻿using LiveArch.Transformers;
+
+namespace LiveArch.Deployment.Transformers
 {
     /// <summary>
     /// Stores named transformer factories and creates transformer instances on demand.
