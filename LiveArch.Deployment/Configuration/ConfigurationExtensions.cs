@@ -1,5 +1,6 @@
 using LiveArch.Deployment.Controls;
 using LiveArch.Deployment.Converters;
+using LiveArch.Deployment.Observers;
 using LiveArch.Deployment.ResourceTypes;
 using LiveArch.Deployment.Transformers;
 using Microsoft.Extensions.DependencyInjection;

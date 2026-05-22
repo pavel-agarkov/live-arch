@@ -3,6 +3,7 @@ using LiveArch.Deployment.Configuration;
 using LiveArch.Deployment.Controls;
 using LiveArch.Deployment.Converters;
 using LiveArch.Deployment.Docker;
+using LiveArch.Deployment.Observers;
 using LiveArch.Deployment.ResourceHierarchy;
 using LiveArch.Deployment.ResourceTypes;
 using LiveArch.Deployment.Transformers;

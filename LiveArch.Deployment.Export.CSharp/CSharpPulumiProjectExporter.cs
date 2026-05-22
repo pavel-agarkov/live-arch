@@ -1,4 +1,4 @@
-using LiveArch.Deployment.Configuration;
+using LiveArch.Deployment.Observers;
 using Pulumi;
 using Structurizr;
 using System.Reflection;

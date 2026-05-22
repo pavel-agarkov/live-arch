@@ -1,7 +1,7 @@
 using Pulumi;
 using Structurizr;
 
-namespace LiveArch.Deployment.Configuration
+namespace LiveArch.Deployment.Observers
 {
     /// <summary>
     /// Default observer that keeps the deployment processor behavior unchanged.
