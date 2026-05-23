@@ -1,5 +1,6 @@
 using LiveArch.Deployment.Expressions;
 using LiveArch.Deployment.Observability;
+using LiveArch.Deployment.Converters;
 using Pulumi;
 using Structurizr;
 using System.Collections;
@@ -49,24 +50,28 @@ namespace LiveArch.Deployment.Export.CSharp
                 ? CreateDefaultProjectName(deployment)
                 : options.ProjectName.Trim();
 
-            var keyByResource = observedResources
+            var exportableResources = observedResources
+                .Where(ShouldExportResource)
+                .ToList();
+
+            var keyByResource = exportableResources
                 .GroupBy(resource => resource.Resource, ReferenceEqualityComparer.Instance)
                 .ToDictionary(group => group.Key, group => CreateResourceKey(group.First()), ReferenceEqualityComparer.Instance);
 
-            var variableNameByKey = CreateVariableNames(observedResources);
+            var variableNameByKey = CreateVariableNames(exportableResources);
 
             var model = new CSharpPulumiProjectModel(
                 deployment,
                 projectName,
                 options.RootNamespace,
                 NormalizeNamespaces(options.AdditionalNamespaces),
-                ResolvePackageReferences(observedResources, options.AdditionalPackageReferences),
-                ResolveProjectReferences(observedResources),
-                observedResources.OfType<CreatedResourceObservation>().Count(),
-                observedResources.OfType<ReferencedResourceObservation>().Count(),
-                [.. observedResources.Select((resource, index) => BuildResourceModel(resource, index, keyByResource, variableNameByKey))]);
+                ResolvePackageReferences(exportableResources, options.AdditionalPackageReferences),
+                ResolveProjectReferences(exportableResources),
+                exportableResources.OfType<CreatedResourceObservation>().Count(),
+                exportableResources.OfType<ReferencedResourceObservation>().Count(),
+                [.. exportableResources.Select((resource, index) => BuildResourceModel(resource, index, keyByResource, variableNameByKey))]);
 
-            return CSharpPulumiProjectWriter.Export(model);
+            return CSharpPulumiProjectWriter.Export(model, options.OutputDirectory);
         }
 
         private static CSharpPulumiResourceModel BuildResourceModel(
@@ -210,6 +215,11 @@ namespace LiveArch.Deployment.Export.CSharp
             IReadOnlyDictionary<object, string> keyByResource,
             IReadOnlyDictionary<string, string> variableNameByKey)
         {
+            if (TryRenderTypedValue(value, declaredType, keyByResource, variableNameByKey, indentLevel, out var typedValue))
+            {
+                return typedValue;
+            }
+
             if (IsPulumiWrapperType(value.GetType()) || IsPulumiWrapperType(declaredType))
             {
                 return "default!";
@@ -254,6 +264,60 @@ namespace LiveArch.Deployment.Export.CSharp
             }
 
             return "default!";
+        }
+
+        private static bool TryRenderTypedValue(
+            object value,
+            Type declaredType,
+            IReadOnlyDictionary<object, string> keyByResource,
+            IReadOnlyDictionary<string, string> variableNameByKey,
+            int indentLevel,
+            out string rendered)
+        {
+            var renderTargetType = GetPreferredRenderType(declaredType, value);
+
+            if (renderTargetType == typeof(string) && value is string text)
+            {
+                rendered = ToCSharpString(text);
+                return true;
+            }
+
+            if (renderTargetType == typeof(bool))
+            {
+                var boolValue = value is bool boolean
+                    ? boolean
+                    : bool.Parse(value.ToString()!);
+                rendered = boolValue ? "true" : "false";
+                return true;
+            }
+
+            if (renderTargetType.IsEnum)
+            {
+                var enumValue = value is Enum enumInstance
+                    ? enumInstance
+                    : Enum.Parse(renderTargetType, value.ToString()!, ignoreCase: true) as Enum
+                        ?? throw new InvalidOperationException($"Cannot render enum value '{value}' for {renderTargetType.FullName}.");
+                rendered = $"{GetGlobalTypeName(renderTargetType)}.{enumValue}";
+                return true;
+            }
+
+            if (ConversionTypeHelpers.IsPulumiEnum(renderTargetType))
+            {
+                rendered = RenderPulumiEnumValue(renderTargetType, value);
+                return true;
+            }
+
+            if (IsNumericTargetType(renderTargetType))
+            {
+                var numericValue = value is string numericText
+                    ? Convert.ChangeType(numericText, renderTargetType, CultureInfo.InvariantCulture)
+                    : value;
+                rendered = Convert.ToString(numericValue, CultureInfo.InvariantCulture) ?? "0";
+                return true;
+            }
+
+            rendered = string.Empty;
+            return false;
         }
 
         private static string RenderLiteralObjectInitializer(
@@ -315,7 +379,7 @@ namespace LiveArch.Deployment.Export.CSharp
         {
             var rendered = expression.Value == null
                 ? "null"
-                : RenderValue(expression.Value, expression.Value.GetType(), indentLevel, keyByResource, variableNameByKey);
+                : RenderValue(expression.Value, declaredType, indentLevel, keyByResource, variableNameByKey);
 
             if (string.IsNullOrWhiteSpace(expression.ConverterName))
             {
@@ -369,6 +433,76 @@ namespace LiveArch.Deployment.Export.CSharp
             }
 
             return effectiveType.GetConstructor(Type.EmptyTypes) != null;
+        }
+
+        private static Type GetPreferredRenderType(Type declaredType, object value)
+        {
+            var currentType = Nullable.GetUnderlyingType(declaredType) ?? declaredType;
+
+            while (currentType.IsGenericType && currentType.GetGenericTypeDefinition() == typeof(Input<>))
+            {
+                currentType = currentType.GetGenericArguments()[0];
+            }
+
+            if (ConversionTypeHelpers.IsGenericInputUnion(currentType) || ConversionTypeHelpers.IsGenericUnion(currentType))
+            {
+                foreach (var candidateType in currentType.GetGenericArguments().Select(argument => Nullable.GetUnderlyingType(argument) ?? argument))
+                {
+                    if (ConversionTypeHelpers.IsPulumiEnum(candidateType) && TryRenderPulumiEnumValue(candidateType, value, out _))
+                    {
+                        return candidateType;
+                    }
+
+                    if (candidateType == typeof(bool) && (value is bool || bool.TryParse(value.ToString(), out _)))
+                    {
+                        return candidateType;
+                    }
+                }
+            }
+
+            return currentType;
+        }
+
+        private static string RenderPulumiEnumValue(Type enumType, object value)
+        {
+            return TryRenderPulumiEnumValue(enumType, value, out var rendered)
+                ? rendered
+                : throw new InvalidOperationException($"Cannot render Pulumi enum value '{value}' for {enumType.FullName}.");
+        }
+
+        private static bool TryRenderPulumiEnumValue(Type enumType, object value, out string rendered)
+        {
+            var stringValue = value.ToString();
+            var valueField = enumType.GetField("_value", BindingFlags.NonPublic | BindingFlags.Instance);
+
+            foreach (var property in enumType.GetProperties(BindingFlags.Public | BindingFlags.Static))
+            {
+                var enumValue = property.GetValue(null)!;
+                var enumString = valueField?.GetValue(enumValue)?.ToString();
+                if (string.Equals(enumString, stringValue, StringComparison.OrdinalIgnoreCase))
+                {
+                    rendered = $"{GetGlobalTypeName(enumType)}.{property.Name}";
+                    return true;
+                }
+            }
+
+            rendered = string.Empty;
+            return false;
+        }
+
+        private static bool IsNumericTargetType(Type type)
+        {
+            return type == typeof(byte) ||
+                type == typeof(sbyte) ||
+                type == typeof(short) ||
+                type == typeof(ushort) ||
+                type == typeof(int) ||
+                type == typeof(uint) ||
+                type == typeof(long) ||
+                type == typeof(ulong) ||
+                type == typeof(float) ||
+                type == typeof(double) ||
+                type == typeof(decimal);
         }
 
         private static Type GetCreatedArgsType(Type resourceType)
@@ -494,8 +628,8 @@ namespace LiveArch.Deployment.Export.CSharp
         {
             var safeDeploymentName = Regex.Replace(deployment, "[^a-zA-Z0-9_-]", "-").Trim('-');
             return string.IsNullOrWhiteSpace(safeDeploymentName)
-                ? "Generated.Pulumi.Project"
-                : $"Generated.{safeDeploymentName}.Pulumi";
+                ? "Generated.Deployment.Project"
+                : $"Generated.{safeDeploymentName}.Deployment";
         }
 
         private static IReadOnlyDictionary<string, string> CreateVariableNames(IReadOnlyList<IObservedResource> resources)
@@ -509,17 +643,31 @@ namespace LiveArch.Deployment.Export.CSharp
                 var key = CreateResourceKey(resource);
                 var baseName = CreateVariableNameCandidate(resource);
                 var variableName = baseName;
-                var suffix = 2;
 
-                while (!usedNames.Add(variableName))
+                if (!usedNames.Add(variableName))
                 {
-                    variableName = $"{baseName}_{suffix++}";
+                    var typedCandidate = baseName + CreateTypeSuffix(resource.CodeGenType);
+                    variableName = usedNames.Add(typedCandidate)
+                        ? typedCandidate
+                        : CreateIndexedVariableName(usedNames, typedCandidate);
                 }
 
                 variableNameByKey[key] = variableName;
             }
 
             return variableNameByKey;
+        }
+
+        private static string CreateIndexedVariableName(HashSet<string> usedNames, string baseName)
+        {
+            var suffix = 2;
+            var candidate = baseName;
+            while (!usedNames.Add(candidate))
+            {
+                candidate = $"{baseName}{suffix++}";
+            }
+
+            return candidate;
         }
 
         private static string CreateResourceKey(IObservedResource resource)
@@ -586,9 +734,33 @@ namespace LiveArch.Deployment.Export.CSharp
             return string.IsNullOrWhiteSpace(variableName) ? "resource" : variableName;
         }
 
+        private static string CreateTypeSuffix(Type codeGenType)
+        {
+            var type = codeGenType;
+            while (ConversionTypeHelpers.IsOutput(type) || ConversionTypeHelpers.IsGenericInput(type))
+            {
+                type = type.GetGenericArguments()[0];
+            }
+
+            var name = type.Name;
+            var tickIndex = name.IndexOf('`');
+            if (tickIndex >= 0)
+            {
+                name = name[..tickIndex];
+            }
+
+            return string.IsNullOrWhiteSpace(name) ? "Type" : name;
+        }
+
         private static string ToCSharpString(string value)
         {
             return $"\"{value.Replace("\\", "\\\\").Replace("\"", "\\\"")}\"";
+        }
+
+        private static bool ShouldExportResource(IObservedResource resource)
+        {
+            var fullName = resource.CodeGenType.FullName ?? resource.CodeGenType.Name;
+            return !fullName.StartsWith("LiveArch.Deployment.Controls.", StringComparison.Ordinal);
         }
 
         private interface IObservedResource
@@ -637,22 +809,30 @@ namespace LiveArch.Deployment.Export.CSharp
 
     public static class CSharpPulumiProjectWriter
     {
-        public static CSharpPulumiProjectExport Export(CSharpPulumiProjectModel model)
+        private static readonly UTF8Encoding Utf8WithoutBom = new(encoderShouldEmitUTF8Identifier: false);
+
+        public static CSharpPulumiProjectExport Export(CSharpPulumiProjectModel model, string? outputDirectory = null)
         {
-            var directory = CreateOutputDirectory(model.Deployment);
+            var directory = ResolveOutputDirectory(model.Deployment, outputDirectory);
+            PrepareOutputDirectory(directory);
             Directory.CreateDirectory(directory);
 
             var projectFilePath = Path.Combine(directory, $"{model.ProjectName}.csproj");
             var deploymentFilePath = Path.Combine(directory, "ExportedDeployment.cs");
 
-            File.WriteAllText(projectFilePath, CreateProjectFile(directory, model), Encoding.UTF8);
-            File.WriteAllText(deploymentFilePath, CreateDeploymentFile(model), Encoding.UTF8);
+            File.WriteAllText(projectFilePath, NormalizeGeneratedText(CreateProjectFile(directory, model)), Utf8WithoutBom);
+            File.WriteAllText(deploymentFilePath, NormalizeGeneratedText(CreateDeploymentFile(model)), Utf8WithoutBom);
 
             return new CSharpPulumiProjectExport(directory, projectFilePath, deploymentFilePath, model);
         }
 
-        private static string CreateOutputDirectory(string deployment)
+        private static string ResolveOutputDirectory(string deployment, string? outputDirectory)
         {
+            if (!string.IsNullOrWhiteSpace(outputDirectory))
+            {
+                return Path.GetFullPath(outputDirectory.Trim());
+            }
+
             var safeDeploymentName = Regex.Replace(deployment, "[^a-zA-Z0-9_-]", "-");
             var baseDirectory = Path.Combine(AppContext.BaseDirectory, "TestResults", "GeneratedProjects");
             var timestamp = DateTimeOffset.Now.ToString("yyyyMMdd-HHmmss-fff", CultureInfo.InvariantCulture);
@@ -665,6 +845,23 @@ namespace LiveArch.Deployment.Export.CSharp
             }
 
             return candidate;
+        }
+
+        private static string NormalizeGeneratedText(string text)
+        {
+            return text.Replace("\r\n", "\n", StringComparison.Ordinal)
+                .Replace("\r", "\n", StringComparison.Ordinal)
+                .Replace("\n", "\r\n", StringComparison.Ordinal);
+        }
+
+        private static void PrepareOutputDirectory(string outputDirectory)
+        {
+            if (!Directory.Exists(outputDirectory))
+            {
+                return;
+            }
+
+            Directory.Delete(outputDirectory, recursive: true);
         }
 
         private static string CreateProjectFile(string outputDirectory, CSharpPulumiProjectModel model)
@@ -695,9 +892,7 @@ namespace LiveArch.Deployment.Export.CSharp
                 builder.AppendLine("  <ItemGroup>");
                 foreach (var projectReference in model.ProjectReferences)
                 {
-                    var fullProjectPath = Path.GetFullPath(projectReference.ProjectPath, AppContext.BaseDirectory);
-                    var relativePath = Path.GetRelativePath(outputDirectory, fullProjectPath);
-                    builder.AppendLine($"    <ProjectReference Include=\"{relativePath.Replace("\\", "\\\\")}\" />");
+                    builder.AppendLine($"    <ProjectReference Include=\"{projectReference.ProjectPath.Replace("\\", "\\\\")}\" />");
                 }
                 builder.AppendLine("  </ItemGroup>");
                 builder.AppendLine();
@@ -733,33 +928,7 @@ namespace LiveArch.Deployment.Export.CSharp
             builder.AppendLine();
             builder.AppendLine("        return Task.CompletedTask;");
             builder.AppendLine("    }");
-            builder.AppendLine();
-            builder.AppendLine("    public static IReadOnlyCollection<ExportedResourceDescriptor> DescribeResources() =>");
-            builder.AppendLine("    [");
-            foreach (var resource in model.Resources)
-            {
-                builder.AppendLine("        new ExportedResourceDescriptor(");
-                builder.AppendLine($"            {ToCSharpString(resource.Key)},");
-                builder.AppendLine($"            {ToCSharpString(resource.Kind)},");
-                builder.AppendLine($"            {ToCSharpString(resource.Node)},");
-                builder.AppendLine($"            {resource.ScopeId},");
-                builder.AppendLine($"            {ToCSharpString(resource.VariableName)},");
-                builder.AppendLine($"            {ToCSharpString(resource.ResourceTypeName)},");
-                builder.Append("            [");
-                builder.Append(string.Join(", ", resource.DependsOn.Select(ToCSharpString)));
-                builder.AppendLine("]),");
-            }
-            builder.AppendLine("    ];");
             builder.AppendLine("}");
-            builder.AppendLine();
-            builder.AppendLine("public sealed record ExportedResourceDescriptor(");
-            builder.AppendLine("    string Key,");
-            builder.AppendLine("    string Kind,");
-            builder.AppendLine("    string Node,");
-            builder.AppendLine("    int ScopeId,");
-            builder.AppendLine("    string VariableName,");
-            builder.AppendLine("    string ResourceTypeName,");
-            builder.AppendLine("    IReadOnlyCollection<string> DependsOn);");
 
             return builder.ToString();
         }
@@ -772,10 +941,12 @@ namespace LiveArch.Deployment.Export.CSharp
 
     public sealed record CSharpPulumiProjectExporterOptions(
         string? ProjectName = null,
-        string RootNamespace = "Generated.Pulumi",
+        string RootNamespace = "Generated.Deployment",
+        string? OutputDirectory = null,
         IReadOnlyCollection<string>? AdditionalNamespaces = null,
         IReadOnlyCollection<CSharpPackageReference>? AdditionalPackageReferences = null)
     {
+        public string? OutputDirectory { get; init; } = OutputDirectory;
         public IReadOnlyCollection<string> AdditionalNamespaces { get; init; } = AdditionalNamespaces ?? [];
         public IReadOnlyCollection<CSharpPackageReference> AdditionalPackageReferences { get; init; } = AdditionalPackageReferences ?? [];
     }
@@ -813,20 +984,33 @@ namespace LiveArch.Deployment.Export.CSharp
 
     internal static class KnownPackageRegistry
     {
+        private static readonly ExportReferenceRule[] Rules =
+        [
+            new(
+                ["Pulumi.AzureNative."],
+                [new CSharpPackageReference("Pulumi.AzureNative", "3.18.0")],
+                []),
+            new(
+                ["Pulumi.DockerBuild."],
+                [new CSharpPackageReference("Pulumi.DockerBuild", "0.0.16")],
+                []),
+            new(
+                ["LiveArch.Resources.Azure."],
+                [],
+                [new CSharpProjectReference("..\\LiveArch.Resources.Azure\\LiveArch.Resources.Azure.csproj")])
+        ];
+
         public static IReadOnlyCollection<CSharpPackageReference> Resolve(Type type)
         {
             var packageReferences = new Dictionary<string, CSharpPackageReference>(StringComparer.OrdinalIgnoreCase);
             foreach (var currentType in EnumerateTypeClosure(type))
             {
-                var fullName = currentType.FullName ?? currentType.Name;
-                if (fullName.StartsWith("Pulumi.AzureNative.", StringComparison.Ordinal))
+                foreach (var rule in Rules.Where(rule => rule.IsMatch(currentType)))
                 {
-                    packageReferences["Pulumi.AzureNative"] = new CSharpPackageReference("Pulumi.AzureNative", "3.18.0");
-                }
-
-                if (fullName.StartsWith("Pulumi.DockerBuild.", StringComparison.Ordinal))
-                {
-                    packageReferences["Pulumi.DockerBuild"] = new CSharpPackageReference("Pulumi.DockerBuild", "0.0.16");
+                    foreach (var packageReference in rule.PackageReferences)
+                    {
+                        packageReferences[packageReference.PackageId] = packageReference;
+                    }
                 }
             }
 
@@ -838,13 +1022,34 @@ namespace LiveArch.Deployment.Export.CSharp
             var projectReferences = new Dictionary<string, CSharpProjectReference>(StringComparer.OrdinalIgnoreCase);
             foreach (var currentType in EnumerateTypeClosure(type))
             {
-                if (currentType.Assembly.GetName().Name == "LiveArch.Pulumi.Azure")
+                foreach (var rule in Rules.Where(rule => rule.IsMatch(currentType)))
                 {
-                    projectReferences["LiveArch.Pulumi.Azure"] = new CSharpProjectReference("..\\..\\..\\..\\LiveArch.Pulumi.Azure\\LiveArch.Pulumi.Azure.csproj");
+                    foreach (var projectReference in rule.ProjectReferences)
+                    {
+                        projectReferences[projectReference.ProjectPath] = projectReference;
+                    }
                 }
             }
 
             return [.. projectReferences.Values];
+        }
+
+        private sealed record ExportReferenceRule(
+            IReadOnlyCollection<string> Prefixes,
+            IReadOnlyCollection<CSharpPackageReference> PackageReferences,
+            IReadOnlyCollection<CSharpProjectReference> ProjectReferences)
+        {
+            public bool IsMatch(Type type)
+            {
+                var fullName = type.FullName ?? type.Name;
+                var @namespace = type.Namespace ?? string.Empty;
+                var assemblyName = type.Assembly.GetName().Name ?? string.Empty;
+
+                return Prefixes.Any(prefix =>
+                    fullName.StartsWith(prefix, StringComparison.Ordinal) ||
+                    @namespace.StartsWith(prefix, StringComparison.Ordinal) ||
+                    assemblyName.StartsWith(prefix.TrimEnd('.'), StringComparison.Ordinal));
+            }
         }
 
         private static IEnumerable<Type> EnumerateTypeClosure(Type type)

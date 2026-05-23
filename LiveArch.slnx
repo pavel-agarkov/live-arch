@@ -4,6 +4,9 @@
     <Project Path="LiveArch.Deployment.TestRunner/LiveArch.Deployment.TestRunner.csproj" Id="6b598c80-c2d1-469b-b8d4-f754bd106233" />
     <Project Path="LiveArch.Diagram/LiveArch.Diagram.csproj" />
   </Folder>
+  <Folder Name="/Examples/Exported/">
+    <Project Path="LiveArch.Order.Deployment/LiveArch.Order.Deployment.csproj" />
+  </Folder>
   <Folder Name="/Examples/Web/">
     <Project Path="LiveArch.Delivery.Api/LiveArch.Delivery.Api.csproj" Id="fbe78d5c-78b5-48d6-a468-e3ed26b4b2bf" />
     <Project Path="LiveArch.Order.Api/LiveArch.Order.Api.csproj" Id="530966b9-7acf-44e3-a14c-1587bfd2d0c5" />
