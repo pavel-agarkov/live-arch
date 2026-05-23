@@ -1,15 +1,12 @@
 using LiveArch.Deployment.Expressions;
-using System.Reflection;
+using LiveArch.Deployment.Observability;
 using Pulumi;
 using Structurizr;
-using LiveArch.Deployment.Observability;
+using System.Reflection;
 
-namespace LiveArch.Deployment.Observers
+namespace LiveArch.Deployment.TestRunner
 {
-    /// <summary>
-    /// Default observer that keeps the deployment processor behavior unchanged.
-    /// </summary>
-    internal sealed class NullStructurizrDeploymentObserver : IStructurizrDeploymentObserver
+    internal sealed class NoOpStructurizrDeploymentObserver : IStructurizrDeploymentObserver
     {
         public void OnResourceCreated(
             ModelItem node,

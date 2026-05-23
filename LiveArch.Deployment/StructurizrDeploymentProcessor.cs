@@ -471,7 +471,7 @@ namespace LiveArch.Deployment
                         var invokeOptions = CreateInvokeOptions(invoke, dependsOnResources);
                         var resource = invoke.Invoke(null, [param, invokeOptions!])!;
 
-                        AddReferencedResource(deployNode.Node, context.Scope, resource!, resourceName, invoke, param, invokeOptions, dependsOnResources, expressionModel);
+                        AddReferencedResource(deployNode.Node, context.Scope, resource!, resourceName, invoke, invokeOptions, dependsOnResources, expressionModel);
 
                         await CreateRelationNodesAsync(deployNode, context, cancellationToken);
                         await CreateIncomingLoopRelationNodesAsync(deployNode, context, cancellationToken);
@@ -504,7 +504,7 @@ namespace LiveArch.Deployment
 
                     var customResourceOptions = CreateCustomResourceOptions(dependsOnResources);
                     var newRes = Activator.CreateInstance(type, [resourceName, param, customResourceOptions!]);
-                    AddCreatedResource(deployNode.Node, context.Scope, newRes!, type, resourceName, param, customResourceOptions, dependsOnResources, expressionModel);
+                    AddCreatedResource(deployNode.Node, context.Scope, newRes!, type, resourceName, customResourceOptions, dependsOnResources, expressionModel);
 
                     await CreateRelationNodesAsync(deployNode, context, cancellationToken);
                     await CreateIncomingLoopRelationNodesAsync(deployNode, context, cancellationToken);
@@ -1241,13 +1241,12 @@ namespace LiveArch.Deployment
             object resource,
             Type resourceType,
             string resourceName,
-            object args,
             CustomResourceOptions? options,
             IReadOnlyCollection<Resource> dependsOn,
             CreatedResourceExpressionModel expressionModel)
         {
             scope.CreatedResources.Add(node, resource);
-            observer.OnResourceCreated(node, scope, resource, resourceType, resourceName, args, options, dependsOn, expressionModel);
+            observer.OnResourceCreated(node, scope, resource, resourceType, resourceName, options, dependsOn, expressionModel);
         }
 
         /// <summary>
@@ -1262,13 +1261,12 @@ namespace LiveArch.Deployment
             object resource,
             string resourceName,
             MethodInfo invokeMethod,
-            object args,
             InvokeOptions? options,
             IReadOnlyCollection<Resource> dependsOn,
             ReferencedResourceExpressionModel expressionModel)
         {
             scope.ReferencedResources.Add(node, resource);
-            observer.OnResourceReferenced(node, scope, resource, resourceName, invokeMethod, args, options, dependsOn, expressionModel);
+            observer.OnResourceReferenced(node, scope, resource, resourceName, invokeMethod, options, dependsOn, expressionModel);
         }
 
         /// <summary>

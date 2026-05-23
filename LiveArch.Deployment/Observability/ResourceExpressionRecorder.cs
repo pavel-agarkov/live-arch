@@ -13,14 +13,14 @@ namespace LiveArch.Deployment.Observability
 
         public CreatedResourceExpressionModel BeginCreatedResource(ModelItem node, int scopeId, string resourceName, object args, Type resourceType)
         {
-            var model = new CreatedResourceExpressionModel(node, scopeId, resourceName, args, resourceType);
+            var model = new CreatedResourceExpressionModel(node, scopeId, resourceName, resourceType);
             RegisterRoot(args, model);
             return model;
         }
 
         public ReferencedResourceExpressionModel BeginReferencedResource(ModelItem node, int scopeId, string resourceName, object args, MethodInfo invokeMethod)
         {
-            var model = new ReferencedResourceExpressionModel(node, scopeId, resourceName, args, invokeMethod);
+            var model = new ReferencedResourceExpressionModel(node, scopeId, resourceName, invokeMethod);
             RegisterRoot(args, model);
             return model;
         }

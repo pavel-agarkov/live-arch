@@ -4,7 +4,7 @@ using Type = System.Type;
 
 namespace LiveArch.Deployment.Expressions
 {
-    public abstract record ResourceExpressionModel(ModelItem Node, int ScopeId, string ResourceName, object Args)
+    public abstract record ResourceExpressionModel(ModelItem Node, int ScopeId, string ResourceName)
     {
         public Dictionary<string, ValueExpressionModel> Assignments { get; } = [];
     }
@@ -13,15 +13,13 @@ namespace LiveArch.Deployment.Expressions
         ModelItem Node,
         int ScopeId,
         string ResourceName,
-        object Args,
-        Type ResourceType) : ResourceExpressionModel(Node, ScopeId, ResourceName, Args);
+        Type ResourceType) : ResourceExpressionModel(Node, ScopeId, ResourceName);
 
     public sealed record ReferencedResourceExpressionModel(
         ModelItem Node,
         int ScopeId,
         string ResourceName,
-        object Args,
-        MethodInfo InvokeMethod) : ResourceExpressionModel(Node, ScopeId, ResourceName, Args);
+        MethodInfo InvokeMethod) : ResourceExpressionModel(Node, ScopeId, ResourceName);
 
     public abstract record ValueExpressionModel;
 

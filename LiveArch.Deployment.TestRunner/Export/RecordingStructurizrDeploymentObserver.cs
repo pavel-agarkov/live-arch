@@ -1,26 +1,27 @@
 using LiveArch.Deployment.Expressions;
-using System.Reflection;
+using LiveArch.Deployment.Observability;
 using Pulumi;
 using Structurizr;
-using LiveArch.Deployment.Observability;
+using System.Reflection;
 
-namespace LiveArch.Deployment.Observers
+namespace LiveArch.Deployment.TestRunner.Export
 {
-    /// <summary>
-    /// Default observer that keeps the deployment processor behavior unchanged.
-    /// </summary>
-    internal sealed class NullStructurizrDeploymentObserver : IStructurizrDeploymentObserver
+    internal sealed class RecordingStructurizrDeploymentObserver : IStructurizrDeploymentObserver
     {
+        public List<RegisteredResource> CreatedResources { get; } = [];
+        public List<RegisteredResource> ReferencedResources { get; } = [];
+
         public void OnResourceCreated(
             ModelItem node,
             StructurizrDeploymentProcessor.ResourceScope scope,
             object resource,
-            Type resourceType,
+            global::System.Type resourceType,
             string resourceName,
             CustomResourceOptions? options,
             IReadOnlyCollection<Resource> dependsOn,
             CreatedResourceExpressionModel expressionModel)
         {
+            CreatedResources.Add(new RegisteredResource(node, scope.Id, resource, dependsOn, resourceName, resourceType, null, options, expressionModel));
         }
 
         public void OnResourceReferenced(
@@ -33,6 +34,7 @@ namespace LiveArch.Deployment.Observers
             IReadOnlyCollection<Resource> dependsOn,
             ReferencedResourceExpressionModel expressionModel)
         {
+            ReferencedResources.Add(new RegisteredResource(node, scope.Id, resource, dependsOn, resourceName, null, invokeMethod, options, expressionModel));
         }
     }
 }
