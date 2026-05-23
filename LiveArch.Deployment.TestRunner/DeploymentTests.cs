@@ -5,8 +5,8 @@ using LiveArch.Deployment.Configuration;
 using LiveArch.Deployment.Controls;
 using LiveArch.Deployment.Converters;
 using LiveArch.Deployment.Docker;
+using LiveArch.Deployment.Expressions;
 using LiveArch.Deployment.Export.CSharp;
-using LiveArch.Deployment.Observers;
 using LiveArch.Deployment.ResourceHierarchy;
 using LiveArch.Deployment.ResourceTypes;
 using LiveArch.Deployment.Transformers;
@@ -22,7 +22,9 @@ using Pulumi.AzureNative.Web.Inputs;
 using Pulumi.DockerBuild;
 using Pulumi.Testing;
 using Structurizr;
+using System.Reflection;
 using ManagedServiceIdentityType = Pulumi.AzureNative.Web.ManagedServiceIdentityType;
+using LiveArch.Deployment.Observability;
 
 namespace LiveArch.Deployment.TestRunner
 {
@@ -175,6 +177,8 @@ namespace LiveArch.Deployment.TestRunner
             observer.CreatedResources.Count.Should().Be(ws.CreatedResources.Count);
             observer.ReferencedResources.Count.Should().Be(ws.ReferencedResources.Count);
             observer.CreatedResources.Any(resource => resource.DependsOn.Count > 0).Should().BeTrue();
+            observer.CreatedResources.Any(resource => resource.ExpressionModel.Assignments.Count > 0).Should().BeTrue();
+            observer.ReferencedResources.Any(resource => resource.ExpressionModel.Assignments.Count > 0).Should().BeTrue();
         }
 
         [Fact]
@@ -201,6 +205,12 @@ namespace LiveArch.Deployment.TestRunner
             export.Model.ProjectName.Should().Be("Order.Generated.Pulumi");
             export.Model.AdditionalNamespaces.Should().Contain("System.Linq");
             export.Model.PackageReferences.Should().Contain(reference => reference.PackageId == "Awesome.Custom.Package");
+            export.Model.Resources.Should().Contain(resource => resource.CreationStatement.Contains("new global::Pulumi.AzureNative.ManagedIdentity.UserAssignedIdentity("));
+            export.Model.Resources.Should().Contain(resource => resource.CreationStatement.Contains("global::Pulumi.AzureNative.ServiceBus.GetNamespace.Invoke("));
+            export.Model.Resources.Should().Contain(resource => resource.VariableName == "orderServiceMi");
+            export.Model.Resources.Should().Contain(resource => resource.VariableName == "serviceBusNamespace");
+
+            Path.GetFileName(export.DirectoryPath).Should().MatchRegex(@"^order-env-\d{8}-\d{6}-\d{3}(-\d+)?$");
 
             var projectText = File.ReadAllText(export.ProjectFilePath);
             projectText.Should().Contain("Awesome.Custom.Package");
@@ -208,8 +218,11 @@ namespace LiveArch.Deployment.TestRunner
 
             var deploymentText = File.ReadAllText(export.DeploymentFilePath);
             deploymentText.Should().Contain("Generated.Order.Pulumi");
-            deploymentText.Should().Contain("ExportedResourceDescriptor");
-            deploymentText.Should().Contain("Pulumi.AzureNative.ManagedIdentity.UserAssignedIdentity");
+            deploymentText.Should().Contain("ProcessAsync");
+            deploymentText.Should().Contain("new global::Pulumi.AzureNative.ManagedIdentity.UserAssignedIdentity(");
+            deploymentText.Should().Contain("global::Pulumi.AzureNative.ServiceBus.GetNamespace.Invoke(");
+            deploymentText.Should().Contain("new global::Pulumi.CustomResourceOptions");
+            deploymentText.Should().Contain("/* saList.value | transformers: SplitTransformer");
             deploymentText.Should().Contain("order-env");
         }
 
@@ -265,21 +278,49 @@ namespace LiveArch.Deployment.TestRunner
             public IReadOnlyDictionary<string, object> GetVariables() => values;
         }
 
-        private sealed record RegisteredResource(ModelItem Node, int ScopeId, object Resource, IReadOnlyCollection<Pulumi.Resource> DependsOn);
+        private sealed record RegisteredResource(
+            ModelItem Node,
+            int ScopeId,
+            object Resource,
+            IReadOnlyCollection<Pulumi.Resource> DependsOn,
+            string? ResourceName,
+            global::System.Type? ResourceType,
+            MethodInfo? InvokeMethod,
+            object Args,
+            object? Options,
+            ResourceExpressionModel ExpressionModel);
 
         private sealed class RecordingStructurizrDeploymentObserver : IStructurizrDeploymentObserver
         {
             public List<RegisteredResource> CreatedResources { get; } = [];
             public List<RegisteredResource> ReferencedResources { get; } = [];
 
-            public void OnResourceCreated(ModelItem node, StructurizrDeploymentProcessor.ResourceScope scope, object resource, IReadOnlyCollection<Pulumi.Resource> dependsOn)
+            public void OnResourceCreated(
+                ModelItem node,
+                StructurizrDeploymentProcessor.ResourceScope scope,
+                object resource,
+                global::System.Type resourceType,
+                string resourceName,
+                object args,
+                global::Pulumi.CustomResourceOptions? options,
+                IReadOnlyCollection<Pulumi.Resource> dependsOn,
+                CreatedResourceExpressionModel expressionModel)
             {
-                CreatedResources.Add(new RegisteredResource(node, scope.Id, resource, dependsOn));
+                CreatedResources.Add(new RegisteredResource(node, scope.Id, resource, dependsOn, resourceName, resourceType, null, args, options, expressionModel));
             }
 
-            public void OnResourceReferenced(ModelItem node, StructurizrDeploymentProcessor.ResourceScope scope, object resource, IReadOnlyCollection<Pulumi.Resource> dependsOn)
+            public void OnResourceReferenced(
+                ModelItem node,
+                StructurizrDeploymentProcessor.ResourceScope scope,
+                object resource,
+                string resourceName,
+                MethodInfo invokeMethod,
+                object args,
+                global::Pulumi.InvokeOptions? options,
+                IReadOnlyCollection<Pulumi.Resource> dependsOn,
+                ReferencedResourceExpressionModel expressionModel)
             {
-                ReferencedResources.Add(new RegisteredResource(node, scope.Id, resource, dependsOn));
+                ReferencedResources.Add(new RegisteredResource(node, scope.Id, resource, dependsOn, resourceName, null, invokeMethod, args, options, expressionModel));
             }
         }
 

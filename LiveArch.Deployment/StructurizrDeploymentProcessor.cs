@@ -3,7 +3,8 @@ using LiveArch.Deployment.Configuration;
 using LiveArch.Deployment.Controls;
 using LiveArch.Deployment.Converters;
 using LiveArch.Deployment.Docker;
-using LiveArch.Deployment.Observers;
+using LiveArch.Deployment.Expressions;
+using LiveArch.Deployment.Observability;
 using LiveArch.Deployment.ResourceHierarchy;
 using LiveArch.Deployment.ResourceTypes;
 using LiveArch.Deployment.Transformers;
@@ -112,6 +113,7 @@ namespace LiveArch.Deployment
         private Workspace workspace = null!;
         private Dictionary<ResourceKey, WaitingNodeRegistration> waitingNodes = new();
         private readonly OutputValueReader outputValueReader = new();
+        private readonly ResourceExpressionRecorder expressionRecorder = new();
         private readonly InputValueBinder inputValueBinder;
         private readonly ITransformerRegistry transformerRegistry;
         private readonly TransformerPipeline transformerPipeline;
@@ -447,9 +449,11 @@ namespace LiveArch.Deployment
                 {
                     if (resourceTypesRegistry.TryGetInvokeMethod(deployNode.Technology, out var invoke))
                     {
+                        var resourceName = ResolveResourceName(deployNode, context);
                         var dependsOnResources = GetDependsOnResources(deployNode, context);
                         var paramType = invoke!.GetParameters().First();
                         var param = Activator.CreateInstance(paramType.ParameterType)!;
+                        var expressionModel = expressionRecorder.BeginReferencedResource(deployNode.Node, context.Scope.Id, resourceName, param, invoke);
                         var paramInputProps = inputValueBinder.GetInputProps(paramType.ParameterType);
 
                         foreach (var parent in deployNode.Parents)
@@ -467,7 +471,7 @@ namespace LiveArch.Deployment
                         var invokeOptions = CreateInvokeOptions(invoke, dependsOnResources);
                         var resource = invoke.Invoke(null, [param, invokeOptions!])!;
 
-                        AddReferencedResource(deployNode.Node, context.Scope, resource!, dependsOnResources);
+                        AddReferencedResource(deployNode.Node, context.Scope, resource!, resourceName, invoke, param, invokeOptions, dependsOnResources, expressionModel);
 
                         await CreateRelationNodesAsync(deployNode, context, cancellationToken);
                         await CreateIncomingLoopRelationNodesAsync(deployNode, context, cancellationToken);
@@ -482,6 +486,8 @@ namespace LiveArch.Deployment
                     var dependsOnResources = GetDependsOnResources(deployNode, context);
                     var paramType = type.GetConstructors()[0].GetParameters()[1];
                     var param = Activator.CreateInstance(paramType.ParameterType)!;
+                    var resourceName = ResolveResourceName(deployNode, context);
+                    var expressionModel = expressionRecorder.BeginCreatedResource(deployNode.Node, context.Scope.Id, resourceName, param, type);
                     var paramInputProps = inputValueBinder.GetInputProps(paramType.ParameterType);
 
                     foreach (var parent in deployNode.Parents)
@@ -496,27 +502,9 @@ namespace LiveArch.Deployment
                         inputValueBinder.SetProperty(param, propName, propVal, paramInputProps, context, parseInlineTransformers: true);
                     }
 
-                    if (!deployNode.Properties.TryGetValue("var", out var resVar) &&
-                        (!deployNode.Properties.TryGetValue("structurizr.dsl.identifier", out resVar) || Guid.TryParse(resVar, out _)) &&
-                        !deployNode.Properties.TryGetValue("name", out resVar))
-                    {
-                        if (deployNode.Node is Element element)
-                        {
-                            resVar = element.Name;
-                        }
-                        else if (deployNode.Node is Relationship rel)
-                        {
-                            resVar = rel.Description;
-                        }
-                        else
-                        {
-                            throw new InvalidOperationException($"Cannot determine resource identifier for node {deployNode.Node}. Please specify 'var' property or assign to a variable.");
-                        }
-                    }
-
                     var customResourceOptions = CreateCustomResourceOptions(dependsOnResources);
-                    var newRes = Activator.CreateInstance(type, [SubstituteVariables(resVar, context), param, customResourceOptions!]);
-                    AddCreatedResource(deployNode.Node, context.Scope, newRes!, dependsOnResources);
+                    var newRes = Activator.CreateInstance(type, [resourceName, param, customResourceOptions!]);
+                    AddCreatedResource(deployNode.Node, context.Scope, newRes!, type, resourceName, param, customResourceOptions, dependsOnResources, expressionModel);
 
                     await CreateRelationNodesAsync(deployNode, context, cancellationToken);
                     await CreateIncomingLoopRelationNodesAsync(deployNode, context, cancellationToken);
@@ -527,6 +515,30 @@ namespace LiveArch.Deployment
                 }
             }
             return null;
+        }
+
+        /// <summary>
+        /// Resolves the logical resource name associated with a deployment adapter.
+        /// </summary>
+        /// <param name="deployNode">Deployment adapter whose configured identifier should be used.</param>
+        /// <param name="context">Current deployment context for variable substitution.</param>
+        /// <returns>The resolved logical resource name.</returns>
+        private string ResolveResourceName(IDeploymentAdapter deployNode, DeploymentContext context)
+        {
+            if (!deployNode.Properties.TryGetValue("var", out var configuredName) &&
+                (!deployNode.Properties.TryGetValue("structurizr.dsl.identifier", out configuredName) || Guid.TryParse(configuredName, out _)) &&
+                !deployNode.Properties.TryGetValue("name", out configuredName))
+            {
+                configuredName = deployNode.Node switch
+                {
+                    Element element => element.Name,
+                    Relationship relationship => relationship.Description,
+                    _ => throw new InvalidOperationException($"Cannot determine resource identifier for node {deployNode.Node}. Please specify 'var' property or assign to a variable.")
+                };
+            }
+
+            return SubstituteVariables(configuredName, context)?.ToString()
+                ?? throw new InvalidOperationException($"Cannot determine resource name for node {deployNode.Node}.");
         }
 
         /// <summary>
@@ -1223,10 +1235,19 @@ namespace LiveArch.Deployment
         /// <param name="node">Model item represented by the resource.</param>
         /// <param name="scope">Scope that should own the registration.</param>
         /// <param name="resource">Pulumi resource instance.</param>
-        private void AddCreatedResource(ModelItem node, ResourceScope scope, object resource, IReadOnlyCollection<Resource> dependsOn)
+        private void AddCreatedResource(
+            ModelItem node,
+            ResourceScope scope,
+            object resource,
+            Type resourceType,
+            string resourceName,
+            object args,
+            CustomResourceOptions? options,
+            IReadOnlyCollection<Resource> dependsOn,
+            CreatedResourceExpressionModel expressionModel)
         {
             scope.CreatedResources.Add(node, resource);
-            observer.OnResourceCreated(node, scope, resource, dependsOn);
+            observer.OnResourceCreated(node, scope, resource, resourceType, resourceName, args, options, dependsOn, expressionModel);
         }
 
         /// <summary>
@@ -1235,10 +1256,19 @@ namespace LiveArch.Deployment
         /// <param name="node">Model item represented by the resource.</param>
         /// <param name="scope">Scope that should own the registration.</param>
         /// <param name="resource">Referenced resource or invoke result.</param>
-        private void AddReferencedResource(ModelItem node, ResourceScope scope, object resource, IReadOnlyCollection<Resource> dependsOn)
+        private void AddReferencedResource(
+            ModelItem node,
+            ResourceScope scope,
+            object resource,
+            string resourceName,
+            MethodInfo invokeMethod,
+            object args,
+            InvokeOptions? options,
+            IReadOnlyCollection<Resource> dependsOn,
+            ReferencedResourceExpressionModel expressionModel)
         {
             scope.ReferencedResources.Add(node, resource);
-            observer.OnResourceReferenced(node, scope, resource, dependsOn);
+            observer.OnResourceReferenced(node, scope, resource, resourceName, invokeMethod, args, options, dependsOn, expressionModel);
         }
 
         /// <summary>
@@ -1336,6 +1366,7 @@ namespace LiveArch.Deployment
             var inputProps = inputValueBinder.GetInputProps(target.GetType());
             value = ApplyTransformers(value, transformers);
             inputValueBinder.SetProperty(target, targetPath, value, inputProps, context, parseInlineTransformers: false, converterName: converterName);
+            expressionRecorder.RecordDependencyAssignment(target, targetPath, source, sourcePath, transformers, converterName);
         }
 
         /// <summary>

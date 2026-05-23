@@ -96,6 +96,7 @@ namespace LiveArch.Deployment
                     if (inputProps.TryGetValue(parts[0], out var prop))
                     {
                         value = owner.PrepareDirectValue(value, context, parseInlineTransformers);
+                        owner.expressionRecorder.RecordDirectAssignment(target, parts[0], value, parseInlineTransformers, converterName);
                         var converted = owner.ConvertValue(prop.PropertyType, value, context, converterName);
                         prop.SetValue(target, converted);
                     }
@@ -119,8 +120,16 @@ namespace LiveArch.Deployment
                     headProp.SetValue(target, current);
                 }
 
+                if (!childInputWrappers.TryGetValue(current, out var nestedTarget))
+                {
+                    nestedTarget = current;
+                    childInputWrappers[current] = nestedTarget;
+                }
+
+                owner.expressionRecorder.RegisterNestedTarget(target, nestedTarget, head);
+
                 var nestedProps = GetInputProps(GetUnderlyingArgsType(headProp.PropertyType));
-                SetProperty(childInputWrappers[current], tail, value, nestedProps, context, parseInlineTransformers, converterName);
+                SetProperty(nestedTarget, tail, value, nestedProps, context, parseInlineTransformers, converterName);
             }
 
             /// <summary>
