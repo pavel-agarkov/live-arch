@@ -23,11 +23,11 @@ namespace LiveArch.Deployment.TestRunner
 
             var newResourceRule = registry[typeof(NewResource)].Should().ContainSingle().Subject;
             newResourceRule.TargetInputProperties.Should().Equal("scope");
-            newResourceRule.ParentOutputProperty(new NewResource { Id = "new-resource-scope" }).Should().Be("new-resource-scope");
+            newResourceRule.ParentOutputProperty.Compile()(new NewResource { Id = "new-resource-scope" }).Should().Be("new-resource-scope");
 
             var existingResourceRule = registry[typeof(ExistingResourceResult)].Should().ContainSingle().Subject;
             existingResourceRule.TargetInputProperties.Should().Equal("scope");
-            existingResourceRule.ParentOutputProperty(new ExistingResourceResult { Id = "existing-resource-scope" }).Should().Be("existing-resource-scope");
+            existingResourceRule.ParentOutputProperty.Compile()(new ExistingResourceResult { Id = "existing-resource-scope" }).Should().Be("existing-resource-scope");
         }
 
         private abstract class ResourceBase

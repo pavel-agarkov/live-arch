@@ -1,4 +1,5 @@
 ﻿using LiveArch.Deployment.ResourceHierarchy;
+using System.Linq.Expressions;
 using System.Reflection;
 
 namespace LiveArch.Deployment.Azure.ResourceHierarchy
@@ -29,7 +30,7 @@ namespace LiveArch.Deployment.Azure.ResourceHierarchy
 
             new ResourcePropagationRules<Pulumi.AzureNative.Web.WebApp>
             {
-                { web => web.Identity.Apply(id => id?.PrincipalId), [ "principalId" ] },
+                { web => web.Identity.Apply(id => id == null ? null : id.PrincipalId), [ "principalId" ] },
             },
 
             new ResourcePropagationRules<Pulumi.AzureNative.Network.VirtualNetwork>
@@ -133,18 +134,20 @@ namespace LiveArch.Deployment.Azure.ResourceHierarchy
                 ]);
         }
 
-        private static Func<object, object>? GetIdMemberAccessor(Type resourceType)
+        private static Expression<Func<object, object>>? GetIdMemberAccessor(Type resourceType)
         {
+            var resourceParameter = Expression.Parameter(typeof(object), "resource");
+            var typedResource = Expression.Convert(resourceParameter, resourceType);
             var idProperty = resourceType.GetProperty("Id", BindingFlags.Instance | BindingFlags.Public | BindingFlags.FlattenHierarchy);
             if (idProperty is { CanRead: true } && idProperty.GetIndexParameters().Length == 0 && idProperty.GetMethod is { IsPublic: true, IsStatic: false })
             {
-                return resource => idProperty.GetValue(resource)!;
+                return Expression.Lambda<Func<object, object>>(Expression.Convert(Expression.Property(typedResource, idProperty), typeof(object)), resourceParameter);
             }
 
             var idField = resourceType.GetField("Id", BindingFlags.Instance | BindingFlags.Public | BindingFlags.FlattenHierarchy);
             if (idField is { IsPublic: true, IsStatic: false })
             {
-                return resource => idField.GetValue(resource)!;
+                return Expression.Lambda<Func<object, object>>(Expression.Convert(Expression.Field(typedResource, idField), typeof(object)), resourceParameter);
             }
 
             return null;

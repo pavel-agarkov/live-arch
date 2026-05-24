@@ -1,4 +1,6 @@
-﻿namespace LiveArch.Deployment.ResourceHierarchy
+﻿using System.Linq.Expressions;
+
+namespace LiveArch.Deployment.ResourceHierarchy
 {
     /// <summary>
     /// Maps resource CLR types to propagation rules that copy parent outputs into child inputs.
@@ -38,9 +40,28 @@
             Add(typeof(TResource),
                 [.. rules.Select(x => new ResourcePropagationRule
                 {
-                    ParentOutputProperty = o => x.ParentOutputProperty((TResource)o),
+                    ParentOutputProperty = ToUntypedExpression(x.ParentOutputProperty),
                     TargetInputProperties = x.TargetInputProperties
                 })]);
+        }
+
+        private static Expression<Func<object, object>> ToUntypedExpression<TResource>(Expression<Func<TResource, object>> expression)
+        {
+            var parameter = Expression.Parameter(typeof(object), expression.Parameters[0].Name);
+            var body = new ReplaceExpressionVisitor(
+                expression.Parameters[0],
+                Expression.Convert(parameter, typeof(TResource)))
+                .Visit(expression.Body)!;
+
+            return Expression.Lambda<Func<object, object>>(Expression.Convert(body, typeof(object)), parameter);
+        }
+
+        private sealed class ReplaceExpressionVisitor(Expression source, Expression target) : ExpressionVisitor
+        {
+            public override Expression? Visit(Expression? node)
+            {
+                return node == source ? target : base.Visit(node);
+            }
         }
     }
 
@@ -54,7 +75,7 @@
         /// </summary>
         /// <param name="parentOutputProperty">Delegate that reads the parent output value.</param>
         /// <param name="targetInputProperties">Child input paths that should receive the value.</param>
-        public void Add(Func<TResource, object> parentOutputProperty, List<string> targetInputProperties)
+        public void Add(Expression<Func<TResource, object>> parentOutputProperty, List<string> targetInputProperties)
         {
             Add(new ResourcePropagationRule<TResource>
             {
@@ -72,12 +93,13 @@
         /// <summary>
         /// Gets or sets the delegate that reads the propagated value from the parent resource.
         /// </summary>
-        public required Func<object, object> ParentOutputProperty { get; set; }
+        public required Expression<Func<object, object>> ParentOutputProperty { get; set; }
 
         /// <summary>
         /// Gets or sets the child input paths that should receive the propagated value.
         /// </summary>
         public required List<string> TargetInputProperties { get; set; }
+
     }
 
 
@@ -89,12 +111,13 @@
         /// <summary>
         /// Gets or sets the delegate that reads the propagated value from the parent resource.
         /// </summary>
-        public required Func<TResource, object> ParentOutputProperty { get; set; }
+        public required Expression<Func<TResource, object>> ParentOutputProperty { get; set; }
 
         /// <summary>
         /// Gets or sets the child input paths that should receive the propagated value.
         /// </summary>
         public required List<string> TargetInputProperties { get; set; }
+
     }
 
 }

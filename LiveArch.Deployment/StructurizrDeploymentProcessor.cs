@@ -1121,10 +1121,16 @@ namespace LiveArch.Deployment
 
                 foreach (var rule in outputRules)
                 {
-                    var value = ConversionTypeHelpers.ProjectOutput(resource, innerType, typeof(object), current => rule.ParentOutputProperty(current));
+                    var parentOutputAccessor = rule.ParentOutputProperty.Compile();
+                    var value = ConversionTypeHelpers.ProjectOutput(resource, innerType, typeof(object), current => parentOutputAccessor(current));
                     foreach (var targetProp in rule.TargetInputProperties)
                     {
                         inputValueBinder.SetProperty(param, targetProp, value, paramInputProps, context);
+                        var sourcePath = PropagationExpressionHelper.GetSourcePath(rule.ParentOutputProperty);
+                        if (!string.IsNullOrWhiteSpace(sourcePath))
+                        {
+                            expressionRecorder.RecordDependencyAssignment(param, targetProp, resource, sourcePath, [], null);
+                        }
                     }
                 }
 
@@ -1135,12 +1141,17 @@ namespace LiveArch.Deployment
             {
                 foreach (var rule in rules)
                 {
-                    var value = rule.ParentOutputProperty(resource);
+                    var value = rule.ParentOutputProperty.Compile()(resource);
                     if (value != null)
                     {
                         foreach (var targetProp in rule.TargetInputProperties)
                         {
                             inputValueBinder.SetProperty(param, targetProp, value, paramInputProps, context);
+                            var sourcePath = PropagationExpressionHelper.GetSourcePath(rule.ParentOutputProperty);
+                            if (!string.IsNullOrWhiteSpace(sourcePath))
+                            {
+                                expressionRecorder.RecordDependencyAssignment(param, targetProp, resource, sourcePath, [], null);
+                            }
                         }
                     }
                 }

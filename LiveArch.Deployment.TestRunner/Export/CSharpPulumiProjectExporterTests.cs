@@ -94,9 +94,12 @@ namespace LiveArch.Deployment.TestRunner.Export
             deploymentText.Should().Contain("LiveArch.Order.Deployment");
             deploymentText.Should().Contain("ProcessAsync");
             deploymentText.Should().Contain("public sealed class LiveArchOrderDeploymentVariables");
-            deploymentText.Should().Contain("public static Task ProcessAsync(LiveArchOrderDeploymentVariables variables");
-            deploymentText.Should().Contain("NamespaceName = $\"{variables.Env}-sbns\"");
-            deploymentText.Should().Contain("VaultName = variables.KeyVaultName");
+            deploymentText.Should().Contain("public static Task ProcessAsync(LiveArchOrderDeploymentVariables vars");
+            deploymentText.Should().Contain("NamespaceName = $\"{vars.Env}-sbns\"");
+            deploymentText.Should().Contain("VaultName = vars.KeyVaultName");
+            deploymentText.Should().Contain("ResourceGroupName = sharedRgReference.Apply(value => value.Name)");
+            deploymentText.Should().Contain("ObjectId = orderServiceMi.PrincipalId");
+            deploymentText.Should().Contain("PrincipalId = orderWorkerWebApp.Identity.Apply(value => value!.PrincipalId)");
             deploymentText.Should().Contain("new global::Pulumi.AzureNative.ManagedIdentity.UserAssignedIdentity(");
             deploymentText.Should().Contain("global::Pulumi.AzureNative.ServiceBus.GetNamespace.Invoke(");
             deploymentText.Should().Contain("new global::Pulumi.CustomResourceOptions");

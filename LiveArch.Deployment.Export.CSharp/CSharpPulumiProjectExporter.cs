@@ -62,6 +62,7 @@ namespace LiveArch.Deployment.Export.CSharp
             var keyByResource = exportableResources
                 .GroupBy(resource => resource.Resource, ReferenceEqualityComparer.Instance)
                 .ToDictionary(group => group.Key, group => CreateResourceKey(group.First()), ReferenceEqualityComparer.Instance);
+            var observedByKey = exportableResources.ToDictionary(CreateResourceKey, StringComparer.Ordinal);
 
             var variableNameByKey = CreateVariableNames(exportableResources);
 
@@ -75,7 +76,7 @@ namespace LiveArch.Deployment.Export.CSharp
                 ResolveProjectReferences(exportableResources),
                 exportableResources.OfType<CreatedResourceObservation>().Count(),
                 exportableResources.OfType<ReferencedResourceObservation>().Count(),
-                [.. exportableResources.Select((resource, index) => BuildResourceModel(resource, index, keyByResource, variableNameByKey, variablesModel))]);
+                [.. exportableResources.Select((resource, index) => BuildResourceModel(resource, index, keyByResource, variableNameByKey, variablesModel, observedByKey))]);
 
             var testProjectName = string.IsNullOrWhiteSpace(options.TestProjectName)
                 ? projectName + ".Tests"
@@ -95,7 +96,8 @@ namespace LiveArch.Deployment.Export.CSharp
             int index,
             IReadOnlyDictionary<object, string> keyByResource,
             IReadOnlyDictionary<string, string> variableNameByKey,
-            CSharpPulumiVariablesModel? variablesModel)
+            CSharpPulumiVariablesModel? variablesModel,
+            IReadOnlyDictionary<string, IObservedResource> observedByKey)
         {
             var key = CreateResourceKey(resource);
             var dependsOnKeys = resource.DependsOn
@@ -106,8 +108,8 @@ namespace LiveArch.Deployment.Export.CSharp
             var variableName = variableNameByKey[key];
             var creationStatement = resource switch
             {
-                CreatedResourceObservation created => RenderCreatedResource(created, variableName, dependsOnKeys, keyByResource, variableNameByKey, variablesModel),
-                ReferencedResourceObservation referenced => RenderReferencedResource(referenced, variableName, dependsOnKeys, keyByResource, variableNameByKey, variablesModel),
+                CreatedResourceObservation created => RenderCreatedResource(created, variableName, dependsOnKeys, keyByResource, variableNameByKey, variablesModel, observedByKey),
+                ReferencedResourceObservation referenced => RenderReferencedResource(referenced, variableName, dependsOnKeys, keyByResource, variableNameByKey, variablesModel, observedByKey),
                 _ => throw new NotSupportedException($"Unsupported observed resource type '{resource.GetType().FullName}'.")
             };
 
@@ -128,10 +130,11 @@ namespace LiveArch.Deployment.Export.CSharp
             IReadOnlyCollection<string> dependsOnKeys,
             IReadOnlyDictionary<object, string> keyByResource,
             IReadOnlyDictionary<string, string> variableNameByKey,
-            CSharpPulumiVariablesModel? variablesModel)
+            CSharpPulumiVariablesModel? variablesModel,
+            IReadOnlyDictionary<string, IObservedResource> observedByKey)
         {
             var optionsCode = RenderCustomResourceOptions(dependsOnKeys, variableNameByKey);
-            var argsCode = RenderTrackedObjectInitializer(GetCreatedArgsType(resource.ResourceType), 2, resource.ExpressionModel, string.Empty, keyByResource, variableNameByKey, variablesModel);
+            var argsCode = RenderTrackedObjectInitializer(GetCreatedArgsType(resource.ResourceType), 2, resource.ExpressionModel, string.Empty, keyByResource, variableNameByKey, variablesModel, observedByKey);
             var resourceTypeName = GetGlobalTypeName(resource.ResourceType);
 
             return $"var {variableName} = new {resourceTypeName}({ToCSharpString(resource.ResourceName)}, {argsCode}, {optionsCode});";
@@ -143,9 +146,10 @@ namespace LiveArch.Deployment.Export.CSharp
             IReadOnlyCollection<string> dependsOnKeys,
             IReadOnlyDictionary<object, string> keyByResource,
             IReadOnlyDictionary<string, string> variableNameByKey,
-            CSharpPulumiVariablesModel? variablesModel)
+            CSharpPulumiVariablesModel? variablesModel,
+            IReadOnlyDictionary<string, IObservedResource> observedByKey)
         {
-            var argsCode = RenderTrackedObjectInitializer(resource.InvokeMethod.GetParameters()[0].ParameterType, 2, resource.ExpressionModel, string.Empty, keyByResource, variableNameByKey, variablesModel);
+            var argsCode = RenderTrackedObjectInitializer(resource.InvokeMethod.GetParameters()[0].ParameterType, 2, resource.ExpressionModel, string.Empty, keyByResource, variableNameByKey, variablesModel, observedByKey);
             var optionsCode = RenderInvokeOptions(resource.InvokeMethod, dependsOnKeys, variableNameByKey);
             var declaringTypeName = GetGlobalTypeName(resource.InvokeMethod.DeclaringType!);
             var invocation = optionsCode == null
@@ -185,7 +189,8 @@ namespace LiveArch.Deployment.Export.CSharp
             string currentPath,
             IReadOnlyDictionary<object, string> keyByResource,
             IReadOnlyDictionary<string, string> variableNameByKey,
-            CSharpPulumiVariablesModel? variablesModel)
+            CSharpPulumiVariablesModel? variablesModel,
+            IReadOnlyDictionary<string, IObservedResource> observedByKey)
         {
             var indent = new string(' ', indentLevel * 4);
             var childIndent = new string(' ', (indentLevel + 1) * 4);
@@ -204,12 +209,12 @@ namespace LiveArch.Deployment.Export.CSharp
 
                 if (expressionModel.Assignments.TryGetValue(propertyPath, out var expression))
                 {
-                    propertyValueCode = RenderExpression(expression, property.PropertyType, indentLevel + 1, keyByResource, variableNameByKey, variablesModel);
+                    propertyValueCode = RenderExpression(expression, property.PropertyType, indentLevel + 1, keyByResource, variableNameByKey, variablesModel, observedByKey);
                 }
                 else if (HasNestedAssignments(expressionModel, propertyPath))
                 {
                     var nestedType = GetUnderlyingArgsType(property.PropertyType);
-                    propertyValueCode = RenderTrackedObjectInitializer(nestedType, indentLevel + 1, expressionModel, propertyPath, keyByResource, variableNameByKey, variablesModel);
+                    propertyValueCode = RenderTrackedObjectInitializer(nestedType, indentLevel + 1, expressionModel, propertyPath, keyByResource, variableNameByKey, variablesModel, observedByKey);
                 }
 
                 if (propertyValueCode == null)
@@ -388,12 +393,13 @@ namespace LiveArch.Deployment.Export.CSharp
             int indentLevel,
             IReadOnlyDictionary<object, string> keyByResource,
             IReadOnlyDictionary<string, string> variableNameByKey,
-            CSharpPulumiVariablesModel? variablesModel)
+            CSharpPulumiVariablesModel? variablesModel,
+            IReadOnlyDictionary<string, IObservedResource> observedByKey)
         {
             return expression switch
             {
                 DirectValueExpressionModel direct => RenderDirectExpression(direct, declaredType, indentLevel, keyByResource, variableNameByKey, variablesModel),
-                DependencyValueExpressionModel dependency => RenderDependencyExpression(dependency, keyByResource, variableNameByKey),
+                DependencyValueExpressionModel dependency => RenderDependencyExpression(dependency, keyByResource, variableNameByKey, observedByKey),
                 _ => "default!"
             };
         }
@@ -421,13 +427,22 @@ namespace LiveArch.Deployment.Export.CSharp
         private static string RenderDependencyExpression(
             DependencyValueExpressionModel expression,
             IReadOnlyDictionary<object, string> keyByResource,
-            IReadOnlyDictionary<string, string> variableNameByKey)
+            IReadOnlyDictionary<string, string> variableNameByKey,
+            IReadOnlyDictionary<string, IObservedResource> observedByKey)
         {
             var sourceName = keyByResource.TryGetValue(expression.SourceResource, out var resourceKey) && variableNameByKey.TryGetValue(resourceKey, out var variableName)
                 ? variableName
                 : expression.SourceResource is Resource resource
                     ? resource.GetResourceName()
                     : "resource";
+            var observedSource = resourceKey != null && observedByKey.TryGetValue(resourceKey, out var foundObservedSource)
+                ? foundObservedSource
+                : null;
+            var sourceType = observedSource?.CodeGenType ?? expression.SourceResource.GetType();
+
+            var renderedSourceAccess = TryRenderDependencySourceAccess(sourceName, sourceType, expression.SourcePath, observedSource, out var renderedAccess)
+                ? renderedAccess
+                : null;
 
             var suffix = new StringBuilder();
             if (expression.Transformers.Count > 0)
@@ -440,7 +455,122 @@ namespace LiveArch.Deployment.Export.CSharp
                 suffix.Append($" | converter: {expression.ConverterName}");
             }
 
+            if (renderedSourceAccess != null && suffix.Length == 0)
+            {
+                return renderedSourceAccess;
+            }
+
+            if (renderedSourceAccess != null)
+            {
+                return $"{renderedSourceAccess} /*{suffix} */";
+            }
+
             return $"default! /* {sourceName}.{expression.SourcePath}{suffix} */";
+        }
+
+        private static bool TryRenderDependencySourceAccess(string sourceExpression, Type sourceType, string sourcePath, IObservedResource? observedSource, out string rendered)
+        {
+            var segments = sourcePath.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (segments.Length == 0)
+            {
+                rendered = sourceExpression;
+                return true;
+            }
+
+            if (TryRenderHeuristicDependencySourceAccess(sourceExpression, segments, observedSource, out rendered))
+            {
+                return true;
+            }
+
+            if (TryRenderHeuristicDependencySourceAccess(sourceExpression, sourceType, segments, out rendered))
+            {
+                return true;
+            }
+
+            return TryRenderAccessExpression(sourceExpression, sourceType, segments, 0, out rendered);
+        }
+
+        private static bool TryRenderHeuristicDependencySourceAccess(string sourceExpression, IReadOnlyList<string> segments, IObservedResource? observedSource, out string rendered)
+        {
+            if (observedSource == null)
+            {
+                rendered = string.Empty;
+                return false;
+            }
+
+            if (observedSource.Kind == "Referenced")
+            {
+                rendered = $"{sourceExpression}.Apply(value => value.{string.Join('.', segments.Select(ToPascalCaseSegment))})";
+                return true;
+            }
+
+            if (segments.Count == 1)
+            {
+                rendered = $"{sourceExpression}.{ToPascalCaseSegment(segments[0])}";
+                return true;
+            }
+
+            rendered = $"{sourceExpression}.{ToPascalCaseSegment(segments[0])}.Apply(value => value!.{string.Join('.', segments.Skip(1).Select(ToPascalCaseSegment))})";
+            return true;
+        }
+
+        private static bool TryRenderHeuristicDependencySourceAccess(string sourceExpression, Type sourceType, IReadOnlyList<string> segments, out string rendered)
+        {
+            var effectiveType = Nullable.GetUnderlyingType(sourceType) ?? sourceType;
+            if (ConversionTypeHelpers.IsOutput(effectiveType))
+            {
+                rendered = $"{sourceExpression}.Apply(value => value.{string.Join('.', segments.Select(ToPascalCaseSegment))})";
+                return true;
+            }
+
+            if (segments.Count == 1)
+            {
+                rendered = $"{sourceExpression}.{ToPascalCaseSegment(segments[0])}";
+                return true;
+            }
+
+            rendered = $"{sourceExpression}.{ToPascalCaseSegment(segments[0])}.Apply(value => value!.{string.Join('.', segments.Skip(1).Select(ToPascalCaseSegment))})";
+            return true;
+        }
+
+        private static string ToPascalCaseSegment(string segment)
+        {
+            return string.IsNullOrWhiteSpace(segment)
+                ? segment
+                : char.ToUpperInvariant(segment[0]) + segment[1..];
+        }
+
+        private static bool TryRenderAccessExpression(string sourceExpression, Type sourceType, IReadOnlyList<string> segments, int index, out string rendered)
+        {
+            if (index >= segments.Count)
+            {
+                rendered = sourceExpression;
+                return true;
+            }
+
+            var effectiveType = Nullable.GetUnderlyingType(sourceType) ?? sourceType;
+            if (ConversionTypeHelpers.IsOutput(effectiveType))
+            {
+                var innerType = effectiveType.GetGenericArguments()[0];
+                if (!TryRenderAccessExpression("value!", innerType, segments, index, out var lambdaBody))
+                {
+                    rendered = string.Empty;
+                    return false;
+                }
+
+                rendered = $"{sourceExpression}.Apply(value => {lambdaBody})";
+                return true;
+            }
+
+            var property = effectiveType.GetProperties(BindingFlags.Instance | BindingFlags.Public)
+                .FirstOrDefault(candidate => string.Equals(candidate.Name, segments[index], StringComparison.OrdinalIgnoreCase));
+            if (property == null)
+            {
+                rendered = string.Empty;
+                return false;
+            }
+
+            return TryRenderAccessExpression($"{sourceExpression}.{property.Name}", property.PropertyType, segments, index + 1, out rendered);
         }
 
         private static bool CanRenderAsLiteralObjectInitializer(Type declaredType, Type runtimeType)
@@ -869,7 +999,7 @@ namespace LiveArch.Deployment.Export.CSharp
                     return true;
                 }
 
-                rendered = $"variables.{variable.PropertyName}";
+                rendered = $"vars.{variable.PropertyName}";
                 return true;
             }
 
@@ -893,7 +1023,7 @@ namespace LiveArch.Deployment.Export.CSharp
             foreach (Match match in VariableRegex.Matches(template))
             {
                 builder.Append(EscapeInterpolatedStringSegment(template[currentIndex..match.Index]));
-                builder.Append("{variables.");
+                builder.Append("{vars.");
                 builder.Append(variablesByKey[match.Groups[1].Value].PropertyName);
                 builder.Append('}');
                 currentIndex = match.Index + match.Length;
@@ -1184,7 +1314,7 @@ namespace LiveArch.Deployment.Export.CSharp
             builder.AppendLine("{");
             builder.AppendLine($"    public const string DeploymentName = {ToCSharpString(model.Deployment)};");
             builder.AppendLine();
-            builder.AppendLine($"    public static Task ProcessAsync({model.VariablesModel?.ClassName ?? "DeploymentVariables"} variables, CancellationToken cancellationToken = default)");
+            builder.AppendLine($"    public static Task ProcessAsync({model.VariablesModel?.ClassName ?? "DeploymentVariables"} vars, CancellationToken cancellationToken = default)");
             builder.AppendLine("    {");
             foreach (var resource in model.Resources)
             {
