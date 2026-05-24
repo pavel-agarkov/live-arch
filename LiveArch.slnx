@@ -5,6 +5,7 @@
     <Project Path="LiveArch.Diagram/LiveArch.Diagram.csproj" />
   </Folder>
   <Folder Name="/Examples/Exported/">
+    <Project Path="LiveArch.Order.Deployment.Tests/LiveArch.Order.Deployment.Tests.csproj" />
     <Project Path="LiveArch.Order.Deployment/LiveArch.Order.Deployment.csproj" />
   </Folder>
   <Folder Name="/Examples/Web/">

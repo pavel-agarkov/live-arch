@@ -11,6 +11,13 @@ namespace LiveArch.Deployment.TestRunner.Export
             "..",
             "..",
             "LiveArch.Order.Deployment"));
+        private static string ExportTestProjectDirectory => Path.GetFullPath(Path.Combine(
+            AppContext.BaseDirectory,
+            "..",
+            "..",
+            "..",
+            "..",
+            "LiveArch.Order.Deployment.Tests"));
 
         [Fact]
         public async Task ShouldNotifyObserverForCreatedAndReferencedResources()
@@ -36,11 +43,18 @@ namespace LiveArch.Deployment.TestRunner.Export
                 ProjectName: "LiveArch.Order.Deployment",
                 RootNamespace: "LiveArch.Order.Deployment",
                 OutputDirectory: ExportProjectDirectory,
+                CleanOutputDirectories: false,
                 AdditionalNamespaces: ["System.Linq"]));
 
             Directory.Exists(export.DirectoryPath).Should().BeTrue();
             File.Exists(export.ProjectFilePath).Should().BeTrue();
             File.Exists(export.DeploymentFilePath).Should().BeTrue();
+            export.TestDirectoryPath.Should().Be(ExportTestProjectDirectory);
+            export.TestProjectFilePath.Should().NotBeNull();
+            export.TestFilePath.Should().NotBeNull();
+            Directory.Exists(export.TestDirectoryPath!).Should().BeTrue();
+            File.Exists(export.TestProjectFilePath!).Should().BeTrue();
+            File.Exists(export.TestFilePath!).Should().BeTrue();
 
             export.Model.CreatedCount.Should().Be(ws.CreatedResources.Count - 2);
             export.Model.ReferencedCount.Should().Be(ws.ReferencedResources.Count);
@@ -63,6 +77,16 @@ namespace LiveArch.Deployment.TestRunner.Export
             projectText.Should().Contain("Pulumi.AzureNative");
             projectText.Should().Contain("LiveArch.Resources.Azure.csproj");
             projectText.Should().NotContain("LiveArch.Deployment.csproj");
+
+            var testProjectText = File.ReadAllText(export.TestProjectFilePath!);
+            testProjectText.Should().Contain("LiveArch.Deployment.Export.Testing.csproj");
+            testProjectText.Should().Contain("LiveArch.Order.Deployment.csproj");
+            testProjectText.Should().Contain("Microsoft.NET.Test.Sdk");
+
+            var testFileText = File.ReadAllText(export.TestFilePath!);
+            testFileText.Should().Contain("ExportedDeploymentTestHost.ExecuteAsync");
+            testFileText.Should().Contain("global::LiveArch.Order.Deployment.ExportedDeployment.ProcessAsync()");
+            testFileText.Should().Contain("Assert.NotEmpty(mocks.Resources)");
 
             var deploymentText = File.ReadAllText(export.DeploymentFilePath);
             deploymentText.Should().Contain("LiveArch.Order.Deployment");

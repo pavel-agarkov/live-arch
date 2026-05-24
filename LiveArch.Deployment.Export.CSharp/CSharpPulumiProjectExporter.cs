@@ -49,6 +49,9 @@ namespace LiveArch.Deployment.Export.CSharp
             var projectName = string.IsNullOrWhiteSpace(options.ProjectName)
                 ? CreateDefaultProjectName(deployment)
                 : options.ProjectName.Trim();
+            var rootNamespace = string.IsNullOrWhiteSpace(options.RootNamespace)
+                ? projectName
+                : options.RootNamespace.Trim();
 
             var exportableResources = observedResources
                 .Where(ShouldExportResource)
@@ -63,7 +66,7 @@ namespace LiveArch.Deployment.Export.CSharp
             var model = new CSharpPulumiProjectModel(
                 deployment,
                 projectName,
-                options.RootNamespace,
+                rootNamespace,
                 NormalizeNamespaces(options.AdditionalNamespaces),
                 ResolvePackageReferences(exportableResources, options.AdditionalPackageReferences),
                 ResolveProjectReferences(exportableResources),
@@ -71,7 +74,17 @@ namespace LiveArch.Deployment.Export.CSharp
                 exportableResources.OfType<ReferencedResourceObservation>().Count(),
                 [.. exportableResources.Select((resource, index) => BuildResourceModel(resource, index, keyByResource, variableNameByKey))]);
 
-            return CSharpPulumiProjectWriter.Export(model, options.OutputDirectory);
+            var testProjectName = string.IsNullOrWhiteSpace(options.TestProjectName)
+                ? projectName + ".Tests"
+                : options.TestProjectName.Trim();
+            var testRootNamespace = string.IsNullOrWhiteSpace(options.TestRootNamespace)
+                ? testProjectName
+                : options.TestRootNamespace.Trim();
+            var testProjectModel = options.GenerateTestProject
+                ? new CSharpPulumiTestProjectModel(testProjectName, testRootNamespace)
+                : null;
+
+            return CSharpPulumiProjectWriter.Export(model, options.OutputDirectory, testProjectModel, options.TestOutputDirectory, options.CleanOutputDirectories);
         }
 
         private static CSharpPulumiResourceModel BuildResourceModel(
@@ -811,10 +824,10 @@ namespace LiveArch.Deployment.Export.CSharp
     {
         private static readonly UTF8Encoding Utf8WithoutBom = new(encoderShouldEmitUTF8Identifier: false);
 
-        public static CSharpPulumiProjectExport Export(CSharpPulumiProjectModel model, string? outputDirectory = null)
+        public static CSharpPulumiProjectExport Export(CSharpPulumiProjectModel model, string? outputDirectory = null, CSharpPulumiTestProjectModel? testProjectModel = null, string? testOutputDirectory = null, bool cleanOutputDirectories = true)
         {
             var directory = ResolveOutputDirectory(model.Deployment, outputDirectory);
-            PrepareOutputDirectory(directory);
+            PrepareOutputDirectory(directory, cleanOutputDirectories);
             Directory.CreateDirectory(directory);
 
             var projectFilePath = Path.Combine(directory, $"{model.ProjectName}.csproj");
@@ -823,7 +836,27 @@ namespace LiveArch.Deployment.Export.CSharp
             File.WriteAllText(projectFilePath, NormalizeGeneratedText(CreateProjectFile(directory, model)), Utf8WithoutBom);
             File.WriteAllText(deploymentFilePath, NormalizeGeneratedText(CreateDeploymentFile(model)), Utf8WithoutBom);
 
-            return new CSharpPulumiProjectExport(directory, projectFilePath, deploymentFilePath, model);
+            string? testDirectoryPath = null;
+            string? testProjectFilePath = null;
+            string? testFilePath = null;
+
+            if (testProjectModel != null)
+            {
+                testDirectoryPath = ResolveTestOutputDirectory(directory, testProjectModel.ProjectName, testOutputDirectory);
+                PrepareOutputDirectory(testDirectoryPath, cleanOutputDirectories);
+                Directory.CreateDirectory(testDirectoryPath);
+
+                testProjectFilePath = Path.Combine(testDirectoryPath, $"{testProjectModel.ProjectName}.csproj");
+                testFilePath = Path.Combine(testDirectoryPath, "ExportedDeploymentTests.cs");
+
+                var resourceProjectReferencePath = NormalizePath(Path.GetRelativePath(testDirectoryPath, projectFilePath));
+                var testingProjectReferencePath = NormalizePath(Path.GetRelativePath(testDirectoryPath, Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "LiveArch.Deployment.Export.Testing", "LiveArch.Deployment.Export.Testing.csproj"))));
+
+                File.WriteAllText(testProjectFilePath, NormalizeGeneratedText(CreateTestProjectFile(testProjectModel, resourceProjectReferencePath, testingProjectReferencePath)), Utf8WithoutBom);
+                File.WriteAllText(testFilePath, NormalizeGeneratedText(CreateTestDeploymentFile(model, testProjectModel)), Utf8WithoutBom);
+            }
+
+            return new CSharpPulumiProjectExport(directory, projectFilePath, deploymentFilePath, testDirectoryPath, testProjectFilePath, testFilePath, model, testProjectModel);
         }
 
         private static string ResolveOutputDirectory(string deployment, string? outputDirectory)
@@ -854,9 +887,14 @@ namespace LiveArch.Deployment.Export.CSharp
                 .Replace("\n", "\r\n", StringComparison.Ordinal);
         }
 
-        private static void PrepareOutputDirectory(string outputDirectory)
+        private static string NormalizePath(string path)
         {
-            if (!Directory.Exists(outputDirectory))
+            return path.Replace("/", "\\", StringComparison.Ordinal);
+        }
+
+        private static void PrepareOutputDirectory(string outputDirectory, bool cleanOutputDirectory)
+        {
+            if (!cleanOutputDirectory || !Directory.Exists(outputDirectory))
             {
                 return;
             }
@@ -902,6 +940,64 @@ namespace LiveArch.Deployment.Export.CSharp
             return builder.ToString();
         }
 
+        private static string ResolveTestOutputDirectory(string resourceOutputDirectory, string testProjectName, string? testOutputDirectory)
+        {
+            return !string.IsNullOrWhiteSpace(testOutputDirectory)
+                ? Path.GetFullPath(testOutputDirectory.Trim())
+                : Path.Combine(Directory.GetParent(resourceOutputDirectory)!.FullName, testProjectName);
+        }
+
+        private static string CreateTestProjectFile(CSharpPulumiTestProjectModel model, string resourceProjectReferencePath, string testingProjectReferencePath)
+        {
+            var builder = new StringBuilder();
+            builder.AppendLine("<Project Sdk=\"Microsoft.NET.Sdk\">");
+            builder.AppendLine();
+            builder.AppendLine("  <PropertyGroup>");
+            builder.AppendLine("    <TargetFramework>net10.0</TargetFramework>");
+            builder.AppendLine("    <ImplicitUsings>enable</ImplicitUsings>");
+            builder.AppendLine("    <Nullable>enable</Nullable>");
+            builder.AppendLine("    <IsPackable>false</IsPackable>");
+            builder.AppendLine("  </PropertyGroup>");
+            builder.AppendLine();
+            builder.AppendLine("  <ItemGroup>");
+            builder.AppendLine("    <PackageReference Include=\"Microsoft.NET.Test.Sdk\" Version=\"18.5.1\" />");
+            builder.AppendLine("    <PackageReference Include=\"xunit.runner.visualstudio\" Version=\"3.1.5\">");
+            builder.AppendLine("      <PrivateAssets>all</PrivateAssets>");
+            builder.AppendLine("      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>");
+            builder.AppendLine("    </PackageReference>");
+            builder.AppendLine("    <PackageReference Include=\"xunit.v3\" Version=\"3.2.2\" />");
+            builder.AppendLine("  </ItemGroup>");
+            builder.AppendLine();
+            builder.AppendLine("  <ItemGroup>");
+            builder.AppendLine($"    <ProjectReference Include=\"{resourceProjectReferencePath.Replace("\\", "\\\\")}\" />");
+            builder.AppendLine($"    <ProjectReference Include=\"{testingProjectReferencePath.Replace("\\", "\\\\")}\" />");
+            builder.AppendLine("  </ItemGroup>");
+            builder.AppendLine();
+            builder.AppendLine("</Project>");
+            return builder.ToString();
+        }
+
+        private static string CreateTestDeploymentFile(CSharpPulumiProjectModel resourceModel, CSharpPulumiTestProjectModel testModel)
+        {
+            var builder = new StringBuilder();
+            builder.AppendLine("using LiveArch.Deployment.Export.Testing;");
+            builder.AppendLine("using Xunit;");
+            builder.AppendLine();
+            builder.AppendLine($"namespace {testModel.RootNamespace};");
+            builder.AppendLine();
+            builder.AppendLine("public class ExportedDeploymentTests");
+            builder.AppendLine("{");
+            builder.AppendLine("    [Fact]");
+            builder.AppendLine("    public async Task ProcessAsync_Should_Create_Resources()");
+            builder.AppendLine("    {");
+            builder.AppendLine($"        var mocks = await ExportedDeploymentTestHost.ExecuteAsync(() => global::{resourceModel.RootNamespace}.ExportedDeployment.ProcessAsync());");
+            builder.AppendLine();
+            builder.AppendLine("        Assert.NotEmpty(mocks.Resources);");
+            builder.AppendLine("    }");
+            builder.AppendLine("}");
+            return builder.ToString();
+        }
+
         private static string CreateDeploymentFile(CSharpPulumiProjectModel model)
         {
             var builder = new StringBuilder();
@@ -943,10 +1039,20 @@ namespace LiveArch.Deployment.Export.CSharp
         string? ProjectName = null,
         string RootNamespace = "Generated.Deployment",
         string? OutputDirectory = null,
+        bool CleanOutputDirectories = true,
+        bool GenerateTestProject = true,
+        string? TestProjectName = null,
+        string? TestRootNamespace = null,
+        string? TestOutputDirectory = null,
         IReadOnlyCollection<string>? AdditionalNamespaces = null,
         IReadOnlyCollection<CSharpPackageReference>? AdditionalPackageReferences = null)
     {
         public string? OutputDirectory { get; init; } = OutputDirectory;
+        public bool CleanOutputDirectories { get; init; } = CleanOutputDirectories;
+        public bool GenerateTestProject { get; init; } = GenerateTestProject;
+        public string? TestProjectName { get; init; } = TestProjectName;
+        public string? TestRootNamespace { get; init; } = TestRootNamespace;
+        public string? TestOutputDirectory { get; init; } = TestOutputDirectory;
         public IReadOnlyCollection<string> AdditionalNamespaces { get; init; } = AdditionalNamespaces ?? [];
         public IReadOnlyCollection<CSharpPackageReference> AdditionalPackageReferences { get; init; } = AdditionalPackageReferences ?? [];
     }
@@ -955,7 +1061,11 @@ namespace LiveArch.Deployment.Export.CSharp
         string DirectoryPath,
         string ProjectFilePath,
         string DeploymentFilePath,
-        CSharpPulumiProjectModel Model);
+        string? TestDirectoryPath,
+        string? TestProjectFilePath,
+        string? TestFilePath,
+        CSharpPulumiProjectModel Model,
+        CSharpPulumiTestProjectModel? TestModel);
 
     public sealed record CSharpPulumiProjectModel(
         string Deployment,
@@ -977,6 +1087,10 @@ namespace LiveArch.Deployment.Export.CSharp
         string VariableName,
         string CreationStatement,
         IReadOnlyCollection<string> DependsOn);
+
+    public sealed record CSharpPulumiTestProjectModel(
+        string ProjectName,
+        string RootNamespace);
 
     public sealed record CSharpPackageReference(string PackageId, string Version);
 

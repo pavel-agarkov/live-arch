@@ -190,7 +190,7 @@ public static class ExportedDeployment
             RoleDefinitionId = "/providers/Microsoft.Authorization/roleDefinitions/ba92f5b4-2d11-453d-a403-e96b0029c9fe",
             Scope = default!
         }, new global::Pulumi.CustomResourceOptions { DependsOn = { orderServiceMi } });
-        var storageAccountGetStorageAccountResult_2 = global::Pulumi.AzureNative.Storage.GetStorageAccount.Invoke(new global::Pulumi.AzureNative.Storage.GetStorageAccountInvokeArgs()
+        var storageAccountGetStorageAccountResult2 = global::Pulumi.AzureNative.Storage.GetStorageAccount.Invoke(new global::Pulumi.AzureNative.Storage.GetStorageAccountInvokeArgs()
         {
             AccountName = "${saName}",
             ResourceGroupName = default!

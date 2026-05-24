@@ -103,10 +103,11 @@ namespace LiveArch.Deployment.Export.Testing
 
         private static Dictionary<string, object> BuildDefaultCallState(MockCallArgs args, Dictionary<string, object> arguments)
         {
+            var fallbackName = (args.Token ?? "invoke").Split(':').LastOrDefault() ?? "invoke";
             var state = new Dictionary<string, object>(arguments, StringComparer.OrdinalIgnoreCase)
             {
                 ["id"] = $"{args.Token}-id",
-                ["name"] = InferName(arguments, args.Token.Split(':').Last())
+                ["name"] = InferName(arguments, fallbackName)
             };
 
             return state;
