@@ -5,51 +5,65 @@ using System.Linq;
 
 namespace LiveArch.Order.Deployment;
 
+public sealed class LiveArchOrderDeploymentVariables
+{
+    public required global::System.String AppConfigName { get; init; }
+    public required global::System.String Env { get; init; }
+    public required global::System.String KeyVaultName { get; init; }
+    public required global::System.String Location { get; init; }
+    public required global::System.String ResourceGroupName { get; init; }
+    public required global::System.String SqlElasticPoolName { get; init; }
+    public required global::System.String SqlServerName { get; init; }
+    public required global::System.String SqlServerRegistrationName { get; init; }
+    public required global::System.String TenantId { get; init; }
+    public required global::System.String VnetName { get; init; }
+}
+
 public static class ExportedDeployment
 {
     public const string DeploymentName = "order-env";
 
-    public static Task ProcessAsync(CancellationToken cancellationToken = default)
+    public static Task ProcessAsync(LiveArchOrderDeploymentVariables variables, CancellationToken cancellationToken = default)
     {
         var sharedRgReference = global::Pulumi.AzureNative.Resources.GetResourceGroup.Invoke(new global::Pulumi.AzureNative.Resources.GetResourceGroupInvokeArgs()
         {
-            ResourceGroupName = "${RESOURCE_GROUP_NAME}"
+            ResourceGroupName = variables.ResourceGroupName
         });
         var serviceBusNamespace = global::Pulumi.AzureNative.ServiceBus.GetNamespace.Invoke(new global::Pulumi.AzureNative.ServiceBus.GetNamespaceInvokeArgs()
         {
-            NamespaceName = "${ENV}-sbns",
+            NamespaceName = $"{variables.Env}-sbns",
             ResourceGroupName = default!
         });
         var orderEventsTopic = global::Pulumi.AzureNative.ServiceBus.GetTopic.Invoke(new global::Pulumi.AzureNative.ServiceBus.GetTopicInvokeArgs()
         {
             NamespaceName = default!,
             ResourceGroupName = default!,
-            TopicName = "${ENV}-order-events-topic"
+            TopicName = $"{variables.Env}-order-events-topic"
         });
         var deliveryEventsTopic = global::Pulumi.AzureNative.ServiceBus.GetTopic.Invoke(new global::Pulumi.AzureNative.ServiceBus.GetTopicInvokeArgs()
         {
             NamespaceName = default!,
             ResourceGroupName = default!,
-            TopicName = "${ENV}-delivery-events-topic"
+            TopicName = $"{variables.Env}-delivery-events-topic"
         });
         var orderRg = global::Pulumi.AzureNative.Resources.GetResourceGroup.Invoke(new global::Pulumi.AzureNative.Resources.GetResourceGroupInvokeArgs()
         {
-            ResourceGroupName = "${RESOURCE_GROUP_NAME}"
+            ResourceGroupName = variables.ResourceGroupName
         });
         var prodKeyVault = global::Pulumi.AzureNative.KeyVault.GetVault.Invoke(new global::Pulumi.AzureNative.KeyVault.GetVaultInvokeArgs()
         {
             ResourceGroupName = default!,
-            VaultName = "${KEY_VAULT_NAME}"
+            VaultName = variables.KeyVaultName
         });
         var orderServiceMi = new global::Pulumi.AzureNative.ManagedIdentity.UserAssignedIdentity("order-service-mi", new global::Pulumi.AzureNative.ManagedIdentity.UserAssignedIdentityArgs()
         {
             Location = default!,
             ResourceGroupName = default!,
-            ResourceName = "${ENV}-order-service-mi"
+            ResourceName = $"{variables.Env}-order-service-mi"
         }, null);
         var saList = global::Pulumi.AzureNative.AppConfiguration.GetKeyValue.Invoke(new global::Pulumi.AzureNative.AppConfiguration.GetKeyValueInvokeArgs()
         {
-            ConfigStoreName = "${APP_CONFIG_NAME}",
+            ConfigStoreName = variables.AppConfigName,
             KeyValueName = "storageAccounts",
             ResourceGroupName = default!
         });
@@ -59,7 +73,7 @@ public static class ExportedDeployment
             {
                 ObjectId = default! /* orderServiceMi.principalId */,
                 Permissions = new global::Pulumi.AzureNative.KeyVault.Inputs.PermissionsArgs(),
-                TenantId = "${TENANT_ID}"
+                TenantId = variables.TenantId
             },
             ResourceGroupName = default!,
             VaultName = default! /* prodKeyVault.name */
@@ -67,23 +81,23 @@ public static class ExportedDeployment
         var sQLServerRegistration = global::Pulumi.AzureNative.AzureData.GetSqlServerRegistration.Invoke(new global::Pulumi.AzureNative.AzureData.GetSqlServerRegistrationInvokeArgs()
         {
             ResourceGroupName = default!,
-            SqlServerRegistrationName = "${SQL_SERVER_REGISTRATION_NAME}"
+            SqlServerRegistrationName = variables.SqlServerRegistrationName
         });
         var sQLServer = global::Pulumi.AzureNative.AzureData.GetSqlServer.Invoke(new global::Pulumi.AzureNative.AzureData.GetSqlServerInvokeArgs()
         {
             ResourceGroupName = default!,
-            SqlServerName = "${SQL_SERVER_NAME}",
+            SqlServerName = variables.SqlServerName,
             SqlServerRegistrationName = default!
         });
         var elasticPool = global::Pulumi.AzureNative.Sql.GetElasticPool.Invoke(new global::Pulumi.AzureNative.Sql.GetElasticPoolInvokeArgs()
         {
-            ElasticPoolName = "${SQL_ELASTIC_POOL_NAME}",
+            ElasticPoolName = variables.SqlElasticPoolName,
             ResourceGroupName = default!,
             ServerName = default!
         });
         var orderDb = new global::Pulumi.AzureNative.Sql.Database("order-db", new global::Pulumi.AzureNative.Sql.DatabaseArgs()
         {
-            DatabaseName = "${ENV}-order-db",
+            DatabaseName = $"{variables.Env}-order-db",
             ElasticPoolId = default!,
             Location = default!,
             ResourceGroupName = default!,
@@ -92,11 +106,11 @@ public static class ExportedDeployment
         var virtualNetwork = global::Pulumi.AzureNative.Network.GetVirtualNetwork.Invoke(new global::Pulumi.AzureNative.Network.GetVirtualNetworkInvokeArgs()
         {
             ResourceGroupName = default!,
-            VirtualNetworkName = "${VNET_NAME}"
+            VirtualNetworkName = variables.VnetName
         });
         var prodAppServicePlan = global::Pulumi.AzureNative.Web.GetAppServicePlan.Invoke(new global::Pulumi.AzureNative.Web.GetAppServicePlanInvokeArgs()
         {
-            Name = "${ENV}-app-service-plan",
+            Name = $"{variables.Env}-app-service-plan",
             ResourceGroupName = default!
         });
         var orderApi = new global::Pulumi.DockerBuild.Image("orderApi", new global::Pulumi.DockerBuild.ImageArgs()
@@ -118,7 +132,7 @@ public static class ExportedDeployment
                 Type = global::Pulumi.AzureNative.Web.ManagedServiceIdentityType.UserAssigned
             },
             Location = default!,
-            Name = "${ENV}-order-api",
+            Name = $"{variables.Env}-order-api",
             ResourceGroupName = default!,
             ServerFarmId = default!,
             SiteConfig = new global::Pulumi.AzureNative.Web.Inputs.SiteConfigArgs()
@@ -147,7 +161,7 @@ public static class ExportedDeployment
                 Type = global::Pulumi.AzureNative.Web.ManagedServiceIdentityType.UserAssigned
             },
             Location = default!,
-            Name = "${ENV}-order-worker",
+            Name = $"{variables.Env}-order-worker",
             ResourceGroupName = default!,
             ServerFarmId = default!,
             SiteConfig = new global::Pulumi.AzureNative.Web.Inputs.SiteConfigArgs()

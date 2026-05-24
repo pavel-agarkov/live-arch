@@ -14,6 +14,7 @@ namespace LiveArch.Deployment.Export.CSharp
     public sealed class CSharpPulumiProjectExporter : IStructurizrDeploymentObserver
     {
         private static readonly PropertyInfo InputAttrNameProp = typeof(InputAttribute).GetProperty("Name", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        private static readonly Regex VariableRegex = new(@"\$\{([a-zA-Z0-9_\.\:\-]+)\}", RegexOptions.Compiled, TimeSpan.FromMilliseconds(1000));
         private readonly List<IObservedResource> observedResources = [];
 
         public void OnResourceCreated(
@@ -52,6 +53,7 @@ namespace LiveArch.Deployment.Export.CSharp
             var rootNamespace = string.IsNullOrWhiteSpace(options.RootNamespace)
                 ? projectName
                 : options.RootNamespace.Trim();
+            var variablesModel = CreateVariablesModel(projectName, options.VariableValues);
 
             var exportableResources = observedResources
                 .Where(ShouldExportResource)
@@ -67,12 +69,13 @@ namespace LiveArch.Deployment.Export.CSharp
                 deployment,
                 projectName,
                 rootNamespace,
+                variablesModel,
                 NormalizeNamespaces(options.AdditionalNamespaces),
                 ResolvePackageReferences(exportableResources, options.AdditionalPackageReferences),
                 ResolveProjectReferences(exportableResources),
                 exportableResources.OfType<CreatedResourceObservation>().Count(),
                 exportableResources.OfType<ReferencedResourceObservation>().Count(),
-                [.. exportableResources.Select((resource, index) => BuildResourceModel(resource, index, keyByResource, variableNameByKey))]);
+                [.. exportableResources.Select((resource, index) => BuildResourceModel(resource, index, keyByResource, variableNameByKey, variablesModel))]);
 
             var testProjectName = string.IsNullOrWhiteSpace(options.TestProjectName)
                 ? projectName + ".Tests"
@@ -91,7 +94,8 @@ namespace LiveArch.Deployment.Export.CSharp
             IObservedResource resource,
             int index,
             IReadOnlyDictionary<object, string> keyByResource,
-            IReadOnlyDictionary<string, string> variableNameByKey)
+            IReadOnlyDictionary<string, string> variableNameByKey,
+            CSharpPulumiVariablesModel? variablesModel)
         {
             var key = CreateResourceKey(resource);
             var dependsOnKeys = resource.DependsOn
@@ -102,8 +106,8 @@ namespace LiveArch.Deployment.Export.CSharp
             var variableName = variableNameByKey[key];
             var creationStatement = resource switch
             {
-                CreatedResourceObservation created => RenderCreatedResource(created, variableName, dependsOnKeys, keyByResource, variableNameByKey),
-                ReferencedResourceObservation referenced => RenderReferencedResource(referenced, variableName, dependsOnKeys, keyByResource, variableNameByKey),
+                CreatedResourceObservation created => RenderCreatedResource(created, variableName, dependsOnKeys, keyByResource, variableNameByKey, variablesModel),
+                ReferencedResourceObservation referenced => RenderReferencedResource(referenced, variableName, dependsOnKeys, keyByResource, variableNameByKey, variablesModel),
                 _ => throw new NotSupportedException($"Unsupported observed resource type '{resource.GetType().FullName}'.")
             };
 
@@ -123,10 +127,11 @@ namespace LiveArch.Deployment.Export.CSharp
             string variableName,
             IReadOnlyCollection<string> dependsOnKeys,
             IReadOnlyDictionary<object, string> keyByResource,
-            IReadOnlyDictionary<string, string> variableNameByKey)
+            IReadOnlyDictionary<string, string> variableNameByKey,
+            CSharpPulumiVariablesModel? variablesModel)
         {
             var optionsCode = RenderCustomResourceOptions(dependsOnKeys, variableNameByKey);
-            var argsCode = RenderTrackedObjectInitializer(GetCreatedArgsType(resource.ResourceType), 2, resource.ExpressionModel, string.Empty, keyByResource, variableNameByKey);
+            var argsCode = RenderTrackedObjectInitializer(GetCreatedArgsType(resource.ResourceType), 2, resource.ExpressionModel, string.Empty, keyByResource, variableNameByKey, variablesModel);
             var resourceTypeName = GetGlobalTypeName(resource.ResourceType);
 
             return $"var {variableName} = new {resourceTypeName}({ToCSharpString(resource.ResourceName)}, {argsCode}, {optionsCode});";
@@ -137,9 +142,10 @@ namespace LiveArch.Deployment.Export.CSharp
             string variableName,
             IReadOnlyCollection<string> dependsOnKeys,
             IReadOnlyDictionary<object, string> keyByResource,
-            IReadOnlyDictionary<string, string> variableNameByKey)
+            IReadOnlyDictionary<string, string> variableNameByKey,
+            CSharpPulumiVariablesModel? variablesModel)
         {
-            var argsCode = RenderTrackedObjectInitializer(resource.InvokeMethod.GetParameters()[0].ParameterType, 2, resource.ExpressionModel, string.Empty, keyByResource, variableNameByKey);
+            var argsCode = RenderTrackedObjectInitializer(resource.InvokeMethod.GetParameters()[0].ParameterType, 2, resource.ExpressionModel, string.Empty, keyByResource, variableNameByKey, variablesModel);
             var optionsCode = RenderInvokeOptions(resource.InvokeMethod, dependsOnKeys, variableNameByKey);
             var declaringTypeName = GetGlobalTypeName(resource.InvokeMethod.DeclaringType!);
             var invocation = optionsCode == null
@@ -178,7 +184,8 @@ namespace LiveArch.Deployment.Export.CSharp
             ResourceExpressionModel expressionModel,
             string currentPath,
             IReadOnlyDictionary<object, string> keyByResource,
-            IReadOnlyDictionary<string, string> variableNameByKey)
+            IReadOnlyDictionary<string, string> variableNameByKey,
+            CSharpPulumiVariablesModel? variablesModel)
         {
             var indent = new string(' ', indentLevel * 4);
             var childIndent = new string(' ', (indentLevel + 1) * 4);
@@ -197,12 +204,12 @@ namespace LiveArch.Deployment.Export.CSharp
 
                 if (expressionModel.Assignments.TryGetValue(propertyPath, out var expression))
                 {
-                    propertyValueCode = RenderExpression(expression, property.PropertyType, indentLevel + 1, keyByResource, variableNameByKey);
+                    propertyValueCode = RenderExpression(expression, property.PropertyType, indentLevel + 1, keyByResource, variableNameByKey, variablesModel);
                 }
                 else if (HasNestedAssignments(expressionModel, propertyPath))
                 {
                     var nestedType = GetUnderlyingArgsType(property.PropertyType);
-                    propertyValueCode = RenderTrackedObjectInitializer(nestedType, indentLevel + 1, expressionModel, propertyPath, keyByResource, variableNameByKey);
+                    propertyValueCode = RenderTrackedObjectInitializer(nestedType, indentLevel + 1, expressionModel, propertyPath, keyByResource, variableNameByKey, variablesModel);
                 }
 
                 if (propertyValueCode == null)
@@ -221,13 +228,19 @@ namespace LiveArch.Deployment.Export.CSharp
             return $"new {GetGlobalTypeName(declaredType)}()\n{indent}{{\n{string.Join(",\n", entries)}\n{indent}}}";
         }
 
-        private static string RenderValue(
+        internal static string RenderValue(
             object value,
             Type declaredType,
             int indentLevel,
             IReadOnlyDictionary<object, string> keyByResource,
-            IReadOnlyDictionary<string, string> variableNameByKey)
+            IReadOnlyDictionary<string, string> variableNameByKey,
+            CSharpPulumiVariablesModel? variablesModel)
         {
+            if (TryRenderVariableSubstitution(value, declaredType, variablesModel, out var variableSubstitution))
+            {
+                return variableSubstitution;
+            }
+
             if (TryRenderTypedValue(value, declaredType, keyByResource, variableNameByKey, indentLevel, out var typedValue))
             {
                 return typedValue;
@@ -263,7 +276,7 @@ namespace LiveArch.Deployment.Export.CSharp
                 var itemType = GetCollectionItemType(declaredType) ?? typeof(object);
                 var renderedItems = enumerable.Cast<object?>()
                     .Where(item => item != null)
-                    .Select(item => RenderValue(item!, itemType, indentLevel + 1, keyByResource, variableNameByKey))
+                    .Select(item => RenderValue(item!, itemType, indentLevel + 1, keyByResource, variableNameByKey, variablesModel))
                     .ToArray();
 
                 return renderedItems.Length == 0
@@ -273,7 +286,7 @@ namespace LiveArch.Deployment.Export.CSharp
 
             if (CanRenderAsLiteralObjectInitializer(declaredType, value.GetType()))
             {
-                return RenderLiteralObjectInitializer(value, value.GetType(), indentLevel + 1, keyByResource, variableNameByKey);
+                return RenderLiteralObjectInitializer(value, value.GetType(), indentLevel + 1, keyByResource, variableNameByKey, variablesModel);
             }
 
             return "default!";
@@ -338,7 +351,8 @@ namespace LiveArch.Deployment.Export.CSharp
             Type declaredType,
             int indentLevel,
             IReadOnlyDictionary<object, string> keyByResource,
-            IReadOnlyDictionary<string, string> variableNameByKey)
+            IReadOnlyDictionary<string, string> variableNameByKey,
+            CSharpPulumiVariablesModel? variablesModel)
         {
             var indent = new string(' ', indentLevel * 4);
             var childIndent = new string(' ', (indentLevel + 1) * 4);
@@ -357,7 +371,7 @@ namespace LiveArch.Deployment.Export.CSharp
                     continue;
                 }
 
-                entries.Add($"{childIndent}{property.Name} = {RenderValue(value, property.PropertyType, indentLevel + 1, keyByResource, variableNameByKey)}");
+                entries.Add($"{childIndent}{property.Name} = {RenderValue(value, property.PropertyType, indentLevel + 1, keyByResource, variableNameByKey, variablesModel)}");
             }
 
             if (entries.Count == 0)
@@ -373,11 +387,12 @@ namespace LiveArch.Deployment.Export.CSharp
             Type declaredType,
             int indentLevel,
             IReadOnlyDictionary<object, string> keyByResource,
-            IReadOnlyDictionary<string, string> variableNameByKey)
+            IReadOnlyDictionary<string, string> variableNameByKey,
+            CSharpPulumiVariablesModel? variablesModel)
         {
             return expression switch
             {
-                DirectValueExpressionModel direct => RenderDirectExpression(direct, declaredType, indentLevel, keyByResource, variableNameByKey),
+                DirectValueExpressionModel direct => RenderDirectExpression(direct, declaredType, indentLevel, keyByResource, variableNameByKey, variablesModel),
                 DependencyValueExpressionModel dependency => RenderDependencyExpression(dependency, keyByResource, variableNameByKey),
                 _ => "default!"
             };
@@ -388,11 +403,12 @@ namespace LiveArch.Deployment.Export.CSharp
             Type declaredType,
             int indentLevel,
             IReadOnlyDictionary<object, string> keyByResource,
-            IReadOnlyDictionary<string, string> variableNameByKey)
+            IReadOnlyDictionary<string, string> variableNameByKey,
+            CSharpPulumiVariablesModel? variablesModel)
         {
             var rendered = expression.Value == null
                 ? "null"
-                : RenderValue(expression.Value, declaredType, indentLevel, keyByResource, variableNameByKey);
+                : RenderValue(expression.Value, declaredType, indentLevel, keyByResource, variableNameByKey, variablesModel);
 
             if (string.IsNullOrWhiteSpace(expression.ConverterName))
             {
@@ -571,7 +587,7 @@ namespace LiveArch.Deployment.Export.CSharp
             return value is byte or sbyte or short or ushort or int or uint or long or ulong or float or double or decimal;
         }
 
-        private static string GetGlobalTypeName(Type type)
+        internal static string GetGlobalTypeName(Type type)
         {
             if (!type.IsGenericType)
             {
@@ -763,6 +779,138 @@ namespace LiveArch.Deployment.Export.CSharp
             }
 
             return string.IsNullOrWhiteSpace(name) ? "Type" : name;
+        }
+
+        private static CSharpPulumiVariablesModel? CreateVariablesModel(string projectName, IReadOnlyDictionary<string, object>? variableValues)
+        {
+            if (variableValues == null)
+            {
+                return null;
+            }
+
+            var usedPropertyNames = new HashSet<string>(StringComparer.Ordinal);
+            var variables = new List<CSharpPulumiVariableModel>();
+            foreach (var (key, value) in variableValues.OrderBy(item => item.Key, StringComparer.Ordinal))
+            {
+                var propertyName = CreateIndexedVariableName(usedPropertyNames, CreateVariablePropertyName(key));
+                var variableType = value?.GetType() ?? typeof(object);
+                variables.Add(new CSharpPulumiVariableModel(key, propertyName, variableType, value));
+            }
+
+            var className = CreateVariableClassName(projectName);
+            return new CSharpPulumiVariablesModel(className, variables);
+        }
+
+        private static string CreateVariablePropertyName(string key)
+        {
+            var parts = Regex.Split(key, "[^a-zA-Z0-9]+")
+                .Where(part => !string.IsNullOrWhiteSpace(part))
+                .ToArray();
+
+            if (parts.Length == 0)
+            {
+                return "Variable";
+            }
+
+            var builder = new StringBuilder();
+            foreach (var part in parts)
+            {
+                builder.Append(char.ToUpperInvariant(part[0]));
+                if (part.Length > 1)
+                {
+                    builder.Append(part.All(char.IsUpper)
+                        ? part[1..].ToLowerInvariant()
+                        : part[1..]);
+                }
+            }
+
+            if (char.IsDigit(builder[0]))
+            {
+                builder.Insert(0, '_');
+            }
+
+            return builder.ToString();
+        }
+
+        private static string CreateVariableClassName(string projectName)
+        {
+            return CreateVariablePropertyName(projectName) + "Variables";
+        }
+
+        private static bool TryRenderVariableSubstitution(object value, Type declaredType, CSharpPulumiVariablesModel? variablesModel, out string rendered)
+        {
+            if (variablesModel == null || value is not string text)
+            {
+                rendered = string.Empty;
+                return false;
+            }
+
+            var matches = VariableRegex.Matches(text);
+            if (matches.Count == 0)
+            {
+                rendered = string.Empty;
+                return false;
+            }
+
+            var variablesByKey = variablesModel.Variables.ToDictionary(variable => variable.Key, StringComparer.Ordinal);
+            if (matches.Cast<Match>().Any(match => !variablesByKey.ContainsKey(match.Groups[1].Value)))
+            {
+                rendered = string.Empty;
+                return false;
+            }
+
+            var targetType = GetUnderlyingArgsType(Nullable.GetUnderlyingType(declaredType) ?? declaredType);
+            if (matches.Count == 1 && matches[0].Index == 0 && matches[0].Length == text.Length)
+            {
+                var variable = variablesByKey[matches[0].Groups[1].Value];
+                if (targetType == typeof(string) && variable.VariableType != typeof(string))
+                {
+                    rendered = BuildInterpolatedString(text, variablesByKey);
+                    return true;
+                }
+
+                rendered = $"variables.{variable.PropertyName}";
+                return true;
+            }
+
+            if (targetType != typeof(string))
+            {
+                rendered = string.Empty;
+                return false;
+            }
+
+            rendered = BuildInterpolatedString(text, variablesByKey);
+            return true;
+        }
+
+        private static string BuildInterpolatedString(string template, IReadOnlyDictionary<string, CSharpPulumiVariableModel> variablesByKey)
+        {
+            var builder = new StringBuilder();
+            builder.Append("$");
+            builder.Append('"');
+
+            var currentIndex = 0;
+            foreach (Match match in VariableRegex.Matches(template))
+            {
+                builder.Append(EscapeInterpolatedStringSegment(template[currentIndex..match.Index]));
+                builder.Append("{variables.");
+                builder.Append(variablesByKey[match.Groups[1].Value].PropertyName);
+                builder.Append('}');
+                currentIndex = match.Index + match.Length;
+            }
+
+            builder.Append(EscapeInterpolatedStringSegment(template[currentIndex..]));
+            builder.Append('"');
+            return builder.ToString();
+        }
+
+        private static string EscapeInterpolatedStringSegment(string value)
+        {
+            return value
+                .Replace("\\", "\\\\", StringComparison.Ordinal)
+                .Replace("\"", "\\\"", StringComparison.Ordinal)
+                .Replace("{", "{{", StringComparison.Ordinal)
+                .Replace("}", "}}", StringComparison.Ordinal);
         }
 
         private static string ToCSharpString(string value)
@@ -990,10 +1138,29 @@ namespace LiveArch.Deployment.Export.CSharp
             builder.AppendLine("    [Fact]");
             builder.AppendLine("    public async Task ProcessAsync_Should_Create_Resources()");
             builder.AppendLine("    {");
-            builder.AppendLine($"        var mocks = await ExportedDeploymentTestHost.ExecuteAsync(() => global::{resourceModel.RootNamespace}.ExportedDeployment.ProcessAsync());");
+            builder.AppendLine($"        var mocks = await ExportedDeploymentTestHost.ExecuteAsync(() => global::{resourceModel.RootNamespace}.ExportedDeployment.ProcessAsync(CreateVariables()));");
             builder.AppendLine();
             builder.AppendLine("        Assert.NotEmpty(mocks.Resources);");
             builder.AppendLine("    }");
+
+            if (resourceModel.VariablesModel != null)
+            {
+                builder.AppendLine();
+                builder.AppendLine($"    private static global::{resourceModel.RootNamespace}.{resourceModel.VariablesModel.ClassName} CreateVariables() => new()");
+                builder.AppendLine("    {");
+                foreach (var variable in resourceModel.VariablesModel.Variables)
+                {
+                    var renderedValue = CSharpPulumiProjectExporter.RenderValue(variable.Value ?? string.Empty, variable.VariableType, 2, new Dictionary<object, string>(ReferenceEqualityComparer.Instance), new Dictionary<string, string>(StringComparer.Ordinal), null);
+                    builder.AppendLine($"        {variable.PropertyName} = {renderedValue},");
+                }
+                builder.AppendLine("    };");
+            }
+            else
+            {
+                builder.AppendLine();
+                builder.AppendLine($"    private static global::{resourceModel.RootNamespace}.DeploymentVariables CreateVariables() => new();");
+            }
+
             builder.AppendLine("}");
             return builder.ToString();
         }
@@ -1011,11 +1178,13 @@ namespace LiveArch.Deployment.Export.CSharp
             builder.AppendLine();
             builder.AppendLine($"namespace {model.RootNamespace};");
             builder.AppendLine();
+            builder.Append(RenderVariablesClass(model));
+            builder.AppendLine();
             builder.AppendLine("public static class ExportedDeployment");
             builder.AppendLine("{");
             builder.AppendLine($"    public const string DeploymentName = {ToCSharpString(model.Deployment)};");
             builder.AppendLine();
-            builder.AppendLine("    public static Task ProcessAsync(CancellationToken cancellationToken = default)");
+            builder.AppendLine($"    public static Task ProcessAsync({model.VariablesModel?.ClassName ?? "DeploymentVariables"} variables, CancellationToken cancellationToken = default)");
             builder.AppendLine("    {");
             foreach (var resource in model.Resources)
             {
@@ -1029,6 +1198,25 @@ namespace LiveArch.Deployment.Export.CSharp
             return builder.ToString();
         }
 
+        private static string RenderVariablesClass(CSharpPulumiProjectModel model)
+        {
+            var builder = new StringBuilder();
+            var className = model.VariablesModel?.ClassName ?? "DeploymentVariables";
+            builder.AppendLine($"public sealed class {className}");
+            builder.AppendLine("{");
+
+            if (model.VariablesModel != null)
+            {
+                foreach (var variable in model.VariablesModel.Variables)
+                {
+                    builder.AppendLine($"    public required {CSharpPulumiProjectExporter.GetGlobalTypeName(variable.VariableType)} {variable.PropertyName} {{ get; init; }}");
+                }
+            }
+
+            builder.AppendLine("}");
+            return builder.ToString();
+        }
+
         private static string ToCSharpString(string value)
         {
             return $"\"{value.Replace("\\", "\\\\").Replace("\"", "\\\"")}\"";
@@ -1039,6 +1227,7 @@ namespace LiveArch.Deployment.Export.CSharp
         string? ProjectName = null,
         string RootNamespace = "Generated.Deployment",
         string? OutputDirectory = null,
+        IReadOnlyDictionary<string, object>? VariableValues = null,
         bool CleanOutputDirectories = true,
         bool GenerateTestProject = true,
         string? TestProjectName = null,
@@ -1048,6 +1237,7 @@ namespace LiveArch.Deployment.Export.CSharp
         IReadOnlyCollection<CSharpPackageReference>? AdditionalPackageReferences = null)
     {
         public string? OutputDirectory { get; init; } = OutputDirectory;
+        public IReadOnlyDictionary<string, object>? VariableValues { get; init; } = VariableValues;
         public bool CleanOutputDirectories { get; init; } = CleanOutputDirectories;
         public bool GenerateTestProject { get; init; } = GenerateTestProject;
         public string? TestProjectName { get; init; } = TestProjectName;
@@ -1071,6 +1261,7 @@ namespace LiveArch.Deployment.Export.CSharp
         string Deployment,
         string ProjectName,
         string RootNamespace,
+        CSharpPulumiVariablesModel? VariablesModel,
         IReadOnlyCollection<string> AdditionalNamespaces,
         IReadOnlyCollection<CSharpPackageReference> PackageReferences,
         IReadOnlyCollection<CSharpProjectReference> ProjectReferences,
@@ -1091,6 +1282,16 @@ namespace LiveArch.Deployment.Export.CSharp
     public sealed record CSharpPulumiTestProjectModel(
         string ProjectName,
         string RootNamespace);
+
+    public sealed record CSharpPulumiVariablesModel(
+        string ClassName,
+        IReadOnlyCollection<CSharpPulumiVariableModel> Variables);
+
+    public sealed record CSharpPulumiVariableModel(
+        string Key,
+        string PropertyName,
+        Type VariableType,
+        object? Value);
 
     public sealed record CSharpPackageReference(string PackageId, string Version);
 

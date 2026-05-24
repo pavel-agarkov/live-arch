@@ -43,6 +43,7 @@ namespace LiveArch.Deployment.TestRunner.Export
                 ProjectName: "LiveArch.Order.Deployment",
                 RootNamespace: "LiveArch.Order.Deployment",
                 OutputDirectory: ExportProjectDirectory,
+                VariableValues: variables,
                 CleanOutputDirectories: false,
                 AdditionalNamespaces: ["System.Linq"]));
 
@@ -85,12 +86,17 @@ namespace LiveArch.Deployment.TestRunner.Export
 
             var testFileText = File.ReadAllText(export.TestFilePath!);
             testFileText.Should().Contain("ExportedDeploymentTestHost.ExecuteAsync");
-            testFileText.Should().Contain("global::LiveArch.Order.Deployment.ExportedDeployment.ProcessAsync()");
+            testFileText.Should().Contain("global::LiveArch.Order.Deployment.ExportedDeployment.ProcessAsync(CreateVariables())");
             testFileText.Should().Contain("Assert.NotEmpty(mocks.Resources)");
+            testFileText.Should().Contain("private static global::LiveArch.Order.Deployment.LiveArchOrderDeploymentVariables CreateVariables() => new()");
 
             var deploymentText = File.ReadAllText(export.DeploymentFilePath);
             deploymentText.Should().Contain("LiveArch.Order.Deployment");
             deploymentText.Should().Contain("ProcessAsync");
+            deploymentText.Should().Contain("public sealed class LiveArchOrderDeploymentVariables");
+            deploymentText.Should().Contain("public static Task ProcessAsync(LiveArchOrderDeploymentVariables variables");
+            deploymentText.Should().Contain("NamespaceName = $\"{variables.Env}-sbns\"");
+            deploymentText.Should().Contain("VaultName = variables.KeyVaultName");
             deploymentText.Should().Contain("new global::Pulumi.AzureNative.ManagedIdentity.UserAssignedIdentity(");
             deploymentText.Should().Contain("global::Pulumi.AzureNative.ServiceBus.GetNamespace.Invoke(");
             deploymentText.Should().Contain("new global::Pulumi.CustomResourceOptions");
