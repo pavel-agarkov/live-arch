@@ -74,6 +74,8 @@ Update this section after each work session.
 - A runtime package version resolver was introduced to resolve package versions from loaded assemblies.
 - `CSharpPackageReference` now allows versionless configured package references.
 - Generated test project dependencies now use the same dependency model/resolution path as generated main project dependencies.
+- Fallback package IDs and versions are centralized in a default package catalog used by baseline and known generated dependencies.
+- Unresolved versionless additional package references now produce actionable export diagnostics and generated project comments while preserving export output.
 - Known gaps remain around transformer metadata, converter metadata, executable transformer/converter code generation, real foreach loop generation, generated-code regression tests, docs, and slides.
 
 ## Completed Work Items
@@ -86,42 +88,12 @@ Keep completed items here with their original stable IDs.
 - **04. Implement runtime package version resolver** — added runtime loaded-assembly version resolution for package references.
 - **05. Allow versionless configured package references** — `CSharpPackageReference.Version` may be omitted and filled from runtime resolution.
 - **06. Use shared dependency resolution for generated test project** — generated test project packages now flow through the same dependency model as main generated project packages.
+- **07. Centralize fallback package defaults** — added a default package catalog for generated package IDs and fallback versions, and routed baseline/known package references through it while keeping loaded-assembly resolution preferred.
+- **08. Improve dependency diagnostics** — added diagnostics and generated `.csproj` comments for unresolved versionless additional package references while preserving export output.
 
 ## Independent Work Items
 
 Each item below should be executable as a separate future session. If an item is completed, move it to **Completed Work Items** and update **Current State Summary**.
-
-### 07. Centralize fallback package defaults
-
-Goal: remove scattered fallback version literals from exporter internals and centralize them in a small default package catalog.
-
-Scope:
-
-- Create a single default dependency catalog for package IDs and fallback versions.
-- Route baseline package references such as `Pulumi`, `Pulumi.AzureNative`, `Pulumi.DockerBuild`, `Microsoft.NET.Test.Sdk`, `xunit.v3`, and `xunit.runner.visualstudio` through that catalog.
-- Keep runtime loaded-assembly resolution as the preferred source.
-- Keep explicit configured versions possible.
-- Ensure generated project writers never hard-code package versions.
-
-Validation:
-
-- Build solution.
-- Export `LiveArch.Order.Deployment` and verify generated `.csproj` still contains required package references.
-
-### 08. Improve dependency diagnostics
-
-Goal: make unresolved versionless dependencies explicit and user-actionable.
-
-Scope:
-
-- Add diagnostics for package references whose versions cannot be resolved from loaded assemblies and were not configured explicitly.
-- Decide whether unresolved dependency versions should fail export immediately or be represented in the generated project with an actionable comment/placeholder.
-- Prefer preserving export output where possible.
-
-Validation:
-
-- Add tests for a versionless package that can be resolved.
-- Add tests for a versionless package that cannot be resolved.
 
 ### 09. Preserve transformer metadata structurally
 

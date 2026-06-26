@@ -59,7 +59,8 @@ namespace LiveArch.Deployment.Export.CSharp
             var exportableResources = observedResources
                 .Where(ShouldExportResource)
                 .ToList();
-            var dependencies = ResolveDependencies(exportableResources, options.AdditionalPackageReferences);
+            var diagnostics = new List<CSharpExportDiagnostic>();
+            var dependencies = ResolveDependencies(exportableResources, options.AdditionalPackageReferences, diagnostics);
 
             var keyByResource = exportableResources
                 .GroupBy(resource => resource.Resource, ReferenceEqualityComparer.Instance)
@@ -68,7 +69,6 @@ namespace LiveArch.Deployment.Export.CSharp
 
             var variableNameByKey = CreateVariableNames(exportableResources);
 
-            var diagnostics = new List<CSharpExportDiagnostic>();
             var model = new CSharpPulumiProjectModel(
                 deployment,
                 projectName,
@@ -827,23 +827,25 @@ namespace LiveArch.Deployment.Export.CSharp
 
         private static CSharpPulumiProjectDependencies ResolveDependencies(
             IReadOnlyCollection<IObservedResource> resources,
-            IReadOnlyCollection<CSharpPackageReference> additionalPackageReferences)
+            IReadOnlyCollection<CSharpPackageReference> additionalPackageReferences,
+            List<CSharpExportDiagnostic> diagnostics)
         {
             return new CSharpPulumiProjectDependencies(
-                ResolvePackageReferences(resources, additionalPackageReferences),
+                ResolvePackageReferences(resources, additionalPackageReferences, diagnostics),
                 ResolveProjectReferences(resources));
         }
 
         private static IReadOnlyCollection<CSharpPackageReference> ResolvePackageReferences(
             IReadOnlyCollection<IObservedResource> resources,
-            IReadOnlyCollection<CSharpPackageReference> additionalPackageReferences)
+            IReadOnlyCollection<CSharpPackageReference> additionalPackageReferences,
+            List<CSharpExportDiagnostic> diagnostics)
         {
             var packageReferences = new Dictionary<string, CSharpPackageReference>(StringComparer.OrdinalIgnoreCase)
             {
-                ["Microsoft.NET.Test.Sdk"] = CSharpRuntimePackageVersionResolver.Resolve("Microsoft.NET.Test.Sdk", "18.5.1"),
-                ["Pulumi"] = CSharpRuntimePackageVersionResolver.Resolve("Pulumi", "3.107.2"),
-                ["xunit.runner.visualstudio"] = CSharpRuntimePackageVersionResolver.Resolve("xunit.runner.visualstudio", "3.1.5"),
-                ["xunit.v3"] = CSharpRuntimePackageVersionResolver.Resolve("xunit.v3", "3.2.2")
+                [CSharpPulumiDefaultPackageCatalog.MicrosoftNetTestSdk] = CSharpPulumiDefaultPackageCatalog.Resolve(CSharpPulumiDefaultPackageCatalog.MicrosoftNetTestSdk),
+                [CSharpPulumiDefaultPackageCatalog.Pulumi] = CSharpPulumiDefaultPackageCatalog.Resolve(CSharpPulumiDefaultPackageCatalog.Pulumi),
+                [CSharpPulumiDefaultPackageCatalog.XunitRunnerVisualStudio] = CSharpPulumiDefaultPackageCatalog.Resolve(CSharpPulumiDefaultPackageCatalog.XunitRunnerVisualStudio),
+                [CSharpPulumiDefaultPackageCatalog.XunitV3] = CSharpPulumiDefaultPackageCatalog.Resolve(CSharpPulumiDefaultPackageCatalog.XunitV3)
             };
 
             foreach (var resource in resources)
@@ -856,7 +858,18 @@ namespace LiveArch.Deployment.Export.CSharp
 
             foreach (var packageReference in additionalPackageReferences)
             {
-                packageReferences[packageReference.PackageId] = CSharpRuntimePackageVersionResolver.Resolve(packageReference.PackageId, packageReference.Version);
+                if (CSharpRuntimePackageVersionResolver.TryResolve(packageReference.PackageId, packageReference.Version, out var resolvedPackageReference))
+                {
+                    packageReferences[packageReference.PackageId] = resolvedPackageReference;
+                    continue;
+                }
+
+                diagnostics.Add(new CSharpExportDiagnostic(
+                    CSharpExportDiagnosticSeverity.Error,
+                    $"Package reference '{packageReference.PackageId}' does not specify a version and no loaded assembly version could be resolved. Configure an explicit package version to make the generated project restore successfully.",
+                    null,
+                    null));
+                packageReferences[packageReference.PackageId] = packageReference;
             }
 
             return [.. packageReferences.Values.OrderBy(reference => reference.PackageId, StringComparer.OrdinalIgnoreCase)];
@@ -1290,7 +1303,7 @@ namespace LiveArch.Deployment.Export.CSharp
                 builder.AppendLine("  <ItemGroup>");
                 foreach (var packageReference in model.Dependencies.PackageReferences)
                 {
-                    builder.AppendLine($"    <PackageReference Include=\"{packageReference.PackageId}\" Version=\"{packageReference.Version}\" />");
+                    AppendPackageReference(builder, packageReference);
                 }
                 builder.AppendLine("  </ItemGroup>");
                 builder.AppendLine();
@@ -1336,7 +1349,7 @@ namespace LiveArch.Deployment.Export.CSharp
                 builder.AppendLine("  <ItemGroup>");
                 foreach (var packageReference in model.Dependencies.PackageReferences)
                 {
-                    builder.AppendLine($"    <PackageReference Include=\"{packageReference.PackageId}\" Version=\"{packageReference.Version}\" />");
+                    AppendPackageReference(builder, packageReference);
                 }
                 builder.AppendLine("  </ItemGroup>");
                 builder.AppendLine();
@@ -1353,6 +1366,18 @@ namespace LiveArch.Deployment.Export.CSharp
             builder.AppendLine();
             builder.AppendLine("</Project>");
             return builder.ToString();
+        }
+
+        private static void AppendPackageReference(StringBuilder builder, CSharpPackageReference packageReference)
+        {
+            if (string.IsNullOrWhiteSpace(packageReference.Version))
+            {
+                builder.AppendLine($"    <!-- PackageReference '{packageReference.PackageId}' needs an explicit Version because the exporter could not resolve one from loaded assemblies. -->");
+                builder.AppendLine($"    <PackageReference Include=\"{packageReference.PackageId}\" />");
+                return;
+            }
+
+            builder.AppendLine($"    <PackageReference Include=\"{packageReference.PackageId}\" Version=\"{packageReference.Version}\" />");
         }
 
         private static string CreateTestDeploymentFile(CSharpPulumiProjectModel resourceModel, CSharpPulumiTestProjectModel testModel)
@@ -1550,23 +1575,72 @@ namespace LiveArch.Deployment.Export.CSharp
 
     public sealed record CSharpProjectReference(string ProjectPath);
 
+    internal static class CSharpPulumiDefaultPackageCatalog
+    {
+        public const string MicrosoftNetTestSdk = "Microsoft.NET.Test.Sdk";
+        public const string Pulumi = "Pulumi";
+        public const string PulumiAzureNative = "Pulumi.AzureNative";
+        public const string PulumiDockerBuild = "Pulumi.DockerBuild";
+        public const string XunitRunnerVisualStudio = "xunit.runner.visualstudio";
+        public const string XunitV3 = "xunit.v3";
+
+        private static readonly IReadOnlyDictionary<string, string> FallbackVersions = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            [MicrosoftNetTestSdk] = "18.5.1",
+            [Pulumi] = "3.107.2",
+            [PulumiAzureNative] = "3.19.0",
+            [PulumiDockerBuild] = "0.0.16",
+            [XunitRunnerVisualStudio] = "3.1.5",
+            [XunitV3] = "3.2.2"
+        };
+
+        public static CSharpPackageReference Resolve(string packageId)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(packageId);
+
+            return CSharpRuntimePackageVersionResolver.Resolve(packageId, GetFallbackVersion(packageId));
+        }
+
+        public static string? GetFallbackVersion(string packageId)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(packageId);
+
+            return FallbackVersions.TryGetValue(packageId, out var version) ? version : null;
+        }
+    }
+
     internal static class CSharpRuntimePackageVersionResolver
     {
         public static CSharpPackageReference Resolve(string packageId, string? version)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(packageId);
 
+            if (TryResolve(packageId, version, out var resolvedPackageReference))
+            {
+                return resolvedPackageReference;
+            }
+
+            throw new InvalidOperationException($"Package reference '{packageId}' does not specify a version and no loaded assembly version could be resolved.");
+        }
+
+        public static bool TryResolve(string packageId, string? version, [NotNullWhen(true)] out CSharpPackageReference? packageReference)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(packageId);
+
             if (TryResolveLoadedAssemblyVersion(packageId, out var resolvedVersion))
             {
-                return new CSharpPackageReference(packageId, resolvedVersion);
+                packageReference = new CSharpPackageReference(packageId, resolvedVersion);
+                return true;
             }
 
             if (string.IsNullOrWhiteSpace(version))
             {
-                throw new InvalidOperationException($"Package reference '{packageId}' does not specify a version and no loaded assembly version could be resolved.");
+                packageReference = null;
+                return false;
             }
 
-            return new CSharpPackageReference(packageId, version);
+            packageReference = new CSharpPackageReference(packageId, version);
+            return true;
         }
 
         private static bool TryResolveLoadedAssemblyVersion(string packageId, [NotNullWhen(true)] out string? version)
@@ -1582,8 +1656,7 @@ namespace LiveArch.Deployment.Export.CSharp
         {
             var assemblyName = assembly.GetName().Name;
             return string.Equals(assemblyName, packageId, StringComparison.OrdinalIgnoreCase) ||
-                assembly.GetName().Name?.StartsWith(packageId + ".", StringComparison.OrdinalIgnoreCase) == true ||
-                packageId.StartsWith(assemblyName + ".", StringComparison.OrdinalIgnoreCase);
+                assembly.GetName().Name?.StartsWith(packageId + ".", StringComparison.OrdinalIgnoreCase) == true;
         }
     }
 
@@ -1593,11 +1666,11 @@ namespace LiveArch.Deployment.Export.CSharp
         [
             new(
                 ["Pulumi.AzureNative."],
-                [CSharpRuntimePackageVersionResolver.Resolve("Pulumi.AzureNative", "3.19.0")],
+                [CSharpPulumiDefaultPackageCatalog.Resolve(CSharpPulumiDefaultPackageCatalog.PulumiAzureNative)],
                 []),
             new(
                 ["Pulumi.DockerBuild."],
-                [CSharpRuntimePackageVersionResolver.Resolve("Pulumi.DockerBuild", "0.0.16")],
+                [CSharpPulumiDefaultPackageCatalog.Resolve(CSharpPulumiDefaultPackageCatalog.PulumiDockerBuild)],
                 []),
             new(
                 ["LiveArch.Resources.Azure."],

@@ -9,16 +9,17 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.5.1" />
-    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-    </PackageReference>
-    <PackageReference Include="xunit.v3" Version="3.2.2" />
+    <PackageReference Include="Pulumi" Version="3.107.2.0" />
+    <PackageReference Include="Pulumi.AzureNative" Version="3.19.0.0" />
+    <PackageReference Include="Pulumi.DockerBuild" Version="0.0.20.0" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />
+    <PackageReference Include="xunit.v3" Version="3.2.2.0" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\\LiveArch.Order.Deployment\\LiveArch.Order.Deployment.csproj" />
     <ProjectReference Include="..\\LiveArch.Deployment.Export.Testing\\LiveArch.Deployment.Export.Testing.csproj" />
+    <ProjectReference Include="..\\LiveArch.Resources.Azure\\LiveArch.Resources.Azure.csproj" />
   </ItemGroup>
 
 </Project>

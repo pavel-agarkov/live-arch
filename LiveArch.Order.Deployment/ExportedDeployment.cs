@@ -138,7 +138,7 @@ public static class ExportedDeployment
             SiteConfig = new global::Pulumi.AzureNative.Web.Inputs.SiteConfigArgs()
             {
                 Cors = new global::Pulumi.AzureNative.Web.Inputs.CorsSettingsArgs(),
-                LinuxFxVersion = default!,
+                LinuxFxVersion = ThrowUnsupported<global::Pulumi.Input<global::System.String>>("Cannot render Pulumi wrapper value of runtime type 'Pulumi.Output`1[[System.String, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]' for declared type 'Pulumi.Input`1[[System.String, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'."),
                 VnetName = virtualNetwork.Apply(value => value.Name)
             }
         }, new global::Pulumi.CustomResourceOptions { DependsOn = { orderServiceMi } });
@@ -166,7 +166,7 @@ public static class ExportedDeployment
             ServerFarmId = prodAppServicePlan.Apply(value => value.Id),
             SiteConfig = new global::Pulumi.AzureNative.Web.Inputs.SiteConfigArgs()
             {
-                LinuxFxVersion = default!,
+                LinuxFxVersion = ThrowUnsupported<global::Pulumi.Input<global::System.String>>("Cannot render Pulumi wrapper value of runtime type 'Pulumi.Output`1[[System.String, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]' for declared type 'Pulumi.Input`1[[System.String, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'."),
                 VnetName = virtualNetwork.Apply(value => value.Name)
             }
         }, new global::Pulumi.CustomResourceOptions { DependsOn = { orderDb, orderServiceMi } });
@@ -218,5 +218,10 @@ public static class ExportedDeployment
         }, new global::Pulumi.CustomResourceOptions { DependsOn = { orderServiceMi } });
 
         return Task.CompletedTask;
+    }
+
+    private static T ThrowUnsupported<T>(string message)
+    {
+        throw new global::System.NotSupportedException(message);
     }
 }

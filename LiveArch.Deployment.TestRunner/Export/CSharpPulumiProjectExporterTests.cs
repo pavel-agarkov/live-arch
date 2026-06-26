@@ -110,5 +110,54 @@ namespace LiveArch.Deployment.TestRunner.Export
             deploymentText.Should().NotContain("ForEachSource");
             deploymentText.Should().Contain("order-env");
         }
+
+        [Fact]
+        public async Task ShouldResolveVersionlessAdditionalPackageReferenceFromLoadedAssembly()
+        {
+            var outputDirectory = CreateTemporaryExportDirectory();
+            var exporter = new CSharpPulumiProjectExporter();
+
+            await ProcessDeployment("order-env", exporter);
+            var export = exporter.Export("order-env", new CSharpPulumiProjectExporterOptions(
+                OutputDirectory: outputDirectory,
+                GenerateTestProject: false,
+                AdditionalPackageReferences: [new CSharpPackageReference("Pulumi", null)]));
+
+            var packageReference = export.Model.Dependencies.PackageReferences.Single(reference => reference.PackageId == "Pulumi");
+            packageReference.Version.Should().NotBeNullOrWhiteSpace();
+            export.Model.Diagnostics.Should().NotContain(diagnostic =>
+                diagnostic.Message.Contains("Package reference 'Pulumi'", StringComparison.Ordinal));
+
+            var projectText = File.ReadAllText(export.ProjectFilePath);
+            projectText.Should().Contain("<PackageReference Include=\"Pulumi\" Version=");
+        }
+
+        [Fact]
+        public async Task ShouldReportUnresolvedVersionlessAdditionalPackageReference()
+        {
+            var outputDirectory = CreateTemporaryExportDirectory();
+            var exporter = new CSharpPulumiProjectExporter();
+
+            await ProcessDeployment("order-env", exporter);
+            var export = exporter.Export("order-env", new CSharpPulumiProjectExporterOptions(
+                OutputDirectory: outputDirectory,
+                GenerateTestProject: false,
+                AdditionalPackageReferences: [new CSharpPackageReference("Contoso.Unresolved.Package", null)]));
+
+            export.Model.Dependencies.PackageReferences.Should().Contain(reference =>
+                reference.PackageId == "Contoso.Unresolved.Package" && reference.Version == null);
+            export.Model.Diagnostics.Should().ContainSingle(diagnostic =>
+                diagnostic.Severity == CSharpExportDiagnosticSeverity.Error &&
+                diagnostic.Message.Contains("Contoso.Unresolved.Package", StringComparison.Ordinal));
+
+            var projectText = File.ReadAllText(export.ProjectFilePath);
+            projectText.Should().Contain("PackageReference 'Contoso.Unresolved.Package' needs an explicit Version");
+            projectText.Should().Contain("<PackageReference Include=\"Contoso.Unresolved.Package\" />");
+        }
+
+        private static string CreateTemporaryExportDirectory()
+        {
+            return Path.Combine(Path.GetTempPath(), "LiveArch.CSharpPulumiProjectExporterTests", Guid.NewGuid().ToString("N"));
+        }
     }
 }
