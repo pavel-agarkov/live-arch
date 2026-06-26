@@ -56,6 +56,57 @@ namespace LiveArch.Deployment.TestRunner.Export
         }
 
         [Fact]
+        public async Task ShouldRenderInlineTransformerCollectionValuesInGeneratedCode()
+        {
+            var exporter = new CSharpPulumiProjectExporter();
+
+            await ProcessDeployment("order-env", exporter);
+            var export = exporter.Export("order-env", new CSharpPulumiProjectExporterOptions(
+                ProjectName: "LiveArch.Order.Deployment",
+                RootNamespace: "LiveArch.Order.Deployment",
+                OutputDirectory: ExportProjectDirectory,
+                VariableValues: variables,
+                CleanOutputDirectories: false,
+                AdditionalNamespaces: ["System.Linq"]));
+
+            var deploymentText = File.ReadAllText(export.DeploymentFilePath);
+
+            deploymentText.Should().Contain("order-service-kv-access-policy");
+            deploymentText.Should().Contain("PermissionsArgs");
+            deploymentText.Should().Contain("Secrets =");
+            deploymentText.Should().Contain("\"get\"");
+            deploymentText.Should().Contain("\"list\"");
+        }
+
+        [Fact]
+        public async Task ShouldPreserveInlineTransformerMetadataForDirectValues()
+        {
+            var observer = new RecordingStructurizrDeploymentObserver();
+
+            await ProcessDeployment("order-env", observer);
+
+            var kvAccessPolicy = observer.CreatedResources
+                .FirstOrDefault(resource => resource.ResourceName == "order-service-kv-access-policy");
+
+            kvAccessPolicy.Should().NotBeNull();
+
+            var allAssignments = string.Join(", ", kvAccessPolicy!.ExpressionModel.Assignments.Keys);
+
+            var secretsAssignment = kvAccessPolicy!.ExpressionModel.Assignments
+                .FirstOrDefault(a => a.Key.Contains("secrets", StringComparison.OrdinalIgnoreCase));
+
+            secretsAssignment.Should().NotBeNull($"Expected to find 'secrets' assignment. All assignments: {allAssignments}");
+            secretsAssignment.Value.Should().BeOfType<DirectValueExpressionModel>();
+
+            var directExpression = (DirectValueExpressionModel)secretsAssignment.Value!;
+            directExpression.InlineTransformers.Should().HaveCount(1);
+            directExpression.InlineTransformers.First().Name.Should().Be("split");
+            directExpression.InlineTransformers.First().Parameter.Should().Be(",");
+            directExpression.InlineTransformers.First().IsBuiltIn.Should().BeTrue();
+            directExpression.Value.Should().NotBeNull();
+        }
+
+        [Fact]
         public void ShouldDeriveTransformerClassificationFromNamespace()
         {
             var builtIn = new TransformerExpressionModel("format", "item-{0}", typeof(FormatTransformer));

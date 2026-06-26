@@ -203,14 +203,8 @@ namespace LiveArch.Deployment.Export.CSharp
             var childIndent = new string(' ', (indentLevel + 1) * 4);
             var entries = new List<string>();
 
-            foreach (var property in declaredType.GetProperties(BindingFlags.Instance | BindingFlags.Public))
+            foreach (var (inputName, property) in GetRenderableInputProperties(declaredType))
             {
-                if (!property.CanRead)
-                {
-                    continue;
-                }
-
-                var inputName = GetInputName(property) ?? property.Name;
                 var propertyPath = CombinePath(currentPath, inputName);
                 string? propertyValueCode = null;
 
@@ -272,11 +266,6 @@ namespace LiveArch.Deployment.Export.CSharp
                 return typedValue;
             }
 
-            if (IsPulumiWrapperType(value.GetType()) || IsPulumiWrapperType(declaredType))
-            {
-                return RenderUnsupportedValue(declaredType, $"Cannot render Pulumi wrapper value of runtime type '{value.GetType().FullName}' for declared type '{declaredType.FullName}'.", diagnostics, expressionModel, propertyPath);
-            }
-
             if (value is string text)
             {
                 return ToCSharpString(text);
@@ -299,7 +288,7 @@ namespace LiveArch.Deployment.Export.CSharp
 
             if (value is IEnumerable enumerable && value is not string)
             {
-                var itemType = GetCollectionItemType(declaredType) ?? typeof(object);
+                var itemType = GetCollectionItemRenderType(declaredType);
                 var renderedItems = enumerable.Cast<object?>()
                     .Where(item => item != null)
                     .Select(item => RenderValue(item!, itemType, indentLevel + 1, keyByResource, variableNameByKey, variablesModel, diagnostics, expressionModel, propertyPath))
@@ -310,6 +299,11 @@ namespace LiveArch.Deployment.Export.CSharp
                     : $"[{string.Join(", ", renderedItems)}]";
             }
 
+            if (IsPulumiWrapperType(value.GetType()) || IsPulumiWrapperType(declaredType))
+            {
+                return RenderUnsupportedValue(declaredType, $"Cannot render Pulumi wrapper value of runtime type '{value.GetType().FullName}' for declared type '{declaredType.FullName}'.", diagnostics, expressionModel, propertyPath);
+            }
+
             if (CanRenderAsLiteralObjectInitializer(declaredType, value.GetType()))
             {
                 return RenderLiteralObjectInitializer(value, value.GetType(), indentLevel + 1, keyByResource, variableNameByKey, variablesModel, diagnostics, expressionModel, propertyPath);
@@ -317,6 +311,7 @@ namespace LiveArch.Deployment.Export.CSharp
 
             return RenderUnsupportedValue(declaredType, $"Cannot render value of runtime type '{value.GetType().FullName}' for declared type '{declaredType.FullName}'.", diagnostics, expressionModel, propertyPath);
         }
+
 
         private static bool TryRenderTypedValue(
             object value,
@@ -446,17 +441,31 @@ namespace LiveArch.Deployment.Export.CSharp
                 ? "null"
                 : RenderValue(expression.Value, declaredType, indentLevel, keyByResource, variableNameByKey, variablesModel, diagnostics, expressionModel, propertyPath);
 
+            var hasBuiltInTransformers = expression.InlineTransformers.Any(t => t.IsBuiltIn);
+            var allTransformersBuiltIn = expression.InlineTransformers.All(t => t.IsBuiltIn);
+
             if (string.IsNullOrWhiteSpace(expression.ConverterName))
             {
-                return expression.InlineTransformers.Count == 0
-                    ? rendered
-                    : $"{rendered} /* transformers: {RenderTransformers(expression.InlineTransformers)} */";
+                if (expression.InlineTransformers.Count == 0)
+                {
+                    return rendered;
+                }
+
+                if (allTransformersBuiltIn && !rendered.StartsWith("ThrowUnsupported<", StringComparison.Ordinal))
+                {
+                    return rendered;
+                }
+
+                return $"{rendered} /* transformers: {RenderTransformers(expression.InlineTransformers)} */";
             }
 
             var suffix = new StringBuilder();
             if (expression.InlineTransformers.Count > 0)
             {
-                suffix.Append($" transformers: {RenderTransformers(expression.InlineTransformers)}");
+                if (!allTransformersBuiltIn || rendered.StartsWith("ThrowUnsupported<", StringComparison.Ordinal))
+                {
+                    suffix.Append($" transformers: {RenderTransformers(expression.InlineTransformers)}");
+                }
             }
 
             suffix.Append($" converter: {expression.ConverterName}");
@@ -487,6 +496,20 @@ namespace LiveArch.Deployment.Export.CSharp
                 ? renderedAccess
                 : null;
 
+            if (renderedSourceAccess != null && expression.Transformers.Count > 0)
+            {
+                var sourceOutputType = InferSourceOutputType(sourceType, expression.SourcePath);
+                if (TryRenderDependencyWithTransformers(renderedSourceAccess, sourceOutputType, expression.Transformers, out var transformedExpression))
+                {
+                    if (string.IsNullOrWhiteSpace(expression.ConverterName))
+                    {
+                        return transformedExpression;
+                    }
+
+                    return $"{transformedExpression} /* converter: {expression.ConverterName} */";
+                }
+            }
+
             var suffix = new StringBuilder();
             if (expression.Transformers.Count > 0)
             {
@@ -512,12 +535,252 @@ namespace LiveArch.Deployment.Export.CSharp
             return RenderUnsupportedExpression(declaredType, message, diagnostics, expressionModel, propertyPath);
         }
 
+        private static bool TryRenderDependencyWithTransformers(
+            string sourceExpression,
+            Type sourceOutputType,
+            IReadOnlyCollection<TransformerExpressionModel> transformers,
+            out string rendered)
+        {
+            rendered = string.Empty;
+
+            if (transformers.Count == 0)
+            {
+                rendered = sourceExpression;
+                return true;
+            }
+
+            if (!transformers.All(t => t.IsBuiltIn))
+            {
+                return false;
+            }
+
+            var isOutputWrapped = sourceExpression.Contains(".Apply(", StringComparison.Ordinal);
+
+            if (isOutputWrapped)
+            {
+                var applyMatch = System.Text.RegularExpressions.Regex.Match(sourceExpression, @"^(.+)\.Apply\(value => (.+)\)$");
+                if (!applyMatch.Success)
+                {
+                    return false;
+                }
+
+                var baseExpression = applyMatch.Groups[1].Value;
+                var lambdaBody = applyMatch.Groups[2].Value;
+
+                if (!TryRenderBuiltInTransformerChain(lambdaBody, sourceOutputType, transformers, out var transformedLambdaBody))
+                {
+                    return false;
+                }
+
+                rendered = $"{baseExpression}.Apply(value => {transformedLambdaBody})";
+                return true;
+            }
+
+            if (!TryRenderBuiltInTransformerChain(sourceExpression, sourceOutputType, transformers, out var transformedExpression))
+            {
+                return false;
+            }
+
+            rendered = transformedExpression;
+            return true;
+        }
+
+        private static Type InferSourceOutputType(Type sourceType, string sourcePath)
+        {
+            if (string.IsNullOrWhiteSpace(sourcePath))
+            {
+                return sourceType;
+            }
+
+            var segments = sourcePath.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var currentType = sourceType;
+
+            foreach (var segment in segments)
+            {
+                var effectiveType = Nullable.GetUnderlyingType(currentType) ?? currentType;
+
+                if (ConversionTypeHelpers.IsOutput(effectiveType))
+                {
+                    currentType = effectiveType.GetGenericArguments()[0];
+                    effectiveType = currentType;
+                }
+
+                var property = effectiveType.GetProperties(BindingFlags.Instance | BindingFlags.Public)
+                    .FirstOrDefault(p => string.Equals(p.Name, segment, StringComparison.OrdinalIgnoreCase));
+
+                if (property == null)
+                {
+                    return typeof(string);
+                }
+
+                currentType = property.PropertyType;
+            }
+
+            var finalEffectiveType = Nullable.GetUnderlyingType(currentType) ?? currentType;
+            if (ConversionTypeHelpers.IsOutput(finalEffectiveType))
+            {
+                return finalEffectiveType.GetGenericArguments()[0];
+            }
+
+            return currentType;
+        }
+
+
         private static string RenderTransformers(IReadOnlyCollection<TransformerExpressionModel> transformers)
         {
             return string.Join(" -> ", transformers.Select(transformer => string.IsNullOrWhiteSpace(transformer.Parameter)
                 ? transformer.Name
                 : $"{transformer.Name} {transformer.Parameter}"));
         }
+
+        private static bool TryRenderBuiltInTransformerChain(
+            string sourceExpression,
+            Type sourceOutputType,
+            IReadOnlyCollection<TransformerExpressionModel> transformers,
+            out string rendered)
+        {
+            rendered = sourceExpression;
+
+            if (transformers.Count == 0 || !transformers.All(t => t.IsBuiltIn))
+            {
+                return false;
+            }
+
+            foreach (var transformer in transformers)
+            {
+                if (!TryRenderSingleBuiltInTransformer(rendered, sourceOutputType, transformer, out var transformedExpression, out var transformedOutputType))
+                {
+                    return false;
+                }
+
+                rendered = transformedExpression;
+                sourceOutputType = transformedOutputType;
+            }
+
+            return true;
+        }
+
+        private static bool TryRenderSingleBuiltInTransformer(
+            string sourceExpression,
+            Type sourceOutputType,
+            TransformerExpressionModel transformer,
+            out string rendered,
+            out Type outputType)
+        {
+            rendered = string.Empty;
+            outputType = typeof(object);
+
+            if (!transformer.IsBuiltIn)
+            {
+                return false;
+            }
+
+            switch (transformer.Name.ToLowerInvariant())
+            {
+                case "split":
+                    if (sourceOutputType != typeof(string))
+                    {
+                        return false;
+                    }
+
+                    var separator = string.IsNullOrEmpty(transformer.Parameter) ? "," : transformer.Parameter;
+                    rendered = $"{sourceExpression}.Split({ToCSharpString(separator)}, global::System.StringSplitOptions.TrimEntries | global::System.StringSplitOptions.RemoveEmptyEntries)";
+                    outputType = typeof(string[]);
+                    return true;
+
+                case "format":
+                    if (string.IsNullOrWhiteSpace(transformer.Parameter))
+                    {
+                        return false;
+                    }
+
+                    rendered = $"global::System.String.Format({ToCSharpString(transformer.Parameter)}, {sourceExpression})";
+                    outputType = typeof(string);
+                    return true;
+
+                case "multiply":
+                case "divide":
+                    if (!double.TryParse(transformer.Parameter, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out var multiplier))
+                    {
+                        return false;
+                    }
+
+                    if (transformer.Name.ToLowerInvariant() == "divide")
+                    {
+                        if (multiplier == 0)
+                        {
+                            return false;
+                        }
+                        multiplier = 1 / multiplier;
+                    }
+
+                    var numericExpression = IsNumericType(sourceOutputType)
+                        ? sourceExpression
+                        : $"global::System.Double.Parse({sourceExpression}.ToString()!)";
+
+                    rendered = $"({numericExpression} * {multiplier.ToString(CultureInfo.InvariantCulture)})";
+                    outputType = typeof(double);
+                    return true;
+
+                case "extractbyregex":
+                case "cleanbyregex":
+                case "splitbyregex":
+                    if (sourceOutputType != typeof(string))
+                    {
+                        return false;
+                    }
+
+                    if (string.IsNullOrWhiteSpace(transformer.Parameter))
+                    {
+                        return false;
+                    }
+
+                    var regexPattern = ToCSharpString(transformer.Parameter);
+                    var regexExpression = $"global::System.Text.RegularExpressions.Regex.Match({sourceExpression}, {regexPattern})";
+
+                    if (transformer.Name.ToLowerInvariant() == "extractbyregex")
+                    {
+                        rendered = $"({regexExpression}.Success ? {regexExpression}.Value : global::System.String.Empty)";
+                        outputType = typeof(string);
+                        return true;
+                    }
+
+                    if (transformer.Name.ToLowerInvariant() == "cleanbyregex")
+                    {
+                        rendered = $"global::System.Text.RegularExpressions.Regex.Replace({sourceExpression}, {regexPattern}, global::System.String.Empty)";
+                        outputType = typeof(string);
+                        return true;
+                    }
+
+                    if (transformer.Name.ToLowerInvariant() == "splitbyregex")
+                    {
+                        rendered = $"global::System.Text.RegularExpressions.Regex.Split({sourceExpression}, {regexPattern})";
+                        outputType = typeof(string[]);
+                        return true;
+                    }
+
+                    return false;
+
+                default:
+                    return false;
+            }
+        }
+
+        private static bool IsNumericType(Type type)
+        {
+            return type == typeof(byte) ||
+                type == typeof(sbyte) ||
+                type == typeof(short) ||
+                type == typeof(ushort) ||
+                type == typeof(int) ||
+                type == typeof(uint) ||
+                type == typeof(long) ||
+                type == typeof(ulong) ||
+                type == typeof(float) ||
+                type == typeof(double) ||
+                type == typeof(decimal);
+        }
+
 
         private static bool TryRenderDependencySourceAccess(string sourceExpression, Type sourceType, string sourcePath, IObservedResource? observedSource, out string rendered)
         {
@@ -662,8 +925,16 @@ namespace LiveArch.Deployment.Export.CSharp
                     {
                         return candidateType;
                     }
+                }
 
+                foreach (var candidateType in currentType.GetGenericArguments().Select(argument => Nullable.GetUnderlyingType(argument) ?? argument))
+                {
                     if (candidateType == typeof(bool) && (value is bool || bool.TryParse(value.ToString(), out _)))
+                    {
+                        return candidateType;
+                    }
+
+                    if (candidateType == typeof(string) && value is string)
                     {
                         return candidateType;
                     }
@@ -761,6 +1032,26 @@ namespace LiveArch.Deployment.Export.CSharp
             }
 
             return typeof(object);
+        }
+
+        private static Type GetCollectionItemRenderType(Type declaredType)
+        {
+            var itemType = GetCollectionItemType(declaredType) ?? typeof(object);
+            var effectiveItemType = Nullable.GetUnderlyingType(itemType) ?? itemType;
+
+            if (ConversionTypeHelpers.IsGenericInputUnion(effectiveItemType) || ConversionTypeHelpers.IsGenericUnion(effectiveItemType))
+            {
+                var stringCandidate = effectiveItemType.GetGenericArguments()
+                    .Select(argument => Nullable.GetUnderlyingType(argument) ?? argument)
+                    .FirstOrDefault(argument => argument == typeof(string));
+
+                if (stringCandidate != null)
+                {
+                    return stringCandidate;
+                }
+            }
+
+            return itemType;
         }
 
         private static bool IsNumeric(object value)
@@ -965,6 +1256,60 @@ namespace LiveArch.Deployment.Export.CSharp
         {
             var inputAttribute = property.GetCustomAttribute<InputAttribute>();
             return inputAttribute == null ? null : (string?)InputAttrNameProp.GetValue(inputAttribute);
+        }
+
+        private static IReadOnlyCollection<(string InputName, PropertyInfo Property)> GetRenderableInputProperties(Type type)
+        {
+            var entries = new List<(string InputName, PropertyInfo Property)>();
+
+            foreach (var property in type.GetProperties(BindingFlags.Instance | BindingFlags.Public))
+            {
+                if (!property.CanRead)
+                {
+                    continue;
+                }
+
+                entries.Add((GetInputName(property) ?? property.Name, property));
+            }
+
+            foreach (var field in type.GetFields(BindingFlags.Instance | BindingFlags.NonPublic))
+            {
+                var inputAttribute = field.GetCustomAttribute<InputAttribute>();
+                if (inputAttribute == null)
+                {
+                    continue;
+                }
+
+                var property = FindPropertyForBackingField(type, field);
+                if (property == null || !property.CanRead)
+                {
+                    continue;
+                }
+
+                var inputName = (string)InputAttrNameProp.GetValue(inputAttribute)!;
+                var existingIndex = entries.FindIndex(entry => entry.Property == property);
+                if (existingIndex >= 0)
+                {
+                    entries[existingIndex] = (inputName, property);
+                    continue;
+                }
+
+                entries.Add((inputName, property));
+            }
+
+            return entries;
+        }
+
+        private static PropertyInfo? FindPropertyForBackingField(Type type, FieldInfo field)
+        {
+            var name = field.Name;
+            if (name.StartsWith('_'))
+            {
+                name = name[1..];
+            }
+
+            name = char.ToUpperInvariant(name[0]) + name[1..];
+            return type.GetProperty(name, BindingFlags.Instance | BindingFlags.Public);
         }
 
         private static string CreateVariableNameCandidate(IObservedResource resource)
@@ -1442,6 +1787,7 @@ namespace LiveArch.Deployment.Export.CSharp
             builder.AppendLine("using System.Collections.Generic;");
             builder.AppendLine("using System.Threading;");
             builder.AppendLine("using System.Threading.Tasks;");
+            builder.AppendLine("using Pulumi;");
             foreach (var namespaceName in model.AdditionalNamespaces)
             {
                 builder.AppendLine($"using {namespaceName};");

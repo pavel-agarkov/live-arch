@@ -1,4 +1,8 @@
-﻿using Pulumi.AzureNative.Authorization;
+﻿using Microsoft.AspNetCore.DataProtection;
+using Pulumi;
+using Pulumi.AzureNative.Authorization;
+using Pulumi.AzureNative.KeyVault;
+using Pulumi.AzureNative.KeyVault.Inputs;
 using Pulumi.AzureNative.ManagedIdentity;
 using Pulumi.AzureNative.Sql;
 using Pulumi.AzureNative.Storage;
@@ -19,9 +23,9 @@ namespace LiveArch.Deployment.TestRunner.Examples
                 //ResourceGroupName = rg.Name,
                 //ServerFarmId = plan.Id,
                 Kind = "app,linux",
-                Identity = new ManagedServiceIdentityArgs
+                Identity = new Pulumi.AzureNative.Web.Inputs.ManagedServiceIdentityArgs
                 {
-                    Type = ManagedServiceIdentityType.UserAssigned,
+                    Type = Pulumi.AzureNative.Web.ManagedServiceIdentityType.UserAssigned,
                     //UserAssignedIdentities
                 },
                 SiteConfig = new SiteConfigArgs
@@ -126,6 +130,24 @@ namespace LiveArch.Deployment.TestRunner.Examples
                 TopicName = sbTopic.Name,
                 NamespaceName = sbNs.Apply(x => x.Name),
                 ResourceGroupName = ""
+            });
+
+
+            var kvAp = new Pulumi.AzureNative.KeyVault.AccessPolicy("kv-access-policy", new Pulumi.AzureNative.KeyVault.AccessPolicyArgs
+            {
+                ResourceGroupName = "",
+                VaultName = "",
+                Policy = new AccessPolicyEntryArgs()
+                {
+                    Permissions = new Pulumi.AzureNative.KeyVault.Inputs.PermissionsArgs
+                    {
+                        Secrets = {
+                            "get",
+                            "list",
+                            "set"
+                        }
+                    }
+                }
             });
 
         }

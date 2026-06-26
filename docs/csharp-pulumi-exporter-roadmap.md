@@ -80,8 +80,9 @@ Update this section after each work session.
 - Transformer/converter built-in classification should be inferred from implementation type namespace, not stored as separate metadata everywhere: if the implementation type namespace starts with `LiveArch.`, treat it as built-in LiveArch behavior for export purposes. The derived classification property name used for transformers is `IsBuiltIn`.
 - Exporter/observer metadata should remain peripheral to the deployment engine: avoid spreading export-only concepts through broad processor method chains, and prefer localized capture near transformer parsing, resource expression recording, and exporter rendering.
 - Exporter-specific rendering for transformers/converters should be designed as a separate extensibility point rather than hard-coded per implementation in the core generator.
+- Built-in transformer rendering has started: direct inline `split` values are rendered from their already-transformed constant collection value, generated deployments include `using Pulumi;` so Pulumi implicit input/union conversions work, and dependency transformer rendering now has localized helpers for built-in transformer chains.
 - Keyed and append input assignments such as `siteConfig.appSettings:WEBSITES_PORT "8080"` and `siteConfig.cors.allowedOrigins+= "... | split ,"` are currently processed at runtime but are not represented/rendered correctly by the exporter; generated code may create the parent object without keyed collection contents.
-- Known gaps remain around converter metadata, executable transformer/converter code generation, keyed/append input collection rendering, real foreach loop generation, generated-code regression tests, docs, and slides.
+- Known gaps remain around converter metadata, full executable transformer/converter code generation, keyed/append input collection rendering, real foreach loop generation, generated-code regression tests, docs, and slides.
 
 ## Completed Work Items
 
@@ -122,6 +123,13 @@ Validation:
 ### 11. Generate built-in transformer equivalents
 
 Goal: render executable C# equivalents for known built-in transformers without referencing `LiveArch.Transformers`.
+
+Progress:
+
+- Direct inline `split` values such as `policy.permissions.secrets "get, list | split ,"` are rendered as executable constant collection values in generated C# instead of comments or empty parent objects.
+- Generated deployment files now include `using Pulumi;` so Pulumi implicit conversions make readable collection literals such as `Secrets = ["get", "list"]` compile for `InputList<Union<string, T>>` targets.
+- The exporter now discovers Pulumi input names from both public properties and private backing fields with `[Input]`, matching runtime binder behavior and enabling nested properties like `PermissionsArgs.Secrets` where the attribute lives on a private field.
+- Dependency transformer rendering has localized built-in-chain helpers for `split`, `format`, `multiply`, `divide`, regex extract, regex clean, and regex split, but generated-project behavioral validation is still needed beyond the current split-focused coverage.
 
 Scope:
 

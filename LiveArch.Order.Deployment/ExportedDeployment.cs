@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using Pulumi;
 using System.Linq;
 
 namespace LiveArch.Order.Deployment;
@@ -72,7 +73,10 @@ public static class ExportedDeployment
             Policy = new global::Pulumi.AzureNative.KeyVault.Inputs.AccessPolicyEntryArgs()
             {
                 ObjectId = orderServiceMi.PrincipalId,
-                Permissions = new global::Pulumi.AzureNative.KeyVault.Inputs.PermissionsArgs(),
+                Permissions = new global::Pulumi.AzureNative.KeyVault.Inputs.PermissionsArgs()
+                {
+                    Secrets = ["get", "list"]
+                },
                 TenantId = vars.TenantId
             },
             ResourceGroupName = orderRg.Apply(value => value.Name),
@@ -129,7 +133,8 @@ public static class ExportedDeployment
         {
             Identity = new global::Pulumi.AzureNative.Web.Inputs.ManagedServiceIdentityArgs()
             {
-                Type = global::Pulumi.AzureNative.Web.ManagedServiceIdentityType.UserAssigned
+                Type = global::Pulumi.AzureNative.Web.ManagedServiceIdentityType.UserAssigned,
+                UserAssignedIdentities = orderServiceMi.Id
             },
             Location = orderRg.Apply(value => value.Location),
             Name = $"{vars.Env}-order-api",
@@ -138,7 +143,7 @@ public static class ExportedDeployment
             SiteConfig = new global::Pulumi.AzureNative.Web.Inputs.SiteConfigArgs()
             {
                 Cors = new global::Pulumi.AzureNative.Web.Inputs.CorsSettingsArgs(),
-                //LinuxFxVersion = ThrowUnsupported<global::Pulumi.Input<global::System.String>>("Cannot render Pulumi wrapper value of runtime type 'Pulumi.Output`1[[System.String, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]' for declared type 'Pulumi.Input`1[[System.String, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'."),
+                LinuxFxVersion = ThrowUnsupported<global::Pulumi.Input<global::System.String>>("Cannot render Pulumi wrapper value of runtime type 'Pulumi.Output`1[[System.String, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]' for declared type 'Pulumi.Input`1[[System.String, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'."),
                 VnetName = virtualNetwork.Apply(value => value.Name)
             }
         }, new global::Pulumi.CustomResourceOptions { DependsOn = { orderServiceMi } });
@@ -158,7 +163,8 @@ public static class ExportedDeployment
         {
             Identity = new global::Pulumi.AzureNative.Web.Inputs.ManagedServiceIdentityArgs()
             {
-                Type = global::Pulumi.AzureNative.Web.ManagedServiceIdentityType.UserAssigned
+                Type = global::Pulumi.AzureNative.Web.ManagedServiceIdentityType.UserAssigned,
+                UserAssignedIdentities = orderServiceMi.Id
             },
             Location = orderRg.Apply(value => value.Location),
             Name = $"{vars.Env}-order-worker",
@@ -166,7 +172,7 @@ public static class ExportedDeployment
             ServerFarmId = prodAppServicePlan.Apply(value => value.Id),
             SiteConfig = new global::Pulumi.AzureNative.Web.Inputs.SiteConfigArgs()
             {
-                //LinuxFxVersion = ThrowUnsupported<global::Pulumi.Input<global::System.String>>("Cannot render Pulumi wrapper value of runtime type 'Pulumi.Output`1[[System.String, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]' for declared type 'Pulumi.Input`1[[System.String, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'."),
+                LinuxFxVersion = ThrowUnsupported<global::Pulumi.Input<global::System.String>>("Cannot render Pulumi wrapper value of runtime type 'Pulumi.Output`1[[System.String, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]' for declared type 'Pulumi.Input`1[[System.String, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]'."),
                 VnetName = virtualNetwork.Apply(value => value.Name)
             }
         }, new global::Pulumi.CustomResourceOptions { DependsOn = { orderDb, orderServiceMi } });
