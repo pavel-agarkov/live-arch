@@ -5,6 +5,7 @@ using Pulumi;
 using Structurizr;
 using System.Collections;
 using System.Globalization;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -58,6 +59,7 @@ namespace LiveArch.Deployment.Export.CSharp
             var exportableResources = observedResources
                 .Where(ShouldExportResource)
                 .ToList();
+            var dependencies = ResolveDependencies(exportableResources, options.AdditionalPackageReferences);
 
             var keyByResource = exportableResources
                 .GroupBy(resource => resource.Resource, ReferenceEqualityComparer.Instance)
@@ -66,17 +68,18 @@ namespace LiveArch.Deployment.Export.CSharp
 
             var variableNameByKey = CreateVariableNames(exportableResources);
 
+            var diagnostics = new List<CSharpExportDiagnostic>();
             var model = new CSharpPulumiProjectModel(
                 deployment,
                 projectName,
                 rootNamespace,
                 variablesModel,
                 NormalizeNamespaces(options.AdditionalNamespaces),
-                ResolvePackageReferences(exportableResources, options.AdditionalPackageReferences),
-                ResolveProjectReferences(exportableResources),
+                dependencies,
+                diagnostics,
                 exportableResources.OfType<CreatedResourceObservation>().Count(),
                 exportableResources.OfType<ReferencedResourceObservation>().Count(),
-                [.. exportableResources.Select((resource, index) => BuildResourceModel(resource, index, keyByResource, variableNameByKey, variablesModel, observedByKey))]);
+                [.. exportableResources.Select((resource, index) => BuildResourceModel(resource, index, keyByResource, variableNameByKey, variablesModel, observedByKey, diagnostics))]);
 
             var testProjectName = string.IsNullOrWhiteSpace(options.TestProjectName)
                 ? projectName + ".Tests"
@@ -85,7 +88,7 @@ namespace LiveArch.Deployment.Export.CSharp
                 ? testProjectName
                 : options.TestRootNamespace.Trim();
             var testProjectModel = options.GenerateTestProject
-                ? new CSharpPulumiTestProjectModel(testProjectName, testRootNamespace)
+                ? new CSharpPulumiTestProjectModel(testProjectName, testRootNamespace, dependencies)
                 : null;
 
             return CSharpPulumiProjectWriter.Export(model, options.OutputDirectory, testProjectModel, options.TestOutputDirectory, options.CleanOutputDirectories);
@@ -97,7 +100,8 @@ namespace LiveArch.Deployment.Export.CSharp
             IReadOnlyDictionary<object, string> keyByResource,
             IReadOnlyDictionary<string, string> variableNameByKey,
             CSharpPulumiVariablesModel? variablesModel,
-            IReadOnlyDictionary<string, IObservedResource> observedByKey)
+            IReadOnlyDictionary<string, IObservedResource> observedByKey,
+            List<CSharpExportDiagnostic> diagnostics)
         {
             var key = CreateResourceKey(resource);
             var dependsOnKeys = resource.DependsOn
@@ -108,9 +112,9 @@ namespace LiveArch.Deployment.Export.CSharp
             var variableName = variableNameByKey[key];
             var creationStatement = resource switch
             {
-                CreatedResourceObservation created => RenderCreatedResource(created, variableName, dependsOnKeys, keyByResource, variableNameByKey, variablesModel, observedByKey),
-                ReferencedResourceObservation referenced => RenderReferencedResource(referenced, variableName, dependsOnKeys, keyByResource, variableNameByKey, variablesModel, observedByKey),
-                _ => throw new NotSupportedException($"Unsupported observed resource type '{resource.GetType().FullName}'.")
+                CreatedResourceObservation created => RenderCreatedResource(created, variableName, dependsOnKeys, keyByResource, variableNameByKey, variablesModel, observedByKey, diagnostics),
+                ReferencedResourceObservation referenced => RenderReferencedResource(referenced, variableName, dependsOnKeys, keyByResource, variableNameByKey, variablesModel, observedByKey, diagnostics),
+                _ => RenderUnsupportedStatement($"Unsupported observed resource type '{resource.GetType().FullName}'.", diagnostics, key)
             };
 
             return new CSharpPulumiResourceModel(
@@ -131,10 +135,11 @@ namespace LiveArch.Deployment.Export.CSharp
             IReadOnlyDictionary<object, string> keyByResource,
             IReadOnlyDictionary<string, string> variableNameByKey,
             CSharpPulumiVariablesModel? variablesModel,
-            IReadOnlyDictionary<string, IObservedResource> observedByKey)
+            IReadOnlyDictionary<string, IObservedResource> observedByKey,
+            List<CSharpExportDiagnostic> diagnostics)
         {
             var optionsCode = RenderCustomResourceOptions(dependsOnKeys, variableNameByKey);
-            var argsCode = RenderTrackedObjectInitializer(GetCreatedArgsType(resource.ResourceType), 2, resource.ExpressionModel, string.Empty, keyByResource, variableNameByKey, variablesModel, observedByKey);
+            var argsCode = RenderTrackedObjectInitializer(GetCreatedArgsType(resource.ResourceType), 2, resource.ExpressionModel, string.Empty, keyByResource, variableNameByKey, variablesModel, observedByKey, diagnostics);
             var resourceTypeName = GetGlobalTypeName(resource.ResourceType);
 
             return $"var {variableName} = new {resourceTypeName}({ToCSharpString(resource.ResourceName)}, {argsCode}, {optionsCode});";
@@ -147,9 +152,10 @@ namespace LiveArch.Deployment.Export.CSharp
             IReadOnlyDictionary<object, string> keyByResource,
             IReadOnlyDictionary<string, string> variableNameByKey,
             CSharpPulumiVariablesModel? variablesModel,
-            IReadOnlyDictionary<string, IObservedResource> observedByKey)
+            IReadOnlyDictionary<string, IObservedResource> observedByKey,
+            List<CSharpExportDiagnostic> diagnostics)
         {
-            var argsCode = RenderTrackedObjectInitializer(resource.InvokeMethod.GetParameters()[0].ParameterType, 2, resource.ExpressionModel, string.Empty, keyByResource, variableNameByKey, variablesModel, observedByKey);
+            var argsCode = RenderTrackedObjectInitializer(resource.InvokeMethod.GetParameters()[0].ParameterType, 2, resource.ExpressionModel, string.Empty, keyByResource, variableNameByKey, variablesModel, observedByKey, diagnostics);
             var optionsCode = RenderInvokeOptions(resource.InvokeMethod, dependsOnKeys, variableNameByKey);
             var declaringTypeName = GetGlobalTypeName(resource.InvokeMethod.DeclaringType!);
             var invocation = optionsCode == null
@@ -190,7 +196,8 @@ namespace LiveArch.Deployment.Export.CSharp
             IReadOnlyDictionary<object, string> keyByResource,
             IReadOnlyDictionary<string, string> variableNameByKey,
             CSharpPulumiVariablesModel? variablesModel,
-            IReadOnlyDictionary<string, IObservedResource> observedByKey)
+            IReadOnlyDictionary<string, IObservedResource> observedByKey,
+            List<CSharpExportDiagnostic> diagnostics)
         {
             var indent = new string(' ', indentLevel * 4);
             var childIndent = new string(' ', (indentLevel + 1) * 4);
@@ -209,12 +216,12 @@ namespace LiveArch.Deployment.Export.CSharp
 
                 if (expressionModel.Assignments.TryGetValue(propertyPath, out var expression))
                 {
-                    propertyValueCode = RenderExpression(expression, property.PropertyType, indentLevel + 1, keyByResource, variableNameByKey, variablesModel, observedByKey);
+                    propertyValueCode = RenderExpression(expression, property.PropertyType, indentLevel + 1, keyByResource, variableNameByKey, variablesModel, observedByKey, diagnostics, expressionModel, propertyPath);
                 }
                 else if (HasNestedAssignments(expressionModel, propertyPath))
                 {
                     var nestedType = GetUnderlyingArgsType(property.PropertyType);
-                    propertyValueCode = RenderTrackedObjectInitializer(nestedType, indentLevel + 1, expressionModel, propertyPath, keyByResource, variableNameByKey, variablesModel, observedByKey);
+                    propertyValueCode = RenderTrackedObjectInitializer(nestedType, indentLevel + 1, expressionModel, propertyPath, keyByResource, variableNameByKey, variablesModel, observedByKey, diagnostics);
                 }
 
                 if (propertyValueCode == null)
@@ -241,6 +248,20 @@ namespace LiveArch.Deployment.Export.CSharp
             IReadOnlyDictionary<string, string> variableNameByKey,
             CSharpPulumiVariablesModel? variablesModel)
         {
+            return RenderValue(value, declaredType, indentLevel, keyByResource, variableNameByKey, variablesModel, null, null, null);
+        }
+
+        private static string RenderValue(
+            object value,
+            Type declaredType,
+            int indentLevel,
+            IReadOnlyDictionary<object, string> keyByResource,
+            IReadOnlyDictionary<string, string> variableNameByKey,
+            CSharpPulumiVariablesModel? variablesModel,
+            List<CSharpExportDiagnostic>? diagnostics,
+            ResourceExpressionModel? expressionModel,
+            string? propertyPath)
+        {
             if (TryRenderVariableSubstitution(value, declaredType, variablesModel, out var variableSubstitution))
             {
                 return variableSubstitution;
@@ -253,7 +274,7 @@ namespace LiveArch.Deployment.Export.CSharp
 
             if (IsPulumiWrapperType(value.GetType()) || IsPulumiWrapperType(declaredType))
             {
-                return "default!";
+                return RenderUnsupportedValue(declaredType, $"Cannot render Pulumi wrapper value of runtime type '{value.GetType().FullName}' for declared type '{declaredType.FullName}'.", diagnostics, expressionModel, propertyPath);
             }
 
             if (value is string text)
@@ -281,7 +302,7 @@ namespace LiveArch.Deployment.Export.CSharp
                 var itemType = GetCollectionItemType(declaredType) ?? typeof(object);
                 var renderedItems = enumerable.Cast<object?>()
                     .Where(item => item != null)
-                    .Select(item => RenderValue(item!, itemType, indentLevel + 1, keyByResource, variableNameByKey, variablesModel))
+                    .Select(item => RenderValue(item!, itemType, indentLevel + 1, keyByResource, variableNameByKey, variablesModel, diagnostics, expressionModel, propertyPath))
                     .ToArray();
 
                 return renderedItems.Length == 0
@@ -291,10 +312,10 @@ namespace LiveArch.Deployment.Export.CSharp
 
             if (CanRenderAsLiteralObjectInitializer(declaredType, value.GetType()))
             {
-                return RenderLiteralObjectInitializer(value, value.GetType(), indentLevel + 1, keyByResource, variableNameByKey, variablesModel);
+                return RenderLiteralObjectInitializer(value, value.GetType(), indentLevel + 1, keyByResource, variableNameByKey, variablesModel, diagnostics, expressionModel, propertyPath);
             }
 
-            return "default!";
+            return RenderUnsupportedValue(declaredType, $"Cannot render value of runtime type '{value.GetType().FullName}' for declared type '{declaredType.FullName}'.", diagnostics, expressionModel, propertyPath);
         }
 
         private static bool TryRenderTypedValue(
@@ -357,7 +378,10 @@ namespace LiveArch.Deployment.Export.CSharp
             int indentLevel,
             IReadOnlyDictionary<object, string> keyByResource,
             IReadOnlyDictionary<string, string> variableNameByKey,
-            CSharpPulumiVariablesModel? variablesModel)
+            CSharpPulumiVariablesModel? variablesModel,
+            List<CSharpExportDiagnostic>? diagnostics,
+            ResourceExpressionModel? expressionModel,
+            string? propertyPath)
         {
             var indent = new string(' ', indentLevel * 4);
             var childIndent = new string(' ', (indentLevel + 1) * 4);
@@ -376,7 +400,7 @@ namespace LiveArch.Deployment.Export.CSharp
                     continue;
                 }
 
-                entries.Add($"{childIndent}{property.Name} = {RenderValue(value, property.PropertyType, indentLevel + 1, keyByResource, variableNameByKey, variablesModel)}");
+                entries.Add($"{childIndent}{property.Name} = {RenderValue(value, property.PropertyType, indentLevel + 1, keyByResource, variableNameByKey, variablesModel, diagnostics, expressionModel, propertyPath)}");
             }
 
             if (entries.Count == 0)
@@ -394,13 +418,16 @@ namespace LiveArch.Deployment.Export.CSharp
             IReadOnlyDictionary<object, string> keyByResource,
             IReadOnlyDictionary<string, string> variableNameByKey,
             CSharpPulumiVariablesModel? variablesModel,
-            IReadOnlyDictionary<string, IObservedResource> observedByKey)
+            IReadOnlyDictionary<string, IObservedResource> observedByKey,
+            List<CSharpExportDiagnostic> diagnostics,
+            ResourceExpressionModel expressionModel,
+            string propertyPath)
         {
             return expression switch
             {
-                DirectValueExpressionModel direct => RenderDirectExpression(direct, declaredType, indentLevel, keyByResource, variableNameByKey, variablesModel),
-                DependencyValueExpressionModel dependency => RenderDependencyExpression(dependency, keyByResource, variableNameByKey, observedByKey),
-                _ => "default!"
+                DirectValueExpressionModel direct => RenderDirectExpression(direct, declaredType, indentLevel, keyByResource, variableNameByKey, variablesModel, diagnostics, expressionModel, propertyPath),
+                DependencyValueExpressionModel dependency => RenderDependencyExpression(dependency, declaredType, keyByResource, variableNameByKey, observedByKey, diagnostics, expressionModel, propertyPath),
+                _ => RenderUnsupportedExpression(declaredType, $"Unsupported expression model '{expression.GetType().FullName}' for '{expressionModel.Node}' property '{propertyPath}'.", diagnostics, expressionModel, propertyPath)
             };
         }
 
@@ -410,11 +437,14 @@ namespace LiveArch.Deployment.Export.CSharp
             int indentLevel,
             IReadOnlyDictionary<object, string> keyByResource,
             IReadOnlyDictionary<string, string> variableNameByKey,
-            CSharpPulumiVariablesModel? variablesModel)
+            CSharpPulumiVariablesModel? variablesModel,
+            List<CSharpExportDiagnostic> diagnostics,
+            ResourceExpressionModel expressionModel,
+            string propertyPath)
         {
             var rendered = expression.Value == null
                 ? "null"
-                : RenderValue(expression.Value, declaredType, indentLevel, keyByResource, variableNameByKey, variablesModel);
+                : RenderValue(expression.Value, declaredType, indentLevel, keyByResource, variableNameByKey, variablesModel, diagnostics, expressionModel, propertyPath);
 
             if (string.IsNullOrWhiteSpace(expression.ConverterName))
             {
@@ -426,9 +456,13 @@ namespace LiveArch.Deployment.Export.CSharp
 
         private static string RenderDependencyExpression(
             DependencyValueExpressionModel expression,
+            Type declaredType,
             IReadOnlyDictionary<object, string> keyByResource,
             IReadOnlyDictionary<string, string> variableNameByKey,
-            IReadOnlyDictionary<string, IObservedResource> observedByKey)
+            IReadOnlyDictionary<string, IObservedResource> observedByKey,
+            List<CSharpExportDiagnostic> diagnostics,
+            ResourceExpressionModel expressionModel,
+            string propertyPath)
         {
             var sourceName = keyByResource.TryGetValue(expression.SourceResource, out var resourceKey) && variableNameByKey.TryGetValue(resourceKey, out var variableName)
                 ? variableName
@@ -465,7 +499,8 @@ namespace LiveArch.Deployment.Export.CSharp
                 return $"{renderedSourceAccess} /*{suffix} */";
             }
 
-            return $"default! /* {sourceName}.{expression.SourcePath}{suffix} */";
+            var message = $"Cannot render dependency source access '{sourceName}.{expression.SourcePath}' for '{expressionModel.Node}' property '{propertyPath}'.{suffix}";
+            return RenderUnsupportedExpression(declaredType, message, diagnostics, expressionModel, propertyPath);
         }
 
         private static bool TryRenderDependencySourceAccess(string sourceExpression, Type sourceType, string sourcePath, IObservedResource? observedSource, out string rendered)
@@ -717,6 +752,52 @@ namespace LiveArch.Deployment.Export.CSharp
             return value is byte or sbyte or short or ushort or int or uint or long or ulong or float or double or decimal;
         }
 
+        private static string RenderUnsupportedStatement(string message, List<CSharpExportDiagnostic> diagnostics, string resourceKey)
+        {
+            diagnostics.Add(new CSharpExportDiagnostic(CSharpExportDiagnosticSeverity.Warning, message, resourceKey, null));
+            return $"throw new global::System.NotSupportedException({ToCSharpString(message)});";
+        }
+
+        private static string RenderUnsupportedExpression(
+            Type declaredType,
+            string message,
+            List<CSharpExportDiagnostic> diagnostics,
+            ResourceExpressionModel expressionModel,
+            string propertyPath)
+        {
+            diagnostics.Add(new CSharpExportDiagnostic(
+                CSharpExportDiagnosticSeverity.Warning,
+                message,
+                $"{expressionModel.ResourceName}:{expressionModel.ScopeId}:{expressionModel.Node}",
+                propertyPath));
+
+            return RenderUnsupportedExpression(declaredType, message);
+        }
+
+        private static string RenderUnsupportedValue(
+            Type declaredType,
+            string message,
+            List<CSharpExportDiagnostic>? diagnostics,
+            ResourceExpressionModel? expressionModel,
+            string? propertyPath)
+        {
+            if (diagnostics != null && expressionModel != null && propertyPath != null)
+            {
+                diagnostics.Add(new CSharpExportDiagnostic(
+                    CSharpExportDiagnosticSeverity.Warning,
+                    message,
+                    $"{expressionModel.ResourceName}:{expressionModel.ScopeId}:{expressionModel.Node}",
+                    propertyPath));
+            }
+
+            return RenderUnsupportedExpression(declaredType, message);
+        }
+
+        private static string RenderUnsupportedExpression(Type declaredType, string message)
+        {
+            return $"ThrowUnsupported<{GetGlobalTypeName(declaredType)}>({ToCSharpString(message)})";
+        }
+
         internal static string GetGlobalTypeName(Type type)
         {
             if (!type.IsGenericType)
@@ -744,13 +825,25 @@ namespace LiveArch.Deployment.Export.CSharp
                 .OrderBy(@namespace => @namespace, StringComparer.Ordinal)];
         }
 
+        private static CSharpPulumiProjectDependencies ResolveDependencies(
+            IReadOnlyCollection<IObservedResource> resources,
+            IReadOnlyCollection<CSharpPackageReference> additionalPackageReferences)
+        {
+            return new CSharpPulumiProjectDependencies(
+                ResolvePackageReferences(resources, additionalPackageReferences),
+                ResolveProjectReferences(resources));
+        }
+
         private static IReadOnlyCollection<CSharpPackageReference> ResolvePackageReferences(
             IReadOnlyCollection<IObservedResource> resources,
             IReadOnlyCollection<CSharpPackageReference> additionalPackageReferences)
         {
             var packageReferences = new Dictionary<string, CSharpPackageReference>(StringComparer.OrdinalIgnoreCase)
             {
-                ["Pulumi"] = new CSharpPackageReference("Pulumi", "3.107.2")
+                ["Microsoft.NET.Test.Sdk"] = CSharpRuntimePackageVersionResolver.Resolve("Microsoft.NET.Test.Sdk", "18.5.1"),
+                ["Pulumi"] = CSharpRuntimePackageVersionResolver.Resolve("Pulumi", "3.107.2"),
+                ["xunit.runner.visualstudio"] = CSharpRuntimePackageVersionResolver.Resolve("xunit.runner.visualstudio", "3.1.5"),
+                ["xunit.v3"] = CSharpRuntimePackageVersionResolver.Resolve("xunit.v3", "3.2.2")
             };
 
             foreach (var resource in resources)
@@ -763,7 +856,7 @@ namespace LiveArch.Deployment.Export.CSharp
 
             foreach (var packageReference in additionalPackageReferences)
             {
-                packageReferences[packageReference.PackageId] = packageReference;
+                packageReferences[packageReference.PackageId] = CSharpRuntimePackageVersionResolver.Resolve(packageReference.PackageId, packageReference.Version);
             }
 
             return [.. packageReferences.Values.OrderBy(reference => reference.PackageId, StringComparer.OrdinalIgnoreCase)];
@@ -1192,10 +1285,10 @@ namespace LiveArch.Deployment.Export.CSharp
             builder.AppendLine("  </PropertyGroup>");
             builder.AppendLine();
 
-            if (model.PackageReferences.Count > 0)
+            if (model.Dependencies.PackageReferences.Count > 0)
             {
                 builder.AppendLine("  <ItemGroup>");
-                foreach (var packageReference in model.PackageReferences)
+                foreach (var packageReference in model.Dependencies.PackageReferences)
                 {
                     builder.AppendLine($"    <PackageReference Include=\"{packageReference.PackageId}\" Version=\"{packageReference.Version}\" />");
                 }
@@ -1203,10 +1296,10 @@ namespace LiveArch.Deployment.Export.CSharp
                 builder.AppendLine();
             }
 
-            if (model.ProjectReferences.Count > 0)
+            if (model.Dependencies.ProjectReferences.Count > 0)
             {
                 builder.AppendLine("  <ItemGroup>");
-                foreach (var projectReference in model.ProjectReferences)
+                foreach (var projectReference in model.Dependencies.ProjectReferences)
                 {
                     builder.AppendLine($"    <ProjectReference Include=\"{projectReference.ProjectPath.Replace("\\", "\\\\")}\" />");
                 }
@@ -1237,18 +1330,25 @@ namespace LiveArch.Deployment.Export.CSharp
             builder.AppendLine("    <IsPackable>false</IsPackable>");
             builder.AppendLine("  </PropertyGroup>");
             builder.AppendLine();
-            builder.AppendLine("  <ItemGroup>");
-            builder.AppendLine("    <PackageReference Include=\"Microsoft.NET.Test.Sdk\" Version=\"18.5.1\" />");
-            builder.AppendLine("    <PackageReference Include=\"xunit.runner.visualstudio\" Version=\"3.1.5\">");
-            builder.AppendLine("      <PrivateAssets>all</PrivateAssets>");
-            builder.AppendLine("      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>");
-            builder.AppendLine("    </PackageReference>");
-            builder.AppendLine("    <PackageReference Include=\"xunit.v3\" Version=\"3.2.2\" />");
-            builder.AppendLine("  </ItemGroup>");
-            builder.AppendLine();
+
+            if (model.Dependencies.PackageReferences.Count > 0)
+            {
+                builder.AppendLine("  <ItemGroup>");
+                foreach (var packageReference in model.Dependencies.PackageReferences)
+                {
+                    builder.AppendLine($"    <PackageReference Include=\"{packageReference.PackageId}\" Version=\"{packageReference.Version}\" />");
+                }
+                builder.AppendLine("  </ItemGroup>");
+                builder.AppendLine();
+            }
+
             builder.AppendLine("  <ItemGroup>");
             builder.AppendLine($"    <ProjectReference Include=\"{resourceProjectReferencePath.Replace("\\", "\\\\")}\" />");
             builder.AppendLine($"    <ProjectReference Include=\"{testingProjectReferencePath.Replace("\\", "\\\\")}\" />");
+            foreach (var projectReference in model.Dependencies.ProjectReferences)
+            {
+                builder.AppendLine($"    <ProjectReference Include=\"{projectReference.ProjectPath.Replace("\\", "\\\\")}\" />");
+            }
             builder.AppendLine("  </ItemGroup>");
             builder.AppendLine();
             builder.AppendLine("</Project>");
@@ -1323,6 +1423,11 @@ namespace LiveArch.Deployment.Export.CSharp
             builder.AppendLine();
             builder.AppendLine("        return Task.CompletedTask;");
             builder.AppendLine("    }");
+            builder.AppendLine();
+            builder.AppendLine("    private static T ThrowUnsupported<T>(string message)");
+            builder.AppendLine("    {");
+            builder.AppendLine("        throw new global::System.NotSupportedException(message);");
+            builder.AppendLine("    }");
             builder.AppendLine("}");
 
             return builder.ToString();
@@ -1393,11 +1498,28 @@ namespace LiveArch.Deployment.Export.CSharp
         string RootNamespace,
         CSharpPulumiVariablesModel? VariablesModel,
         IReadOnlyCollection<string> AdditionalNamespaces,
-        IReadOnlyCollection<CSharpPackageReference> PackageReferences,
-        IReadOnlyCollection<CSharpProjectReference> ProjectReferences,
+        CSharpPulumiProjectDependencies Dependencies,
+        IReadOnlyCollection<CSharpExportDiagnostic> Diagnostics,
         int CreatedCount,
         int ReferencedCount,
         IReadOnlyCollection<CSharpPulumiResourceModel> Resources);
+
+    public sealed record CSharpPulumiProjectDependencies(
+        IReadOnlyCollection<CSharpPackageReference> PackageReferences,
+        IReadOnlyCollection<CSharpProjectReference> ProjectReferences);
+
+    public sealed record CSharpExportDiagnostic(
+        CSharpExportDiagnosticSeverity Severity,
+        string Message,
+        string? ResourceKey,
+        string? PropertyPath);
+
+    public enum CSharpExportDiagnosticSeverity
+    {
+        Info,
+        Warning,
+        Error
+    }
 
     public sealed record CSharpPulumiResourceModel(
         string Key,
@@ -1411,7 +1533,8 @@ namespace LiveArch.Deployment.Export.CSharp
 
     public sealed record CSharpPulumiTestProjectModel(
         string ProjectName,
-        string RootNamespace);
+        string RootNamespace,
+        CSharpPulumiProjectDependencies Dependencies);
 
     public sealed record CSharpPulumiVariablesModel(
         string ClassName,
@@ -1423,9 +1546,46 @@ namespace LiveArch.Deployment.Export.CSharp
         Type VariableType,
         object? Value);
 
-    public sealed record CSharpPackageReference(string PackageId, string Version);
+    public sealed record CSharpPackageReference(string PackageId, string? Version);
 
     public sealed record CSharpProjectReference(string ProjectPath);
+
+    internal static class CSharpRuntimePackageVersionResolver
+    {
+        public static CSharpPackageReference Resolve(string packageId, string? version)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(packageId);
+
+            if (TryResolveLoadedAssemblyVersion(packageId, out var resolvedVersion))
+            {
+                return new CSharpPackageReference(packageId, resolvedVersion);
+            }
+
+            if (string.IsNullOrWhiteSpace(version))
+            {
+                throw new InvalidOperationException($"Package reference '{packageId}' does not specify a version and no loaded assembly version could be resolved.");
+            }
+
+            return new CSharpPackageReference(packageId, version);
+        }
+
+        private static bool TryResolveLoadedAssemblyVersion(string packageId, [NotNullWhen(true)] out string? version)
+        {
+            var assembly = AppDomain.CurrentDomain.GetAssemblies()
+                .FirstOrDefault(assembly => IsPackageAssemblyMatch(assembly, packageId));
+
+            version = assembly?.GetName().Version?.ToString();
+            return !string.IsNullOrWhiteSpace(version);
+        }
+
+        private static bool IsPackageAssemblyMatch(Assembly assembly, string packageId)
+        {
+            var assemblyName = assembly.GetName().Name;
+            return string.Equals(assemblyName, packageId, StringComparison.OrdinalIgnoreCase) ||
+                assembly.GetName().Name?.StartsWith(packageId + ".", StringComparison.OrdinalIgnoreCase) == true ||
+                packageId.StartsWith(assemblyName + ".", StringComparison.OrdinalIgnoreCase);
+        }
+    }
 
     internal static class KnownPackageRegistry
     {
@@ -1433,11 +1593,11 @@ namespace LiveArch.Deployment.Export.CSharp
         [
             new(
                 ["Pulumi.AzureNative."],
-                [new CSharpPackageReference("Pulumi.AzureNative", "3.19.0")],
+                [CSharpRuntimePackageVersionResolver.Resolve("Pulumi.AzureNative", "3.19.0")],
                 []),
             new(
                 ["Pulumi.DockerBuild."],
-                [new CSharpPackageReference("Pulumi.DockerBuild", "0.0.16")],
+                [CSharpRuntimePackageVersionResolver.Resolve("Pulumi.DockerBuild", "0.0.16")],
                 []),
             new(
                 ["LiveArch.Resources.Azure."],

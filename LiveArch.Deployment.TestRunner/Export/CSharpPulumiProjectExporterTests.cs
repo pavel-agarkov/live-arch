@@ -64,7 +64,7 @@ namespace LiveArch.Deployment.TestRunner.Export
             export.Model.Resources.Should().Contain(resource => resource.Kind == "Referenced");
             export.Model.ProjectName.Should().Be("LiveArch.Order.Deployment");
             export.Model.AdditionalNamespaces.Should().Contain("System.Linq");
-            export.Model.PackageReferences.Should().NotContain(reference => reference.PackageId == "Awesome.Custom.Package");
+            export.Model.Dependencies.PackageReferences.Should().NotContain(reference => reference.PackageId == "Awesome.Custom.Package");
             export.Model.Resources.Should().Contain(resource => resource.CreationStatement.Contains("new global::Pulumi.AzureNative.ManagedIdentity.UserAssignedIdentity("));
             export.Model.Resources.Should().Contain(resource => resource.CreationStatement.Contains("global::Pulumi.AzureNative.ServiceBus.GetNamespace.Invoke("));
             export.Model.Resources.Should().Contain(resource => resource.VariableName == "orderServiceMi");
