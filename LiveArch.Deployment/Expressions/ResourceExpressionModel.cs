@@ -23,11 +23,20 @@ namespace LiveArch.Deployment.Expressions
 
     public abstract record ValueExpressionModel;
 
-    public sealed record DirectValueExpressionModel(object? Value, bool ParseInlineTransformers, string? ConverterName) : ValueExpressionModel;
+    public sealed record TransformerExpressionModel(string Name, string Parameter, Type ImplementationType)
+    {
+        public bool IsBuiltIn => ImplementationType.Namespace?.StartsWith("LiveArch.", StringComparison.Ordinal) == true;
+    }
+
+    public sealed record DirectValueExpressionModel(
+        object? Value,
+        bool ParseInlineTransformers,
+        string? ConverterName,
+        IReadOnlyCollection<TransformerExpressionModel> InlineTransformers) : ValueExpressionModel;
 
     public sealed record DependencyValueExpressionModel(
         object SourceResource,
         string SourcePath,
-        IReadOnlyCollection<string> Transformers,
+        IReadOnlyCollection<TransformerExpressionModel> Transformers,
         string? ConverterName) : ValueExpressionModel;
 }

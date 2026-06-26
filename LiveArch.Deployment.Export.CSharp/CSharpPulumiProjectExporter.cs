@@ -448,10 +448,19 @@ namespace LiveArch.Deployment.Export.CSharp
 
             if (string.IsNullOrWhiteSpace(expression.ConverterName))
             {
-                return rendered;
+                return expression.InlineTransformers.Count == 0
+                    ? rendered
+                    : $"{rendered} /* transformers: {RenderTransformers(expression.InlineTransformers)} */";
             }
 
-            return $"{rendered} /* converter: {expression.ConverterName} */";
+            var suffix = new StringBuilder();
+            if (expression.InlineTransformers.Count > 0)
+            {
+                suffix.Append($" transformers: {RenderTransformers(expression.InlineTransformers)}");
+            }
+
+            suffix.Append($" converter: {expression.ConverterName}");
+            return $"{rendered} /*{suffix} */";
         }
 
         private static string RenderDependencyExpression(
@@ -481,7 +490,7 @@ namespace LiveArch.Deployment.Export.CSharp
             var suffix = new StringBuilder();
             if (expression.Transformers.Count > 0)
             {
-                suffix.Append($" | transformers: {string.Join(" -> ", expression.Transformers)}");
+                suffix.Append($" | transformers: {RenderTransformers(expression.Transformers)}");
             }
 
             if (!string.IsNullOrWhiteSpace(expression.ConverterName))
@@ -501,6 +510,13 @@ namespace LiveArch.Deployment.Export.CSharp
 
             var message = $"Cannot render dependency source access '{sourceName}.{expression.SourcePath}' for '{expressionModel.Node}' property '{propertyPath}'.{suffix}";
             return RenderUnsupportedExpression(declaredType, message, diagnostics, expressionModel, propertyPath);
+        }
+
+        private static string RenderTransformers(IReadOnlyCollection<TransformerExpressionModel> transformers)
+        {
+            return string.Join(" -> ", transformers.Select(transformer => string.IsNullOrWhiteSpace(transformer.Parameter)
+                ? transformer.Name
+                : $"{transformer.Name} {transformer.Parameter}"));
         }
 
         private static bool TryRenderDependencySourceAccess(string sourceExpression, Type sourceType, string sourcePath, IObservedResource? observedSource, out string rendered)

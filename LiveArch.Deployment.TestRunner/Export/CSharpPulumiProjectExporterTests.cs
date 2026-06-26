@@ -1,4 +1,6 @@
+using LiveArch.Deployment.Expressions;
 using LiveArch.Deployment.Export.CSharp;
+using LiveArch.Transformers;
 
 namespace LiveArch.Deployment.TestRunner.Export
 {
@@ -31,6 +33,38 @@ namespace LiveArch.Deployment.TestRunner.Export
             observer.CreatedResources.Any(resource => resource.DependsOn.Count > 0).Should().BeTrue();
             observer.CreatedResources.Any(resource => resource.ExpressionModel.Assignments.Count > 0).Should().BeTrue();
             observer.ReferencedResources.Any(resource => resource.ExpressionModel.Assignments.Count > 0).Should().BeTrue();
+        }
+
+        [Fact]
+        public async Task ShouldPreserveTransformerMetadataStructurally()
+        {
+            var observer = new RecordingStructurizrDeploymentObserver();
+
+            await ProcessDeployment("order-env", observer);
+
+            var dependencyTransformers = observer.CreatedResources
+                .SelectMany(resource => resource.ExpressionModel.Assignments.Values)
+                .OfType<DependencyValueExpressionModel>()
+                .SelectMany(expression => expression.Transformers)
+                .ToArray();
+
+            dependencyTransformers.Should().Contain(transformer =>
+                transformer.Name == "split" &&
+                transformer.Parameter == "," &&
+                transformer.ImplementationType == typeof(SplitTransformer) &&
+                transformer.IsBuiltIn);
+        }
+
+        [Fact]
+        public void ShouldDeriveTransformerClassificationFromNamespace()
+        {
+            var builtIn = new TransformerExpressionModel("format", "item-{0}", typeof(FormatTransformer));
+            var custom = new TransformerExpressionModel("custom", string.Empty, typeof(object));
+
+            builtIn.IsBuiltIn.Should().BeTrue();
+            custom.IsBuiltIn.Should().BeFalse();
+            typeof(TransformerExpressionModel).GetProperty("Classification").Should().BeNull();
+            typeof(TransformerExpressionModel).GetProperty("BuiltIn").Should().BeNull();
         }
 
         [Fact]

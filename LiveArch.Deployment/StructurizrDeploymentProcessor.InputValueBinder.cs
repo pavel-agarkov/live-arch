@@ -95,8 +95,8 @@ namespace LiveArch.Deployment
 
                     if (inputProps.TryGetValue(parts[0], out var prop))
                     {
-                        value = owner.PrepareDirectValue(value, context, parseInlineTransformers);
-                        owner.expressionRecorder.RecordDirectAssignment(target, parts[0], value, parseInlineTransformers, converterName);
+                        value = owner.PrepareDirectValue(value, context, parseInlineTransformers, out var inlineTransformers);
+                        owner.expressionRecorder.RecordDirectAssignment(target, parts[0], value, parseInlineTransformers, converterName, inlineTransformers);
                         var converted = owner.ConvertValue(prop.PropertyType, value, context, converterName);
                         prop.SetValue(target, converted);
                     }

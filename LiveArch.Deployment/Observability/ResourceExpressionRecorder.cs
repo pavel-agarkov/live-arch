@@ -1,7 +1,6 @@
 using LiveArch.Deployment.Expressions;
 using Structurizr;
 using System.Reflection;
-using LiveArch.Transformers;
 using Type = System.Type;
 
 namespace LiveArch.Deployment.Observability
@@ -35,17 +34,17 @@ namespace LiveArch.Deployment.Observability
             trackedTargets[nestedTarget] = new TrackedTarget(parent.Model, CombinePath(parent.PathPrefix, pathSegment));
         }
 
-        public void RecordDirectAssignment(object target, string path, object? value, bool parseInlineTransformers, string? converterName)
+        public void RecordDirectAssignment(object target, string path, object? value, bool parseInlineTransformers, string? converterName, IReadOnlyCollection<TransformerExpressionModel>? inlineTransformers = null)
         {
             if (!trackedTargets.TryGetValue(target, out var tracked))
             {
                 return;
             }
 
-            tracked.Model.Assignments[CombinePath(tracked.PathPrefix, path)] = new DirectValueExpressionModel(value, parseInlineTransformers, converterName);
+            tracked.Model.Assignments[CombinePath(tracked.PathPrefix, path)] = new DirectValueExpressionModel(value, parseInlineTransformers, converterName, inlineTransformers ?? []);
         }
 
-        public void RecordDependencyAssignment(object target, string targetPath, object sourceResource, string sourcePath, IReadOnlyCollection<ITransformer> transformers, string? converterName)
+        public void RecordDependencyAssignment(object target, string targetPath, object sourceResource, string sourcePath, IReadOnlyCollection<TransformerExpressionModel> transformers, string? converterName)
         {
             if (!trackedTargets.TryGetValue(target, out var tracked))
             {
@@ -55,7 +54,7 @@ namespace LiveArch.Deployment.Observability
             tracked.Model.Assignments[CombinePath(tracked.PathPrefix, targetPath)] = new DependencyValueExpressionModel(
                 sourceResource,
                 sourcePath,
-                [.. transformers.Select(transformer => transformer.GetType().Name)],
+                transformers,
                 converterName);
         }
 

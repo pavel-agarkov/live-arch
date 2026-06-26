@@ -1,7 +1,13 @@
 using LiveArch.Transformers;
+using Type = System.Type;
 
 namespace LiveArch.Deployment.Transformers
 {
+    public sealed record ParsedTransformer(string Name, string Parameter, ITransformer Transformer)
+    {
+        public Type ImplementationType => Transformer.GetType();
+    }
+
     /// <summary>
     /// Parses inline transformer pipelines and applies transformer chains to values.
     /// </summary>
@@ -16,8 +22,15 @@ namespace LiveArch.Deployment.Transformers
         /// <returns><c>true</c> when the expression starts with a registered transformer; otherwise <c>false</c>.</returns>
         public bool TryParse(string value, out string sourceValue, out IReadOnlyCollection<ITransformer> transformers)
         {
+            var parsed = TryParseWithMetadata(value, out sourceValue, out var parsedTransformers);
+            transformers = [.. parsedTransformers.Select(transformer => transformer.Transformer)];
+            return parsed;
+        }
+
+        public bool TryParseWithMetadata(string value, out string sourceValue, out IReadOnlyCollection<ParsedTransformer> transformers)
+        {
             sourceValue = value;
-            transformers = Array.Empty<ITransformer>();
+            transformers = Array.Empty<ParsedTransformer>();
 
             var parts = value.Split('|', StringSplitOptions.TrimEntries);
             if (parts.Length < 2)
@@ -30,7 +43,7 @@ namespace LiveArch.Deployment.Transformers
                 return false;
             }
 
-            var parsedTransformers = new List<ITransformer> { firstTransformer };
+            var parsedTransformers = new List<ParsedTransformer> { firstTransformer };
             for (var i = 2; i < parts.Length; i++)
             {
                 if (!TryCreateTransformer(parts[i], out var transformer))
@@ -69,7 +82,7 @@ namespace LiveArch.Deployment.Transformers
         /// <param name="value">Single transformer specification.</param>
         /// <param name="transformer">Created transformer when the specification name is registered.</param>
         /// <returns><c>true</c> when the transformer name is known; otherwise <c>false</c>.</returns>
-        private bool TryCreateTransformer(string value, out ITransformer transformer)
+        private bool TryCreateTransformer(string value, out ParsedTransformer transformer)
         {
             var specification = value.Trim();
             if (string.IsNullOrWhiteSpace(specification))
@@ -81,11 +94,13 @@ namespace LiveArch.Deployment.Transformers
             var transformerName = parts[0];
             var transformerParameter = parts.Length > 1 ? parts[1] : string.Empty;
 
-            if (!transformerRegistry.TryCreate(transformerName, transformerParameter, out transformer))
+            if (!transformerRegistry.TryCreate(transformerName, transformerParameter, out var instance))
             {
+                transformer = null!;
                 return false;
             }
 
+            transformer = new ParsedTransformer(transformerName, transformerParameter, instance);
             return true;
         }
     }

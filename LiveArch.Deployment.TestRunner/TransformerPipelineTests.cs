@@ -23,6 +23,23 @@ namespace LiveArch.Deployment.TestRunner
         }
 
         [Fact]
+        public void ShouldParseInlineTransformerMetadata()
+        {
+            var pipeline = CreateServices().BuildServiceProvider().GetRequiredService<TransformerPipeline>();
+            var parsed = pipeline.TryParseWithMetadata("get, list | split , | format item-{0}", out var sourceValue, out var transformers);
+
+            parsed.Should().BeTrue();
+            sourceValue.Should().Be("get, list");
+            transformers.Should().HaveCount(2);
+            transformers.First().Name.Should().Be("split");
+            transformers.First().Parameter.Should().Be(",");
+            transformers.First().ImplementationType.Should().Be(typeof(SplitTransformer));
+            transformers.Last().Name.Should().Be("format");
+            transformers.Last().Parameter.Should().Be("item-{0}");
+            transformers.Last().ImplementationType.Should().Be(typeof(FormatTransformer));
+        }
+
+        [Fact]
         public void ShouldTreatPipeAsPlainValueWhenFirstTransformerIsUnknown()
         {
             var pipeline = CreateServices().BuildServiceProvider().GetRequiredService<TransformerPipeline>();

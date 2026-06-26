@@ -909,15 +909,15 @@ namespace LiveArch.Deployment
         /// </summary>
         /// <param name="properties">Relationship properties that may declare transformer arguments.</param>
         /// <returns>The instantiated transformer pipeline.</returns>
-        private IReadOnlyCollection<ITransformer> GetTransformers(Dictionary<string, string> properties, DeploymentContext context)
+        private IReadOnlyCollection<ParsedTransformer> GetTransformers(Dictionary<string, string> properties, DeploymentContext context)
         {
-            var transformers = new List<ITransformer>();
+            var transformers = new List<ParsedTransformer>();
             foreach (var (name, param) in properties)
             {
                 var paramValue = SubstituteVariables(param, context);
                 if (paramValue is string paramStr && transformerRegistry.TryCreate(name, paramStr, out var transformer))
                 {
-                    transformers.Add(transformer);
+                    transformers.Add(new ParsedTransformer(name, paramStr, transformer));
                 }
             }
             return transformers;
@@ -1334,6 +1334,16 @@ namespace LiveArch.Deployment
             return TransformerPipeline.Apply(value, transformers);
         }
 
+        private static object ApplyTransformers(object value, IReadOnlyCollection<ParsedTransformer> transformers)
+        {
+            return ApplyTransformers(value, [.. transformers.Select(transformer => transformer.Transformer)]);
+        }
+
+        private static IReadOnlyCollection<TransformerExpressionModel> CreateTransformerExpressionModels(IReadOnlyCollection<ParsedTransformer> transformers)
+        {
+            return [.. transformers.Select(transformer => new TransformerExpressionModel(transformer.Name, transformer.Parameter, transformer.ImplementationType))];
+        }
+
         /// <summary>
         /// Resolves inline transformer syntax in direct DSL values before conversion.
         /// </summary>
@@ -1343,16 +1353,23 @@ namespace LiveArch.Deployment
         /// <returns>The substituted and transformed value, or the original value when no inline pipeline is present.</returns>
         private object PrepareDirectValue(object value, DeploymentContext context, bool parseInlineTransformers)
         {
+            return PrepareDirectValue(value, context, parseInlineTransformers, out _);
+        }
+
+        private object PrepareDirectValue(object value, DeploymentContext context, bool parseInlineTransformers, out IReadOnlyCollection<TransformerExpressionModel> inlineTransformers)
+        {
+            inlineTransformers = [];
             if (!parseInlineTransformers || value is not string stringValue)
             {
                 return value;
             }
 
-            if (!transformerPipeline.TryParse(stringValue, out var sourceValue, out var transformers))
+            if (!transformerPipeline.TryParseWithMetadata(stringValue, out var sourceValue, out var transformers))
             {
                 return value;
             }
 
+            inlineTransformers = CreateTransformerExpressionModels(transformers);
             var substituted = SubstituteVariables(sourceValue, context);
             return ApplyTransformers(substituted, transformers);
         }
@@ -1366,7 +1383,7 @@ namespace LiveArch.Deployment
         /// <param name="targetPath">Dot-separated input path on the target.</param>
         /// <param name="context">Current deployment context.</param>
         /// <param name="transformers">Optional transformer pipeline applied before assignment.</param>
-        private void ApplyDependency(object source, object target, string sourcePath, string targetPath, DeploymentContext context, IReadOnlyCollection<ITransformer> transformers, string? converterName = null)
+        private void ApplyDependency(object source, object target, string sourcePath, string targetPath, DeploymentContext context, IReadOnlyCollection<ParsedTransformer> transformers, string? converterName = null)
         {
             var value = outputValueReader.GetValue(source, sourcePath);
             if (value == null)
@@ -1375,7 +1392,7 @@ namespace LiveArch.Deployment
             var inputProps = inputValueBinder.GetInputProps(target.GetType());
             value = ApplyTransformers(value, transformers);
             inputValueBinder.SetProperty(target, targetPath, value, inputProps, context, parseInlineTransformers: false, converterName: converterName);
-            expressionRecorder.RecordDependencyAssignment(target, targetPath, source, sourcePath, transformers, converterName);
+            expressionRecorder.RecordDependencyAssignment(target, targetPath, source, sourcePath, CreateTransformerExpressionModels(transformers), converterName);
         }
 
         /// <summary>

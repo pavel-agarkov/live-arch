@@ -76,7 +76,11 @@ Update this section after each work session.
 - Generated test project dependencies now use the same dependency model/resolution path as generated main project dependencies.
 - Fallback package IDs and versions are centralized in a default package catalog used by baseline and known generated dependencies.
 - Unresolved versionless additional package references now produce actionable export diagnostics and generated project comments while preserving export output.
-- Known gaps remain around transformer metadata, converter metadata, executable transformer/converter code generation, real foreach loop generation, generated-code regression tests, docs, and slides.
+- Transformer metadata is preserved structurally in expression models through `TransformerExpressionModel`, including DSL name, parameter, implementation type, and derived `IsBuiltIn` classification.
+- Transformer/converter built-in classification should be inferred from implementation type namespace, not stored as separate metadata everywhere: if the implementation type namespace starts with `LiveArch.`, treat it as built-in LiveArch behavior for export purposes. The derived classification property name used for transformers is `IsBuiltIn`.
+- Exporter/observer metadata should remain peripheral to the deployment engine: avoid spreading export-only concepts through broad processor method chains, and prefer localized capture near transformer parsing, resource expression recording, and exporter rendering.
+- Exporter-specific rendering for transformers/converters should be designed as a separate extensibility point rather than hard-coded per implementation in the core generator.
+- Known gaps remain around converter metadata, executable transformer/converter code generation, real foreach loop generation, generated-code regression tests, docs, and slides.
 
 ## Completed Work Items
 
@@ -90,25 +94,11 @@ Keep completed items here with their original stable IDs.
 - **06. Use shared dependency resolution for generated test project** — generated test project packages now flow through the same dependency model as main generated project packages.
 - **07. Centralize fallback package defaults** — added a default package catalog for generated package IDs and fallback versions, and routed baseline/known package references through it while keeping loaded-assembly resolution preferred.
 - **08. Improve dependency diagnostics** — added diagnostics and generated `.csproj` comments for unresolved versionless additional package references while preserving export output.
+- **09. Preserve transformer metadata structurally** — added structural transformer metadata with DSL name, parameter, implementation type, and derived `IsBuiltIn`; dependency and inline transformer expression models now preserve this metadata while keeping exporter/observer integration localized and runtime transformer behavior unchanged.
 
 ## Independent Work Items
 
 Each item below should be executable as a separate future session. If an item is completed, move it to **Completed Work Items** and update **Current State Summary**.
-
-### 09. Preserve transformer metadata structurally
-
-Goal: stop storing only transformer type names in expression models.
-
-Scope:
-
-- Extend expression model types to capture transformer DSL name, parameter, implementation type, and known/custom classification.
-- Update transformer pipeline/processor code so relationship and inline transformers record the structural metadata.
-- Preserve enough data for future generated code to render built-in equivalents or custom transformer calls.
-
-Validation:
-
-- Existing transformer behavior remains unchanged at runtime.
-- Export model contains structured transformer metadata for dependency mappings and inline pipelines.
 
 ### 10. Preserve converter metadata structurally
 
@@ -116,14 +106,17 @@ Goal: record converter data well enough to generate executable code later.
 
 Scope:
 
-- Extend expression model types to capture converter name and, where available, converter implementation type or built-in/custom classification.
+- Extend expression model types to capture converter name and, where available, converter implementation type.
+- Do not store a separate built-in/custom classification on every converter metadata record.
+- Infer built-in/custom classification from the converter implementation type namespace when needed: namespaces starting with `LiveArch.` are treated as built-in LiveArch behavior; other namespaces are treated as user/custom behavior.
 - Update direct assignments, relationship mappings, keyed list conversions, and named converter paths to record this data.
 - Preserve current runtime conversion behavior.
+- Treat special converters such as `AzureSqlConnectionStringConverter` as candidates for exporter-renderer extensibility instead of hard-coding all converter-specific rendering into the core generator; see item 33.
 
 Validation:
 
 - Existing converter tests continue passing.
-- Export model can distinguish known built-in converters from user-provided converter names.
+- Export model records enough converter identity data for built-in/custom classification to be derived from implementation type namespace.
 
 ### 11. Generate built-in transformer equivalents
 
@@ -457,3 +450,24 @@ Scope:
 Validation:
 
 - Code remains understandable and future work items do not require large unrelated rewrites.
+
+### 33. Design transformer/converter render extensibility
+
+Goal: make generated-code rendering for transformers and converters extensible without hard-coding every special case into the core C# Pulumi exporter.
+
+Scope:
+
+- Design a small exporter/rendering abstraction for transformer and converter code generation.
+- Keep the abstraction in a safe core or export-specific package that does not force generated Pulumi projects to reference `LiveArch.Deployment`, `LiveArch.Deployment.Azure`, or `LiveArch.Transformers`.
+- Allow LiveArch-owned packages to provide renderer implementations for their own built-in transformers/converters.
+- Use namespace-based classification as the default rule: implementation types whose namespace starts with `LiveArch.` are built-in LiveArch behavior; other namespaces are custom/user behavior.
+- Renderers are discovered by the exporter from DI registration done along side with converters/transformers registrations of that package.
+- Prefer renderer-provider extensions for cases like `AzureSqlConnectionStringConverter`, because it is built-in LiveArch behavior but lives in an Azure-specific package and should not require the core generator to know Azure-specific conversion details.
+- Consider applying the same extension model to transformer rendering so future LiveArch transformer packages can supply generation logic without changing the core exporter.
+- Define fallback behavior when no renderer is available: generate a custom converter/transformer call when possible, or emit a localized escape hatch/diagnostic.
+
+Validation:
+
+- Design supports `AzureSqlConnectionStringConverter` without adding Azure-specific rendering logic directly to the core exporter.
+- Design supports built-in transformer renderers and custom/user transformer calls.
+- Generated code dependency rules remain consistent with the Target Concept.
