@@ -750,7 +750,7 @@ namespace LiveArch.Deployment.Export.CSharp
         {
             var packageReferences = new Dictionary<string, CSharpPackageReference>(StringComparer.OrdinalIgnoreCase)
             {
-                ["Pulumi"] = new CSharpPackageReference("Pulumi", "3.106.2")
+                ["Pulumi"] = new CSharpPackageReference("Pulumi", "3.107.2")
             };
 
             foreach (var resource in resources)
@@ -1433,7 +1433,7 @@ namespace LiveArch.Deployment.Export.CSharp
         [
             new(
                 ["Pulumi.AzureNative."],
-                [new CSharpPackageReference("Pulumi.AzureNative", "3.18.0")],
+                [new CSharpPackageReference("Pulumi.AzureNative", "3.19.0")],
                 []),
             new(
                 ["Pulumi.DockerBuild."],
