@@ -80,7 +80,8 @@ Update this section after each work session.
 - Transformer/converter built-in classification should be inferred from implementation type namespace, not stored as separate metadata everywhere: if the implementation type namespace starts with `LiveArch.`, treat it as built-in LiveArch behavior for export purposes. The derived classification property name used for transformers is `IsBuiltIn`.
 - Exporter/observer metadata should remain peripheral to the deployment engine: avoid spreading export-only concepts through broad processor method chains, and prefer localized capture near transformer parsing, resource expression recording, and exporter rendering.
 - Exporter-specific rendering for transformers/converters should be designed as a separate extensibility point rather than hard-coded per implementation in the core generator.
-- Known gaps remain around converter metadata, executable transformer/converter code generation, real foreach loop generation, generated-code regression tests, docs, and slides.
+- Keyed and append input assignments such as `siteConfig.appSettings:WEBSITES_PORT "8080"` and `siteConfig.cors.allowedOrigins+= "... | split ,"` are currently processed at runtime but are not represented/rendered correctly by the exporter; generated code may create the parent object without keyed collection contents.
+- Known gaps remain around converter metadata, executable transformer/converter code generation, keyed/append input collection rendering, real foreach loop generation, generated-code regression tests, docs, and slides.
 
 ## Completed Work Items
 
@@ -111,7 +112,7 @@ Scope:
 - Infer built-in/custom classification from the converter implementation type namespace when needed: namespaces starting with `LiveArch.` are treated as built-in LiveArch behavior; other namespaces are treated as user/custom behavior.
 - Update direct assignments, relationship mappings, keyed list conversions, and named converter paths to record this data.
 - Preserve current runtime conversion behavior.
-- Treat special converters such as `AzureSqlConnectionStringConverter` as candidates for exporter-renderer extensibility instead of hard-coding all converter-specific rendering into the core generator; see item 33.
+- Treat special converters such as `AzureSqlConnectionStringConverter` as candidates for exporter-renderer extensibility instead of hard-coding all converter-specific rendering into the core generator; see item 34.
 
 Validation:
 
@@ -197,7 +198,33 @@ Validation:
 - Add a custom converter fixture.
 - Generated code compiles when reference exists and fails clearly when it does not.
 
-### 16. Design loop export model
+### 16. Render keyed and append input collection assignments
+
+Goal: generate C# initializers for DSL property paths that target keyed input collections and append operations.
+
+Current problem:
+
+- DSL such as `siteConfig.appSettings:WEBSITES_PORT "8080"` is applied by the runtime processor but is not rendered into generated C# by the exporter.
+- DSL such as `siteConfig.cors.allowedOrigins "... | split ,"` and `siteConfig.cors.allowedOrigins+= "... | split ,"` may currently produce only an empty parent object, for example `Cors = new CorsSettingsArgs()`, until both collection assignment rendering and built-in transformer rendering are implemented.
+- Item 11 should make the `split` transformer executable, but item 11 alone does not cover keyed map/list paths (`:`) or append paths (`+=`).
+
+Scope:
+
+- Extend the export expression model, if needed, to distinguish plain property assignment, keyed collection assignment, and append collection assignment rather than relying only on flattened property path strings.
+- Render `InputMap<T>` keyed entries such as `siteConfig.appSettings:WEBSITES_PORT` into generated C# collection/map initializers or equivalent `Add` calls.
+- Render `InputList<T>` keyed entries and append entries such as `siteConfig.cors.allowedOrigins+=` while preserving existing runtime semantics.
+- Preserve inline transformer metadata on collection assignments so item 11 can render executable transformer equivalents for values such as `"... | split ,"`.
+- Ensure nested object initializers include non-empty collection assignments instead of dropping them when the reflected CLR property path does not exactly match the flattened DSL path.
+- Keep exporter/observer metadata localized; avoid spreading collection-export-only concepts through broad processor method chains unless no maintainable alternative exists.
+
+Validation:
+
+- Generated `LiveArch.Order.Deployment` includes `siteConfig.appSettings:WEBSITES_PORT "8080"` as an executable app setting assignment.
+- Generated `LiveArch.Order.Deployment` includes `siteConfig.cors.allowedOrigins` and `siteConfig.cors.allowedOrigins+=` values once collection rendering is implemented; transformer execution may still depend on item 11 if completed separately.
+- Generated code builds and executes through Pulumi mocks.
+- Regression tests cover keyed `InputMap<T>`, keyed `InputList<T>`, and append `InputList<T>` paths.
+
+### 17. Design loop export model
 
 Goal: represent foreach loops as first-class export model concepts.
 
@@ -211,7 +238,7 @@ Validation:
 
 - Export model can describe current storage account loop scenario without leaving `${saName}` as a raw string literal.
 
-### 17. Extend processor observation for loops
+### 18. Extend processor observation for loops
 
 Goal: expose enough loop/source/scope metadata to the exporter.
 
@@ -226,7 +253,7 @@ Validation:
 - Existing runtime deployment tests pass.
 - Exporter receives loop metadata for `order-env`.
 
-### 18. Add representative loop mock strategy
+### 19. Add representative loop mock strategy
 
 Goal: ensure export-time processing observes resources inside loops.
 
@@ -241,7 +268,7 @@ Validation:
 - Export observes resources inside the storage account loop.
 - Generated code still emits real loops, not hard-coded observed items.
 
-### 19. Render real C# foreach loops
+### 20. Render real C# foreach loops
 
 Goal: generate actual C# loops for Structurizr `foreach:loop` constructs.
 
@@ -256,7 +283,7 @@ Validation:
 - Generated deployment contains real `foreach` logic.
 - Generated code compiles and executes with Pulumi mocks.
 
-### 20. Fix loop variable substitution
+### 21. Fix loop variable substitution
 
 Goal: render loop-scoped variables as generated C# variables.
 
@@ -270,7 +297,7 @@ Validation:
 
 - Generated `LiveArch.Order.Deployment` no longer contains raw `${saName}` for loop-scoped resources.
 
-### 21. Generate loop-scoped names safely
+### 22. Generate loop-scoped names safely
 
 Goal: ensure C# variable names and Pulumi logical names remain stable inside generated loops.
 
@@ -285,7 +312,7 @@ Validation:
 - Generated loop resources have unique, readable identifiers/logical names.
 - Pulumi mocks show expected resource names.
 
-### 22. Preserve incoming loop relationships
+### 23. Preserve incoming loop relationships
 
 Goal: generate relationship resources inside loop bodies when source is outside the loop and destination is inside.
 
@@ -300,7 +327,7 @@ Validation:
 - Storage account role assignment relationships are generated inside the loop.
 - Generated-code tests validate repeated relationship resource behavior.
 
-### 23. Validate loop dependency rendering
+### 24. Validate loop dependency rendering
 
 Goal: make loop-scoped dependency rendering reliable.
 
@@ -315,7 +342,7 @@ Validation:
 - Generated loop code builds.
 - Pulumi mocks verify dependency and relationship behavior.
 
-### 24. Replace string-heavy exporter tests
+### 25. Replace string-heavy exporter tests
 
 Goal: reduce fragile string-fragment assertions in exporter tests.
 
@@ -330,7 +357,7 @@ Validation:
 - Existing exporter tests remain meaningful but less string-fragile.
 - New generated-code tests cover feature behavior.
 
-### 25. Add generated-project regression test project
+### 26. Add generated-project regression test project
 
 Goal: create or extend a dedicated test project that references known generated projects normally.
 
@@ -345,7 +372,7 @@ Validation:
 - Test can fail against stale generated code and pass after regeneration.
 - Test validates mocked resource registrations.
 
-### 26. Add focused generated-code behavior tests
+### 27. Add focused generated-code behavior tests
 
 Goal: cover exporter features by executing generated code.
 
@@ -362,7 +389,7 @@ Validation:
 - Tests run against generated project references.
 - Tests use Pulumi mocks and assert real behavior.
 
-### 27. Add export documentation
+### 28. Add export documentation
 
 Goal: document the supported export surface and design constraints.
 
@@ -379,7 +406,7 @@ Validation:
 
 - Documentation is accurate for current implementation state.
 
-### 28. Link export docs from README
+### 29. Link export docs from README
 
 Goal: make export documentation discoverable.
 
@@ -392,7 +419,7 @@ Validation:
 
 - README links resolve.
 
-### 29. Update Slidev presentation
+### 30. Update Slidev presentation
 
 Goal: add an export section to the presentation under `slides`.
 
@@ -408,7 +435,7 @@ Validation:
 
 - Slidev deck still builds/renders if a build script exists.
 
-### 30. Regenerate sample exported project
+### 31. Regenerate sample exported project
 
 Goal: refresh `LiveArch.Order.Deployment` after exporter improvements.
 
@@ -423,7 +450,7 @@ Validation:
 - Generated project builds.
 - Generated tests pass.
 
-### 31. Validate generated project execution
+### 32. Validate generated project execution
 
 Goal: ensure generated deployment execution works through Pulumi mocks.
 
@@ -436,7 +463,7 @@ Validation:
 
 - Tests pass in the solution test runner.
 
-### 32. Keep exporter design extensible
+### 33. Keep exporter design extensible
 
 Goal: keep internals clean enough for future expansion.
 
@@ -451,7 +478,7 @@ Validation:
 
 - Code remains understandable and future work items do not require large unrelated rewrites.
 
-### 33. Design transformer/converter render extensibility
+### 34. Design transformer/converter render extensibility
 
 Goal: make generated-code rendering for transformers and converters extensible without hard-coding every special case into the core C# Pulumi exporter.
 
