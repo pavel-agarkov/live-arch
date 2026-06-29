@@ -102,23 +102,26 @@ Keep completed items here with their original stable IDs.
 
 Each item below should be executable as a separate future session. If an item is completed, move it to **Completed Work Items** and update **Current State Summary**.
 
-### 10. Preserve converter metadata structurally
+### 10. Preserve converter names and add shared conversion resolver
 
-Goal: record converter data well enough to generate executable code later.
+Goal: let the exporter reproduce runtime converter selection later without duplicating `ConversionEngine` logic.
 
 Scope:
 
-- Extend expression model types to capture converter name and, where available, converter implementation type.
-- Do not store a separate built-in/custom classification on every converter metadata record.
-- Infer built-in/custom classification from the converter implementation type namespace when needed: namespaces starting with `LiveArch.` are treated as built-in LiveArch behavior; other namespaces are treated as user/custom behavior.
-- Update direct assignments, relationship mappings, keyed list conversions, and named converter paths to record this data.
+- Keep recording converter names in expression models for paths that specify or imply a named converter.
+- Do not add broader structural converter metadata such as implementation type or built-in/custom classification to export expression models.
+- Introduce a shared conversion-selection abstraction such as `IConversionResolver` that can select the effective converter for a `(targetType, sourceValue/sourceType, optional converterName)` request using the same DI registrations and ordering rules as `ConversionEngine`.
+- Update `ConversionEngine` to use that shared resolver so runtime behavior and exporter behavior come from one selection path.
+- Allow the exporter to reuse the same DI configuration to resolve named and automatic converters at export time rather than persisting converter implementation metadata into the observed expression model.
+- Update direct assignments, relationship mappings, keyed list conversions, and named converter paths to preserve enough converter-name information for later export rendering, including implicit named-converter cases such as keyed-list default converter behavior.
 - Preserve current runtime conversion behavior.
 - Treat special converters such as `AzureSqlConnectionStringConverter` as candidates for exporter-renderer extensibility instead of hard-coding all converter-specific rendering into the core generator; see item 34.
 
 Validation:
 
 - Existing converter tests continue passing.
-- Export model records enough converter identity data for built-in/custom classification to be derived from implementation type namespace.
+- Shared conversion resolution returns the same effective named/automatic converter choices as runtime execution for representative scenarios, including registration-order-sensitive cases.
+- Export model preserves converter names for paths that rely on named converter behavior.
 
 ### 11. Generate built-in transformer equivalents
 
@@ -166,7 +169,7 @@ Goal: render executable C# equivalents for known built-in converters instead of 
 
 Scope:
 
-- Identify built-in converter names and current behaviors used by deployment/export tests.
+- Use the shared conversion resolver from item 10 to identify the effective built-in converter behavior selected for representative deployment/export scenarios.
 - Generate inline code or safe helper calls for known built-ins.
 - Preserve conversion semantics for direct values, dependency values, keyed list values, maps, Pulumi inputs/outputs, and simple scalar conversions.
 
