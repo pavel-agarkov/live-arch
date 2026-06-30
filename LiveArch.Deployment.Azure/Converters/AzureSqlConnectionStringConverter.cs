@@ -10,16 +10,16 @@ namespace LiveArch.Deployment.Azure.Converters
     {
         public string Name => AzureKnownConverterNames.AzureSqlConnectionString;
 
-        public bool CanConvert(ConversionRequest request)
+        public bool CanConvert(IConversionRequest request)
         {
             return !ConversionTypeHelpers.IsOutput(request.SourceType) && request.TargetType == typeof(ConnStringInfoArgs);
         }
 
-        public object Convert(ConversionRequest request, IConversionEngine engine)
+        public object Convert(ConversionRequest request)
         {
             return new ConnStringInfoArgs
             {
-                ConnectionString = (Input<string>)engine.ConvertValue(typeof(Input<string>), request.SourceValue),
+                ConnectionString = request.SourceValue as Input<string> ?? (Input<string>)request.SourceValue.ToString()!,
                 Type = ConnectionStringType.SQLAzure,
             };
         }

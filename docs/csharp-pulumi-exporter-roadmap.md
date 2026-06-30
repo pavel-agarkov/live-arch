@@ -82,6 +82,7 @@ Update this section after each work session.
 - Exporter-specific rendering for transformers/converters should be designed as a separate extensibility point rather than hard-coded per implementation in the core generator.
 - Built-in transformer rendering has started: direct inline `split` values are rendered from their already-transformed constant collection value, generated deployments include `using Pulumi;` so Pulumi implicit input/union conversions work, and dependency transformer rendering now has localized helpers for built-in transformer chains.
 - Keyed and append input assignments such as `siteConfig.appSettings:WEBSITES_PORT "8080"` and `siteConfig.cors.allowedOrigins+= "... | split ,"` are currently processed at runtime but are not represented/rendered correctly by the exporter; generated code may create the parent object without keyed collection contents.
+- Conversion architecture now uses explicit plan-based execution: `ConversionResolver` emits structural `ConversionPlan` with explicit `ConversionStep` records, and `ConversionPlanExecutor` executes plans without recursive callbacks into `ConversionEngine`. Union handling was simplified to explicit string+enum-like cases (`StringEnumUnionConversionStep`, `StringEnumInputUnionConversionStep`). `ITypedValueConverter` was removed; only `INamedValueConverter` remains for DSL-selected converters. Built-in conversions (assignable, primitive, Pulumi enum, input, input list, immutable array/dictionary, implicit operator, output projection) are handled structurally through dedicated step types. This provides the exporter with inspectable conversion plans for later code generation while keeping runtime conversion behavior self-contained.
 - Known gaps remain around converter metadata, full executable transformer/converter code generation, keyed/append input collection rendering, real foreach loop generation, generated-code regression tests, docs, and slides.
 
 ## Completed Work Items
@@ -97,31 +98,13 @@ Keep completed items here with their original stable IDs.
 - **07. Centralize fallback package defaults** — added a default package catalog for generated package IDs and fallback versions, and routed baseline/known package references through it while keeping loaded-assembly resolution preferred.
 - **08. Improve dependency diagnostics** — added diagnostics and generated `.csproj` comments for unresolved versionless additional package references while preserving export output.
 - **09. Preserve transformer metadata structurally** — added structural transformer metadata with DSL name, parameter, implementation type, and derived `IsBuiltIn`; dependency and inline transformer expression models now preserve this metadata while keeping exporter/observer integration localized and runtime transformer behavior unchanged.
+- **10. Finalize self-contained plan execution** — refactored conversion architecture to use explicit plan-based execution: `ConversionResolver` emits `ConversionPlan` with structural `ConversionStep` records; `ConversionPlanExecutor` executes plans without recursive callbacks; union handling simplified to explicit string+enum steps; `ITypedValueConverter` removed; only `INamedValueConverter` remains. Built-in conversions are handled through dedicated step types, providing inspectable plans for exporter code generation.
 
 ## Independent Work Items
 
 Each item below should be executable as a separate future session. If an item is completed, move it to **Completed Work Items** and update **Current State Summary**.
 
-### 10. Preserve converter names and add shared conversion resolver
 
-Goal: let the exporter reproduce runtime converter selection later without duplicating `ConversionEngine` logic.
-
-Scope:
-
-- Keep recording converter names in expression models for paths that specify or imply a named converter.
-- Do not add broader structural converter metadata such as implementation type or built-in/custom classification to export expression models.
-- Introduce a shared conversion-selection abstraction such as `IConversionResolver` that can select the effective converter for a `(targetType, sourceValue/sourceType, optional converterName)` request using the same DI registrations and ordering rules as `ConversionEngine`.
-- Update `ConversionEngine` to use that shared resolver so runtime behavior and exporter behavior come from one selection path.
-- Allow the exporter to reuse the same DI configuration to resolve named and automatic converters at export time rather than persisting converter implementation metadata into the observed expression model.
-- Update direct assignments, relationship mappings, keyed list conversions, and named converter paths to preserve enough converter-name information for later export rendering, including implicit named-converter cases such as keyed-list default converter behavior.
-- Preserve current runtime conversion behavior.
-- Treat special converters such as `AzureSqlConnectionStringConverter` as candidates for exporter-renderer extensibility instead of hard-coding all converter-specific rendering into the core generator; see item 34.
-
-Validation:
-
-- Existing converter tests continue passing.
-- Shared conversion resolution returns the same effective named/automatic converter choices as runtime execution for representative scenarios, including registration-order-sensitive cases.
-- Export model preserves converter names for paths that rely on named converter behavior.
 
 ### 11. Generate built-in transformer equivalents
 

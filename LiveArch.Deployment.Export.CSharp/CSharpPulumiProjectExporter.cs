@@ -208,9 +208,12 @@ namespace LiveArch.Deployment.Export.CSharp
                 var propertyPath = CombinePath(currentPath, inputName);
                 string? propertyValueCode = null;
 
-                if (expressionModel.Assignments.TryGetValue(propertyPath, out var expression))
+                var assignment = expressionModel.Assignments
+                    .FirstOrDefault(a => a.Target is PropertyAssignmentTargetModel p && p.Path.Equals(propertyPath, StringComparison.OrdinalIgnoreCase));
+
+                if (assignment != null)
                 {
-                    propertyValueCode = RenderExpression(expression, property.PropertyType, indentLevel + 1, keyByResource, variableNameByKey, variablesModel, observedByKey, diagnostics, expressionModel, propertyPath);
+                    propertyValueCode = RenderExpression(assignment.Value, property.PropertyType, indentLevel + 1, keyByResource, variableNameByKey, variablesModel, observedByKey, diagnostics, expressionModel, propertyPath);
                 }
                 else if (HasNestedAssignments(expressionModel, propertyPath))
                 {
@@ -994,7 +997,9 @@ namespace LiveArch.Deployment.Export.CSharp
         private static bool HasNestedAssignments(ResourceExpressionModel expressionModel, string propertyPath)
         {
             var prefix = propertyPath + ".";
-            return expressionModel.Assignments.Keys.Any(key => key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+            return expressionModel.Assignments.Any(a =>
+                a.Target is PropertyAssignmentTargetModel p &&
+                p.Path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
         }
 
         private static Type GetUnderlyingArgsType(Type type)

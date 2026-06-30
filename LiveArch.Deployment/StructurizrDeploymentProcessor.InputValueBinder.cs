@@ -177,6 +177,7 @@ namespace LiveArch.Deployment
                 var addRangeMethod = listType.GetMethod("AddRange");
                 var inputListType = typeof(InputList<>).MakeGenericType(itemType);
                 value = owner.PrepareDirectValue(value, context, parseInlineTransformers);
+                owner.expressionRecorder.RecordAppendCollectionAssignment(target, listProp.Name, value, parseInlineTransformers, converterName);
                 var inputList = owner.ConvertValue(inputListType, value, context, converterName);
                 addRangeMethod!.Invoke(list, [inputList]);
             }
@@ -236,8 +237,12 @@ namespace LiveArch.Deployment
                 var convertedName = owner.ConvertValue(nameProp.PropertyType, key, context);
 
                 value = owner.PrepareDirectValue(value, context, parseInlineTransformers);
-                var effectiveConverterName = converterName ?? KnownNamedValueConverters.DefaultKeyedListValue;
-                var item = owner.ConvertValue(itemType, value, context, effectiveConverterName);
+
+                var item = string.IsNullOrWhiteSpace(converterName)
+                    ? owner.ConvertKeyedListItem(itemType, value, context)
+                    : owner.ConvertValue(itemType, value, context, converterName);
+
+                owner.expressionRecorder.RecordKeyedCollectionAssignment(target, listProp.Name, key, value, parseInlineTransformers, converterName);
 
                 if (ConversionTypeHelpers.IsOutput(item.GetType()))
                 {
@@ -294,6 +299,7 @@ namespace LiveArch.Deployment
 
                 var inputValueType = typeof(Input<>).MakeGenericType(valueType);
                 value = owner.PrepareDirectValue(value, context, parseInlineTransformers);
+                owner.expressionRecorder.RecordKeyedCollectionAssignment(target, mapProp.Name, key, value, parseInlineTransformers, converterName);
                 var convertedValue = owner.ConvertValue(inputValueType, value, context, converterName);
                 addMethod.Invoke(map, [key, convertedValue]);
             }

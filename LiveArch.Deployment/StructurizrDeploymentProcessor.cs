@@ -107,6 +107,7 @@ namespace LiveArch.Deployment
         private readonly ResourceHierarchyRegistry hierarchyRegistry;
         private readonly ResourceTypesRegistry resourceTypesRegistry;
         private readonly DockerImageReferenceConfigurator dockerImageReferenceConfigurator;
+        private readonly IConversionResolver conversionResolver;
         private readonly IConversionEngine conversionEngine;
         private DeploymentView deploymentView = null!;
         private DeploymentContext rootContext = null!;
@@ -151,6 +152,7 @@ namespace LiveArch.Deployment
             IResourceHierarchyBuilder resourceHierarchyBuilder,
             ResourceTypesRegistry resourceTypesRegistry,
             DockerImageReferenceConfigurator dockerImageReferenceConfigurator,
+            IConversionResolver conversionResolver,
             IConversionEngine conversionEngine,
             ITransformerRegistry transformerRegistry,
             IStructurizrDeploymentObserver observer)
@@ -161,6 +163,7 @@ namespace LiveArch.Deployment
             this.hierarchyRegistry = resourceHierarchyBuilder.Registry;
             this.resourceTypesRegistry = resourceTypesRegistry;
             this.dockerImageReferenceConfigurator = dockerImageReferenceConfigurator;
+            this.conversionResolver = conversionResolver;
             this.conversionEngine = conversionEngine;
             this.transformerRegistry = transformerRegistry;
             this.transformerPipeline = new TransformerPipeline(this.transformerRegistry);
@@ -1129,7 +1132,7 @@ namespace LiveArch.Deployment
                         var sourcePath = PropagationExpressionHelper.GetSourcePath(rule.ParentOutputProperty);
                         if (!string.IsNullOrWhiteSpace(sourcePath))
                         {
-                            expressionRecorder.RecordDependencyAssignment(param, targetProp, resource, sourcePath, [], null);
+                            RecordDependencyAssignment(param, targetProp, resource, sourcePath, [], null);
                         }
                     }
                 }
@@ -1150,7 +1153,7 @@ namespace LiveArch.Deployment
                             var sourcePath = PropagationExpressionHelper.GetSourcePath(rule.ParentOutputProperty);
                             if (!string.IsNullOrWhiteSpace(sourcePath))
                             {
-                                expressionRecorder.RecordDependencyAssignment(param, targetProp, resource, sourcePath, [], null);
+                                RecordDependencyAssignment(param, targetProp, resource, sourcePath, [], null);
                             }
                         }
                     }
@@ -1392,7 +1395,23 @@ namespace LiveArch.Deployment
             var inputProps = inputValueBinder.GetInputProps(target.GetType());
             value = ApplyTransformers(value, transformers);
             inputValueBinder.SetProperty(target, targetPath, value, inputProps, context, parseInlineTransformers: false, converterName: converterName);
-            expressionRecorder.RecordDependencyAssignment(target, targetPath, source, sourcePath, CreateTransformerExpressionModels(transformers), converterName);
+            RecordDependencyAssignment(target, targetPath, source, sourcePath, CreateTransformerExpressionModels(transformers), converterName);
+        }
+
+        private void RecordDependencyAssignment(object target, string targetPath, object source, string sourcePath, IReadOnlyCollection<TransformerExpressionModel> transformers, string? converterName)
+        {
+            var parts = targetPath.Split('.', 2);
+            if (parts.Length == 1 && parts[0].Contains(':', StringComparison.Ordinal))
+            {
+                var keyedParts = parts[0].Split(':', 2);
+                if (keyedParts.Length == 2)
+                {
+                    expressionRecorder.RecordKeyedCollectionDependencyAssignment(target, keyedParts[0], keyedParts[1], source, sourcePath, transformers, converterName);
+                    return;
+                }
+            }
+
+            expressionRecorder.RecordDependencyAssignment(target, targetPath, source, sourcePath, transformers, converterName);
         }
 
         /// <summary>
@@ -1413,6 +1432,30 @@ namespace LiveArch.Deployment
             }
 
             return conversionEngine.ConvertValue(targetType, sourceValue, converterName);
+        }
+
+        private object ConvertValue(ConversionPlan plan, Type targetType, object sourceValue, DeploymentContext context)
+        {
+            ArgumentNullException.ThrowIfNull(plan);
+
+            if (sourceValue is string stringValue)
+            {
+                sourceValue = SubstituteVariables(stringValue, context);
+            }
+
+            return conversionEngine.ConvertValue(plan, targetType, sourceValue);
+        }
+
+        private object ConvertKeyedListItem(Type itemType, object sourceValue, DeploymentContext context)
+        {
+            if (sourceValue is string stringValue)
+            {
+                sourceValue = SubstituteVariables(stringValue, context);
+            }
+
+            var plan = conversionResolver.CreateKeyedListItemPlan(itemType, sourceValue.GetType());
+
+            return conversionEngine.ConvertValue(plan, itemType, sourceValue);
         }
     }
 }

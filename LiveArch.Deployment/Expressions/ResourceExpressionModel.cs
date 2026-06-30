@@ -6,7 +6,7 @@ namespace LiveArch.Deployment.Expressions
 {
     public abstract record ResourceExpressionModel(ModelItem Node, int ScopeId, string ResourceName)
     {
-        public Dictionary<string, ValueExpressionModel> Assignments { get; } = [];
+        public List<AssignmentExpressionModel> Assignments { get; } = [];
     }
 
     public sealed record CreatedResourceExpressionModel(
@@ -20,6 +20,20 @@ namespace LiveArch.Deployment.Expressions
         int ScopeId,
         string ResourceName,
         MethodInfo InvokeMethod) : ResourceExpressionModel(Node, ScopeId, ResourceName);
+
+    public sealed record AssignmentExpressionModel(
+        AssignmentTargetModel Target,
+        ValueExpressionModel Value);
+
+    public abstract record AssignmentTargetModel;
+
+    public sealed record PropertyAssignmentTargetModel(string Path) : AssignmentTargetModel;
+
+    public sealed record KeyedCollectionAssignmentTargetModel(
+        string CollectionPath,
+        string Key) : AssignmentTargetModel;
+
+    public sealed record AppendCollectionAssignmentTargetModel(string CollectionPath) : AssignmentTargetModel;
 
     public abstract record ValueExpressionModel;
 

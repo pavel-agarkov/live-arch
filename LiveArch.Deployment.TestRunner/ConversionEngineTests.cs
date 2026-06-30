@@ -1,3 +1,4 @@
+using FluentAssertions;
 using LiveArch.Deployment.Azure.Converters;
 using LiveArch.Deployment.Converters;
 using Microsoft.Extensions.DependencyInjection;
@@ -184,9 +185,11 @@ namespace LiveArch.Deployment.TestRunner
         [Fact]
         public void ShouldUseNamedValuePropertyConverter()
         {
-            var engine = CreateEngine();
+            var (resolver, engine) = CreateResolverAndEngine();
 
-            var result = engine.ConvertValue(typeof(NamedValueArgs), "hello", KnownNamedValueConverters.DefaultKeyedListValue);
+            var plan = resolver.CreateKeyedListItemPlan(typeof(NamedValueArgs), typeof(string));
+
+            var result = engine.ConvertValue(plan, typeof(NamedValueArgs), "hello");
 
             result.Should().BeOfType<NamedValueArgs>();
             var typed = (NamedValueArgs)result;
@@ -197,9 +200,11 @@ namespace LiveArch.Deployment.TestRunner
         [Fact]
         public async Task ShouldPopulateNamedValuePropertyConverterPayload()
         {
-            var engine = CreateEngine();
+            var (resolver, engine) = CreateResolverAndEngine();
 
-            var result = (NamedValueArgs)engine.ConvertValue(typeof(NamedValueArgs), "hello", KnownNamedValueConverters.DefaultKeyedListValue);
+            var plan = resolver.CreateKeyedListItemPlan(typeof(NamedValueArgs), typeof(string));
+
+            var result = (NamedValueArgs)engine.ConvertValue(plan, typeof(NamedValueArgs), "hello");
 
             var resolved = await ResolveInputAsync(result.Value!);
             resolved.Should().Be("hello");
@@ -221,18 +226,78 @@ namespace LiveArch.Deployment.TestRunner
         }
 
         [Fact]
-        public async Task ShouldRespectTypedConverterRegistrationOrder()
+        public void ResolverShouldSelectNamedConverterCaseInsensitively()
         {
             var services = new ServiceCollection();
-            services.AddTypedValueConverter<OverrideStringInputConverter>();
             services.AddDefaultValueConverters();
             services.AddAzureValueConverters();
-            var engine = services.BuildServiceProvider().GetRequiredService<IConversionEngine>();
+            var resolver = services.BuildServiceProvider().GetRequiredService<IConversionResolver>();
 
-            var result = engine.ConvertValue(typeof(Input<string>), "original");
+            var plan = resolver.Resolve(new ConversionRequest(typeof(ConnStringInfoArgs), "Server=tcp:test.database.windows.net;Initial Catalog=db;"), "AZURE-SQL-CONNECTION-STRING");
 
-            var resolved = await ResolveInputAsync((Input<string>)result);
-            resolved.Should().Be("overridden");
+            plan.Should().NotBeNull();
+            plan!.RootStep.Should().Be(new NamedConverterStep(typeof(AzureSqlConnectionStringConverter), typeof(ConnStringInfoArgs)));
+        }
+
+        [Fact]
+        public void ResolverShouldReturnUnresolvedForMissingNamedConverter()
+        {
+            var resolver = CreateResolver();
+
+            var plan = resolver.Resolve(new ConversionRequest(typeof(string), "value"), "missing-converter");
+
+            plan.Should().BeNull();
+        }
+
+        [Fact]
+        public void ResolverShouldReturnUnresolvedWhenAutomaticConverterIsMissing()
+        {
+            var resolver = CreateResolver();
+
+            var plan = resolver.Resolve(new ConversionRequest(typeof(DateTime), "2025-01-01"));
+
+            plan.Should().BeNull();
+        }
+
+        [Fact]
+        public void ResolverShouldPlanBuiltInInputConversionStructurally()
+        {
+            var resolver = CreateResolver();
+
+            var plan = resolver.Resolve(new ConversionRequest(typeof(Input<ManagedServiceIdentityType>), "UserAssigned"));
+
+            plan.Should().NotBeNull();
+            plan!.RootStep.Should().BeOfType<InputConversionStep>();
+            var inputStep = (InputConversionStep)plan.RootStep;
+            inputStep.InnerType.Should().Be(typeof(ManagedServiceIdentityType));
+            inputStep.InnerStep.Should().BeOfType<PulumiEnumConversionStep>();
+        }
+
+        [Fact]
+        public void ResolverShouldPlanNamedOutputProjectionStructurally()
+        {
+            var resolver = CreateResolver();
+            var source = Output.Create("Server=tcp:test.database.windows.net;Initial Catalog=db;");
+
+            var plan = resolver.Resolve(new ConversionRequest(typeof(ConnStringInfoArgs), source), AzureKnownConverterNames.AzureSqlConnectionString);
+
+            plan.Should().NotBeNull();
+            plan!.RootStep.Should().BeOfType<ProjectedOutputConversionStep>();
+            var projected = (ProjectedOutputConversionStep)plan.RootStep;
+            projected.ProjectedTargetType.Should().Be(typeof(ConnStringInfoArgs));
+            projected.InnerStep.Should().Be(new NamedConverterStep(typeof(AzureSqlConnectionStringConverter), typeof(ConnStringInfoArgs)));
+        }
+
+        [Fact]
+        public void ResolverShouldThrowForDuplicateNamedConverterRegistrations()
+        {
+            var services = new ServiceCollection();
+            services.AddNamedValueConverter<DuplicateNamedValueConverterA>();
+            services.AddNamedValueConverter<DuplicateNamedValueConverterB>();
+
+            var act = () => services.BuildServiceProvider().GetRequiredService<IConversionResolver>();
+
+            act.Should().Throw<InvalidOperationException>();
         }
 
         [Fact]
@@ -271,10 +336,21 @@ namespace LiveArch.Deployment.TestRunner
 
         private static IConversionEngine CreateEngine()
         {
+            return CreateResolverAndEngine().engine;
+        }
+
+        private static IConversionResolver CreateResolver()
+        {
+            return CreateResolverAndEngine().resolver;
+        }
+
+        private static (IConversionResolver resolver, IConversionEngine engine) CreateResolverAndEngine()
+        {
             var services = new ServiceCollection();
             services.AddDefaultValueConverters();
             services.AddAzureValueConverters();
-            return services.BuildServiceProvider().GetRequiredService<IConversionEngine>();
+            var provider = services.BuildServiceProvider();
+            return (provider.GetRequiredService<IConversionResolver>(), provider.GetRequiredService<IConversionEngine>());
         }
 
         private static async Task<T> ResolveInputAsync<T>(Input<T> input)
@@ -318,16 +394,33 @@ namespace LiveArch.Deployment.TestRunner
             public Input<string>? Value { get; set; }
         }
 
-        private sealed class OverrideStringInputConverter : ITypedValueConverter
+        private sealed class DuplicateNamedValueConverterA : INamedValueConverter
         {
-            public bool CanConvert(ConversionRequest request)
+            public string Name => "duplicate-named";
+
+            public bool CanConvert(IConversionRequest request)
             {
-                return request.SourceType == typeof(string) && request.TargetType == typeof(Input<string>);
+                return false;
             }
 
-            public object Convert(ConversionRequest request, IConversionEngine engine)
+            public object Convert(ConversionRequest request)
             {
-                return (Input<string>)"overridden";
+                throw new NotSupportedException();
+            }
+        }
+
+        private sealed class DuplicateNamedValueConverterB : INamedValueConverter
+        {
+            public string Name => "DUPLICATE-NAMED";
+
+            public bool CanConvert(IConversionRequest request)
+            {
+                return false;
+            }
+
+            public object Convert(ConversionRequest request)
+            {
+                throw new NotSupportedException();
             }
         }
     }

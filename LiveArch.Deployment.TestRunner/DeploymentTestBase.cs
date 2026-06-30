@@ -35,6 +35,7 @@ namespace LiveArch.Deployment.TestRunner
         protected readonly ResourceTypesRegistry resourceTypesRegistry;
         protected readonly DockerImageReferenceConfigurator dockerImageConfig;
         protected readonly ResourceHierarchyRegistry hierarchyRegistry;
+        protected readonly IConversionResolver conversionResolver;
         protected readonly IConversionEngine conversionEngine;
         protected readonly ITransformerRegistry transformerRegistry;
 
@@ -57,6 +58,7 @@ namespace LiveArch.Deployment.TestRunner
             services.AddDefaultValueConverters();
             services.AddAzureValueConverters();
             var serviceProvider = services.BuildServiceProvider();
+            conversionResolver = serviceProvider.GetRequiredService<IConversionResolver>();
             conversionEngine = serviceProvider.GetRequiredService<IConversionEngine>();
             transformerRegistry = serviceProvider.GetRequiredService<ITransformerRegistry>();
         }
@@ -69,6 +71,7 @@ namespace LiveArch.Deployment.TestRunner
                 new ResourceHierarchyBuilder([new AzureResourceHierarchy()], resourceTypesRegistry),
                 resourceTypesRegistry,
                 dockerImageConfig,
+                conversionResolver,
                 conversionEngine,
                 transformerRegistry,
                 observer ?? new NoOpStructurizrDeploymentObserver());

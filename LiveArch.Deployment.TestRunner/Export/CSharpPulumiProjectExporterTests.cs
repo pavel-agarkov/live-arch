@@ -43,7 +43,8 @@ namespace LiveArch.Deployment.TestRunner.Export
             await ProcessDeployment("order-env", observer);
 
             var dependencyTransformers = observer.CreatedResources
-                .SelectMany(resource => resource.ExpressionModel.Assignments.Values)
+                .SelectMany(resource => resource.ExpressionModel.Assignments)
+                .Select(assignment => assignment.Value)
                 .OfType<DependencyValueExpressionModel>()
                 .SelectMany(expression => expression.Transformers)
                 .ToArray();
@@ -90,15 +91,22 @@ namespace LiveArch.Deployment.TestRunner.Export
 
             kvAccessPolicy.Should().NotBeNull();
 
-            var allAssignments = string.Join(", ", kvAccessPolicy!.ExpressionModel.Assignments.Keys);
+            var allAssignments = string.Join(", ", kvAccessPolicy!.ExpressionModel.Assignments
+                .Select(a => a.Target switch
+                {
+                    PropertyAssignmentTargetModel p => p.Path,
+                    KeyedCollectionAssignmentTargetModel k => $"{k.CollectionPath}:{k.Key}",
+                    AppendCollectionAssignmentTargetModel app => $"{app.CollectionPath}+=",
+                    _ => "<unknown>"
+                }));
 
             var secretsAssignment = kvAccessPolicy!.ExpressionModel.Assignments
-                .FirstOrDefault(a => a.Key.Contains("secrets", StringComparison.OrdinalIgnoreCase));
+                .FirstOrDefault(a => a.Target is PropertyAssignmentTargetModel p && p.Path.Contains("secrets", StringComparison.OrdinalIgnoreCase));
 
             secretsAssignment.Should().NotBeNull($"Expected to find 'secrets' assignment. All assignments: {allAssignments}");
-            secretsAssignment.Value.Should().BeOfType<DirectValueExpressionModel>();
+            secretsAssignment!.Value.Should().BeOfType<DirectValueExpressionModel>();
 
-            var directExpression = (DirectValueExpressionModel)secretsAssignment.Value!;
+            var directExpression = (DirectValueExpressionModel)secretsAssignment.Value;
             directExpression.InlineTransformers.Should().HaveCount(1);
             directExpression.InlineTransformers.First().Name.Should().Be("split");
             directExpression.InlineTransformers.First().Parameter.Should().Be(",");

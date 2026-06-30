@@ -41,7 +41,36 @@ namespace LiveArch.Deployment.Observability
                 return;
             }
 
-            tracked.Model.Assignments[CombinePath(tracked.PathPrefix, path)] = new DirectValueExpressionModel(value, parseInlineTransformers, converterName, inlineTransformers ?? []);
+            var fullPath = CombinePath(tracked.PathPrefix, path);
+            var assignmentTarget = new PropertyAssignmentTargetModel(fullPath);
+            var valueModel = new DirectValueExpressionModel(value, parseInlineTransformers, converterName, inlineTransformers ?? []);
+            UpsertAssignment(tracked.Model, assignmentTarget, valueModel);
+        }
+
+        public void RecordKeyedCollectionAssignment(object target, string collectionPath, string key, object? value, bool parseInlineTransformers, string? converterName, IReadOnlyCollection<TransformerExpressionModel>? inlineTransformers = null)
+        {
+            if (!trackedTargets.TryGetValue(target, out var tracked))
+            {
+                return;
+            }
+
+            var fullPath = CombinePath(tracked.PathPrefix, collectionPath);
+            var assignmentTarget = new KeyedCollectionAssignmentTargetModel(fullPath, key);
+            var valueModel = new DirectValueExpressionModel(value, parseInlineTransformers, converterName, inlineTransformers ?? []);
+            UpsertAssignment(tracked.Model, assignmentTarget, valueModel);
+        }
+
+        public void RecordAppendCollectionAssignment(object target, string collectionPath, object? value, bool parseInlineTransformers, string? converterName, IReadOnlyCollection<TransformerExpressionModel>? inlineTransformers = null)
+        {
+            if (!trackedTargets.TryGetValue(target, out var tracked))
+            {
+                return;
+            }
+
+            var fullPath = CombinePath(tracked.PathPrefix, collectionPath);
+            var assignmentTarget = new AppendCollectionAssignmentTargetModel(fullPath);
+            var valueModel = new DirectValueExpressionModel(value, parseInlineTransformers, converterName, inlineTransformers ?? []);
+            UpsertAssignment(tracked.Model, assignmentTarget, valueModel);
         }
 
         public void RecordDependencyAssignment(object target, string targetPath, object sourceResource, string sourcePath, IReadOnlyCollection<TransformerExpressionModel> transformers, string? converterName)
@@ -51,11 +80,36 @@ namespace LiveArch.Deployment.Observability
                 return;
             }
 
-            tracked.Model.Assignments[CombinePath(tracked.PathPrefix, targetPath)] = new DependencyValueExpressionModel(
-                sourceResource,
-                sourcePath,
-                transformers,
-                converterName);
+            var fullPath = CombinePath(tracked.PathPrefix, targetPath);
+            var assignmentTarget = new PropertyAssignmentTargetModel(fullPath);
+            var valueModel = new DependencyValueExpressionModel(sourceResource, sourcePath, transformers, converterName);
+            UpsertAssignment(tracked.Model, assignmentTarget, valueModel);
+        }
+
+        public void RecordKeyedCollectionDependencyAssignment(object target, string collectionPath, string key, object sourceResource, string sourcePath, IReadOnlyCollection<TransformerExpressionModel> transformers, string? converterName)
+        {
+            if (!trackedTargets.TryGetValue(target, out var tracked))
+            {
+                return;
+            }
+
+            var fullPath = CombinePath(tracked.PathPrefix, collectionPath);
+            var assignmentTarget = new KeyedCollectionAssignmentTargetModel(fullPath, key);
+            var valueModel = new DependencyValueExpressionModel(sourceResource, sourcePath, transformers, converterName);
+            UpsertAssignment(tracked.Model, assignmentTarget, valueModel);
+        }
+
+        private static void UpsertAssignment(ResourceExpressionModel model, AssignmentTargetModel target, ValueExpressionModel value)
+        {
+            var assignment = new AssignmentExpressionModel(target, value);
+            var existingIndex = model.Assignments.FindIndex(current => current.Target == target);
+            if (existingIndex >= 0)
+            {
+                model.Assignments[existingIndex] = assignment;
+                return;
+            }
+
+            model.Assignments.Add(assignment);
         }
 
         private void RegisterRoot(object args, ResourceExpressionModel model)
